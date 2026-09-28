@@ -1,7 +1,7 @@
 # PRD: 이자/연체 에이전트 (이자/연체금액)
 
 - 담당: 팀원B · 브랜치: `feat-agent-interest`
-- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6, "코드·테스트 규칙", "통합 순서"), `docs/ADR.md`
+- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6, 코드·테스트 규칙, 통합 순서), `docs/ADR.md`
 
 ## 목표
 이자·연체 문의에 mock 이자 API를 조회해, 납부 예정 이자와 연체 현황을 상담원 연결 없이 바로 안내한다.
@@ -21,8 +21,8 @@
 | 슬롯 | 예시 값 |
 |------|--------|
 | `{{loan_label}}` | 주택담보대출 |
-| `{{interest_due}}` | 451,000원 |
-| `{{overdue_amount}}` | 850,000원 |
+| `{{interest_due}}` | 312,500원 |
+| `{{overdue_amount}}` | 625,000원 |
 - 금액이 아닌 정보(다음 납부일, 연체 일수, 대출 종류)는 프롬프트에 넣어도 된다.
 
 ## 인수 기준 (이 영역 책임)

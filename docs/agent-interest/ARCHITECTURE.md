@@ -19,27 +19,26 @@ backend/
 - `__init__.py`: 팀원C가 스텁(`agent` + 빈 `mock_router`)을 넣는다. 스텁이 오기 전에는 빈 파일로 두고, main 병합 때 충돌하면 스텁 쪽을 받은 뒤 실제 구현으로 바꾼다.
 
 ## TDD 착수점
-첫 테스트는 `tests/interest/test_mock_api.py`다. `get_interest(customer_id)`가 아래 "데모 값" 표대로 돌려주는지 확인한다. 그다음 `test_prompt.py`, `test_validate.py`, `test_agent.py` 순서로 쓴다.
+- 첫 테스트: `tests/interest/test_mock_api.py` — `get_interest(customer_id)`가 아래 mock 데이터대로 돌려주는지 확인한다.
+- 이후 순서: `handle()` 내역 없음 고정 문장(INT-003) → 슬롯·프롬프트 구성 → 출력 검증(모델은 목). `agents/base.py` 스텁이 main에 오기 전이면 `handle()` 테스트는 import 실패 red로 시작한다.
+- 진행 상황: `test_mock_api.py`, 슬롯·프롬프트(`test_prompt.py`), 출력 검증(`test_validate.py`)은 작성·통과했다. `handle()`(`test_agent.py`)은 `base.py` 스텁을 기다린다.
 
 ## mock API
 | 메서드 | 경로 | 응답 |
 |--------|------|------|
 | GET | `/mock/customers/{customer_id}/interest` | `[{loan_id, product_type, next_due_date, interest_due, overdue_amount, overdue_days}]` |
-
-- 조회 함수: `get_interest(customer_id: str) -> list[dict]` (동기). 에이전트는 라우트가 아니라 이 함수를 직접 호출한다.
-- 키는 위 표와 정확히 같다. `interest_due`·`overdue_amount`·`overdue_days`는 int, `loan_id`·`product_type`·`next_due_date`(`YYYY-MM-DD`)는 str이다.
-- 결과는 표의 행 순서를 따르고, 데모 고객이 아니거나 대출이 없으면 `[]`다(404 아님).
-- 금리·이율 필드는 두지 않는다(INT-002).
-- `interest_due`: 다음 납부일에 낼 이자. `overdue_amount`: 납부일이 지나 아직 내지 않은 금액 합계. 연체가 없으면 `overdue_days=0`, `overdue_amount=0`.
+- 조회 함수: `get_interest(customer_id: str) -> list[dict]`. 공통 규칙은 `docs/ARCHITECTURE.md` "코드·테스트 규칙"을 따른다. 에이전트는 라우트가 아니라 이 함수를 직접 호출한다.
+- 금리·이율 필드는 두지 않는다(INT-002). 금액은 정수(원)로 저장한다.
+- 타입: `next_due_date`는 `"YYYY-MM-DD"` 문자열, `overdue_days`는 정수다. 연체가 없으면 `overdue_amount`와 `overdue_days`가 모두 0이다.
+- `interest_due`: 다음 납부일에 낼 이자. `overdue_amount`: 납부일이 지나 아직 내지 않은 금액 합계.
 - `mock_data.json` 내부 형식은 이 영역 재량이다. 테스트는 반환값만 본다.
 
-### 데모 값과 대출문의 mock 공유 (계약 6)
-| customer_id | loan_id | product_type | next_due_date | interest_due | overdue_days | overdue_amount |
-|---|---|---|---|---:|---:|---:|
-| `C001` | (없음, `[]`) | | | | | |
-| `C002` | `L001` | 신용대출 | 2026-10-25 | 54167 | 0 | 0 |
-| `C003` | `L002` | 주택담보대출 | 2026-10-25 | 451000 | 12 | 850000 |
-
+### mock 데이터
+| customer_id | loan_id | product_type | next_due_date | interest_due | overdue_amount | overdue_days |
+|-------------|---------|--------------|---------------|--------------|----------------|--------------|
+| `C002` | `L001` | 신용대출 | 2026-10-15 | 58000 | 0 | 0 |
+| `C003` | `L002` | 주택담보대출 | 2026-10-25 | 312500 | 625000 | 12 |
+- `C001`은 대출이 없어 `[]`다.
 - 대출문의 mock과 공유하는 값은 `loan_id`·`product_type`뿐이다(계약 6). 나머지 필드는 이 영역만 쓴다.
 - 다음 납부일은 대출문의 만기일(L001 2027-03-31, L002 2035-06-30)보다 앞이다. L002는 대출문의에서도 연체로 연장 불가(`extendable=false`)다.
 - 이자·연체 금액은 계산 없이 저장한 데모 값이다(INT-001). 원금·잔액·금리는 두지 않는다. 잔액은 대출문의 슬롯(`{{principal_remaining}}`) 담당이다.
@@ -49,7 +48,7 @@ backend/
 1. items = get_interest(customer_id)
 2. 없음 → AgentReply(text="고객님 명의로 조회되는 대출 이자 내역이 없습니다.", slots={}, options=[]) (모델 호출 없음)
 3. 대상 대출: mock 고객은 대출이 최대 1건이다(계약 6). 여러 건 선택 되묻기는 만들지 않는다. 2건 이상이면 첫 번째를 쓴다.
-4. slots = prompt.build_slots(item) — loan_label, interest_due, 연체가 있으면 overdue_amount ("451,000원" 형태)
+4. slots = prompt.build_slots(item) — loan_label, interest_due, 연체가 있으면 overdue_amount ("312,500원" 형태)
 5. messages = prompt.build_messages(masked_text, history, item)
      [system: SYSTEM_PROMPT] + history + [user: masked_text
                                                + "\n이자 정보: 종류=주택담보대출, 다음 납부일=2026-10-25, 연체 여부=연체 중, 연체 일수=12"
@@ -72,11 +71,11 @@ backend/
 ## 테스트 (`backend/tests/interest/`, 모델 호출은 목으로 대체)
 실행: `cd backend && pytest tests/interest` (`--import-mode=importlib`). 핵심 규칙을 깨는 입력을 재현해 고정한다.
 - mock API(`test_mock_api.py`): `get_interest("C002")`·`get_interest("C003")`가 데모 값 표와 같고, `C001`·모르는 고객은 `[]`다. 금리 관련 키가 없다. `loan_id`·`product_type`은 계약 6 값(C002=L001 신용대출, C003=L002 주택담보대출)을 기대값으로 두어 확인하고, 대출문의 모듈은 import하지 않는다. 라우트 테스트는 선택이다.
-- 프롬프트(`test_prompt.py`): messages 어디에도 `451000`·`451,000`·`850,000`이 없다. 연체 여부 줄이 조회값과 맞다.
+- 프롬프트(`test_prompt.py`): messages 어디에도 `312500`·`312,500`·`625,000`이 없다. 연체 여부 줄이 조회값과 맞다.
 - 출력 검증(`test_validate.py`): 날짜·연체 일수는 통과하고, 금액·금리·마스킹 토큰·허용 밖 슬롯·필수 슬롯 누락은 걸린다.
 - 에이전트(`test_agent.py`, `base.py` 머지 후): `monkeypatch.setattr("app.llm.generate", 가짜_함수)`로 대체한다.
   - `C001`: `generate`가 호출되지 않고 고정 문장, `slots={}`가 나온다.
-  - 목이 "적용 금리는 4.5%입니다", "이자는 451,000원입니다", "{{balance}}입니다", "[금액_1]입니다"를 돌려주면 기본 문장으로 바뀐다.
+  - 목이 "적용 금리는 4.5%입니다", "이자는 312,500원입니다", "{{balance}}입니다", "[금액_1]입니다"를 돌려주면 기본 문장으로 바뀐다.
   - `C003`: 목이 `{{overdue_amount}}` 없는 답을 돌려주면 기본 문장(연체 문구 포함)으로 바뀐다.
 - 학습 데이터(`test_prepare.py`): 제외 규칙별로 원본에서 나온 문장을 재현한다.
 

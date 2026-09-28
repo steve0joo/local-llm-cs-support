@@ -18,12 +18,16 @@ backend/
 │   └── agents/
 │       ├── base.py             # AgentRequest, AgentReply, Agent (계약 3)
 │       └── {balance,loan,interest}/__init__.py   # 스텁 → 각 담당이 교체
-├── tests/{gateway,masking,router}/
+├── tests/{gateway,masking,llm,router}/
 ├── training/
 │   ├── common/                 # 은행 필터 + source_id 분할 → data/processed/split.json
 │   └── router/                 # 라우터 학습 데이터 생성 + QLoRA 학습
 └── models/router/Modelfile
 ```
+
+## TDD 착수점
+- 첫 테스트: `tests/masking/test_mask.py` — `docs/router/PRD.md` 인수 기준의 마스킹 고정 시나리오를 `mask()`에 넣어 `masked_text`와 `mask_map`을 확인한다. 마스킹은 아무 모듈에도 의존하지 않고, 게이트웨이와 모든 학습 스크립트가 쓴다.
+- 이후 순서: masking(나머지 종류) → llm(`generate` 호출·로그 기록, Ollama HTTP는 목) → router(`classify`, RT-002 사례) → `agents/base.py`·스텁 → gateway.
 
 ## 게이트웨이 처리 순서
 ```
@@ -53,6 +57,14 @@ POST /api/chat
 | 금액 | `[금액_n]` | 1,234,567원 / 50만원 |
 - 적용 순서: 주민번호 → 카드번호 → 전화번호 → 계좌번호 → 금액 → 주소. 긴 패턴부터 적용해 서로 겹치지 않게 한다.
 - 같은 원본 값은 같은 토큰으로 바꾼다.
+- 전화번호는 `01`로 시작하는 번호(`010-1234-5678`, `01012345678`)만이다. 그 밖의 하이픈으로 이은 숫자열(예: `110-1234-5678`)은 계좌번호다.
+- 번호는 종류별로 1부터 센다. `mask()`는 상태가 없는 함수라 호출마다 1부터 다시 센다. `mask_map`은 그 호출 결과에만 유효하다(되묻기 대기 질문은 `masked_text`와 `mask_map`을 함께 보관한다).
+- 토큰 밖의 글자(공백·조사 포함)는 바꾸지 않는다.
+- 표의 예시 입력과 토큰은 테스트 기대값으로 써도 된다.
+
+### `mask()` 인터페이스
+- `mask(text: str) -> MaskResult`. `MaskResult`는 `@dataclass`로 `masked_text: str`, `mask_map: dict[str, str]` 필드를 가진다. `app/masking/__init__.py`가 `mask`와 `MaskResult`를 export한다.
+- `mask_map` 키는 대괄호를 포함한 토큰 문자열(`"[계좌번호_1]"`), 값은 원본 문자열이다. 마스킹한 항목만 들어가고, 없으면 `{}`다.
 
 ## 라우터 모델
 - 입력: 마스킹된 고객 문장. 출력: 주제 코드(계약 2) 하나.

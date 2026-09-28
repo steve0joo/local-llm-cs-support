@@ -15,10 +15,15 @@ backend/
 └── models/loan/Modelfile
 ```
 
+## TDD 착수점
+- 첫 테스트: `tests/loan/test_mock_api.py` — `get_loans(customer_id)`가 아래 mock 데이터대로 돌려주는지 확인한다.
+- 이후 순서: `handle()` 대출 없음 고정 문장(LN-003) → 슬롯·프롬프트 구성 → 출력 검증(모델은 목). `agents/base.py` 스텁이 main에 오기 전이면 `handle()` 테스트는 import 실패 red로 시작한다.
+
 ## mock API
 | 메서드 | 경로 | 응답 |
 |--------|------|------|
 | GET | `/mock/customers/{customer_id}/loans` | `[{loan_id, product_type, principal_remaining, maturity_date, extendable}]` |
+- 조회 함수: `get_loans(customer_id: str) -> list[dict]`. 공통 규칙은 `docs/ARCHITECTURE.md` "코드·테스트 규칙"을 따른다.
 - `product_type`에는 일반 명칭만 쓴다. 실제 상품명은 쓰지 않는다. 금리 필드는 두지 않는다.
 - 대출이 없거나 모르는 `customer_id`는 404가 아니라 `[]`를 돌려준다.
 - 금액은 정수(원), 날짜는 `YYYY-MM-DD` 문자열, `extendable`은 boolean으로 저장한다. 표시용 포맷(`12,000,000원`)은 에이전트가 슬롯을 만들 때 한다.
@@ -31,11 +36,12 @@ backend/
 | `C003` | `L002` | 주택담보대출 | 85000000 | 2035-06-30 | false |
 - `loan_id`와 `product_type`은 이자/연체 mock과 같은 값이어야 한다(계약 6). 나머지 필드는 이 영역만 쓴다.
 - `L002`는 연체 중인 대출이라 `extendable=false`로 둔다. 사유는 데이터에 두지 않는다(모델이 사유를 지어낼 근거를 없앤다).
+- `mock_data.json`의 내부 형식(고객 ID를 키로 쓸지 등)은 담당 재량이다. 테스트는 `get_loans` 반환값만 확인하고, 파일 읽기 방식은 검증하지 않는다.
 
 ## handle() 흐름
 ```
 1. loans = get_loans(customer_id)
-2. 대출 없음 → 고정 문장 "고객님 명의로 조회되는 대출이 없습니다." (모델 호출 없음)
+2. 대출 없음 → AgentReply(text="고객님 명의로 조회되는 대출이 없습니다.", slots={}, options=[]) (모델 호출 없음)
 3. 대상 대출: mock 고객은 대출이 최대 1건이다(계약 6). 여러 건 선택 되묻기는 만들지 않는다. 2건 이상이면 첫 번째를 쓴다.
 4. slots 생성: loan_label = product_type, principal_remaining = "12,000,000원" 형태
 5. messages = 시스템 프롬프트 + history + masked_text
@@ -63,10 +69,10 @@ backend/
 - 정제 시 특히 `output`의 금리(%)·상품명·서류 목록 중 `input`에 없는 것은 제외한다
 
 ## 테스트 (`backend/tests/loan/`, 모델 호출은 목으로 대체)
-핵심 규칙을 깨는 입력을 재현해 고정한다.
+핵심 규칙을 깨는 입력을 재현해 고정한다. 첫 테스트는 위 "TDD 착수점"(`get_loans` 함수)이고, 아래 mock API 항목이 그 첫 테스트의 내용이다. 나머지 항목은 그 뒤에 쓸 테스트다.
 - 대출 없음(`C001`): `llm.generate`가 호출되지 않고 고정 문장이 나온다.
 - 프롬프트 누출: `C002` 호출 시 `generate`에 넘어간 messages 어디에도 `12000000`·`12,000,000`이 없다.
 - 검증 대체: 목이 각각 "금리는 연 3.5%입니다", "1,200만원입니다", "2027-04-01까지 연장됩니다", "재직증명서가 필요합니다", "{{balance}}입니다"를 돌려주면 기본 문장으로 바뀐다.
 - 날짜 허용: 목이 "만기일은 2027-03-31입니다. {{principal_remaining}} 남았습니다."를 돌려주면 그대로 통과한다.
 - 연장 불가(`C003`): 목이 "연장이 가능합니다"를 돌려주면 기본 문장(연장 가능으로 조회되지 않음)으로 바뀐다.
-- mock API: `/mock/customers/C002/loans`가 위 표 값과 같고, `C001`은 `[]`다. `loan_id`·`product_type`이 이자/연체 mock 데이터와 일치한다.
+- mock API: `get_loans`가 위 mock 데이터 표 전체(`C001`은 `[]`)와 같고, 데모 고객이 아니면 `[]`다(라우트 테스트는 선택). `loan_id`·`product_type`이 이자/연체 mock과 같은지는 계약 6 값(C002=`L001` 신용대출, C003=`L002` 주택담보대출)을 기대값으로 두어 확인한다. 이자/연체 모듈은 import하지 않는다.

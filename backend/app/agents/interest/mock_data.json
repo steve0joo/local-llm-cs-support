@@ -4,8 +4,8 @@
     {
       "loan_id": "L001",
       "product_type": "신용대출",
-      "next_due_date": "2026-10-25",
-      "interest_due": 54167,
+      "next_due_date": "2026-10-15",
+      "interest_due": 58000,
       "overdue_amount": 0,
       "overdue_days": 0
     }
@@ -15,8 +15,8 @@
       "loan_id": "L002",
       "product_type": "주택담보대출",
       "next_due_date": "2026-10-25",
-      "interest_due": 451000,
-      "overdue_amount": 850000,
+      "interest_due": 312500,
+      "overdue_amount": 625000,
       "overdue_days": 12
     }
   ]

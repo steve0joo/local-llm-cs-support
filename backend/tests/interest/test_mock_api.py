@@ -54,3 +54,27 @@ def test_mock_route():
     assert res.json() == get_interest("C003")
 
     assert client.get("/mock/customers/C001/interest").json() == []
+
+
+def test_matches_mock_data_table():
+    # docs/agent-interest/ARCHITECTURE.md "mock 데이터" 표
+    assert get_interest("C002") == [
+        {
+            "loan_id": "L001",
+            "product_type": "신용대출",
+            "next_due_date": "2026-10-15",
+            "interest_due": 58000,
+            "overdue_amount": 0,
+            "overdue_days": 0,
+        }
+    ]
+    assert get_interest("C003") == [
+        {
+            "loan_id": "L002",
+            "product_type": "주택담보대출",
+            "next_due_date": "2026-10-25",
+            "interest_due": 312500,
+            "overdue_amount": 625000,
+            "overdue_days": 12,
+        }
+    ]
