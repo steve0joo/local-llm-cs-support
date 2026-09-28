@@ -27,16 +27,16 @@
     │       ├── loan/              # 대출문의 에이전트 + mock API·데이터 — 팀원A
     │       └── interest/          # 이자/연체 에이전트 + mock API·데이터 — 팀원B
     ├── requirements.txt           # 런타임 의존성(fastapi·uvicorn·pytest 등) — 팀원C, 추가는 PR로
-    ├── tests/<영역>/              # pytest, 영역별 폴더
+    ├── tests/                     # pytest — gateway·masking·llm·router(팀원C), balance, loan, interest
     ├── training/
     │   ├── requirements.txt       # 학습 의존성(torch·transformers·peft·trl 등) — Windows 학습 장비 전용, Mac 데모에는 설치하지 않음
     │   ├── common/                # 은행 데이터 필터 + source_id 기준 분할 — 팀원C
     │   └── {router,balance,loan,interest}/   # 영역별 전처리·학습 스크립트
-    ├── models/<영역>/Modelfile    # Ollama Modelfile은 커밋, .gguf는 커밋 금지
+    ├── models/{router,balance,loan,interest}/Modelfile   # Ollama Modelfile은 커밋, .gguf는 커밋 금지
     ├── data/                      # gitignore — AI Hub 원본·가공본
     └── logs/                      # gitignore — model_inputs.jsonl
 ```
-각 담당은 자기 영역 폴더와 `backend/tests/<영역>/`, `backend/training/<영역>/`, `backend/models/<영역>/`만 수정한다.
+각 담당은 자기 영역 폴더와 `backend/tests/<폴더>/`, `backend/training/<폴더>/`, `backend/models/<폴더>/`만 수정한다. `<폴더>`는 `router`·`balance`·`loan`·`interest`이고, 팀원C는 `tests/{gateway,masking,llm}/`도 맡는다.
 
 ## 패턴
 - 백엔드는 **FastAPI 단일 프로세스**다. 라우터·에이전트는 별도 서비스가 아니라 같은 프로세스 안의 Python 모듈이다.
@@ -134,6 +134,7 @@ class Agent(Protocol):
 - `generate(model: str, messages: list[dict], **options) -> str` — Ollama `/api/chat` 비스트리밍 호출.
 - 호출할 때마다 `backend/logs/model_inputs.jsonl`에 `{ts, model, messages}`를 한 줄로 남긴다. PM은 인수 때 이 파일로 마스킹을 확인한다.
 - Ollama 모델 이름: `cs-router`, `cs-balance`, `cs-loan`, `cs-interest`.
+- (팀 합의 대기) 10초 초과로 4개 영역을 모델 1개로 합치더라도(ADR-005) Ollama 모델 이름 `cs-<영역>`(위 4개 이름)과 영역별 Modelfile(같은 GGUF를 `FROM`, `SYSTEM`만 다름)을 유지한다. 호출하는 코드는 모델 이름을 바꾸지 않는다.
 
 ## 계약 6 — mock 고객 데이터 공통 ID
 모든 mock 데이터는 아래 데모 고객을 기준으로 만든다. 데이터 안의 상품명은 "신용대출", "주택담보대출"처럼 일반 명칭만 쓴다(실제 상품명 금지).
@@ -163,3 +164,16 @@ AI Hub 원본(backend/data/raw)
 1. 팀원C가 `agents/base.py`, 세 에이전트의 스텁 패키지(고정 문구를 돌려줌), `llm`, `masking`, `/api/chat`을 먼저 main에 머지한다.
 2. 스텁이 main에 머지되면 각 feat 브랜치는 main을 병합한 뒤 스텁을 실제 구현으로 교체한다. 프론트는 스텁 응답으로 먼저 개발한다.
 3. 모델이 준비되기 전에는 각 영역이 `llm.generate`를 목(mock)으로 바꿔 테스트한다.
+
+### 드라이런 판정 규칙 (팀 합의 대기)
+드라이런은 사전 맥락 없는 새 에이전트가 루트 `docs/`, `docs/<영역>/`의 모든 문서, `CLAUDE.md`만 읽고 그 영역의 첫 실패 테스트를 작성해 보는 점검이다. 에이전트는 문서로 답할 수 없어 추측한 지점을 목록으로 남긴다.
+- 통과로 세는 질문(면제):
+  - `docs/PRD.md` '확인 필요'의 미결 4건을 가리키는 질문
+  - 통합 순서 1단계 전이라 아직 없는 계약 3 스텁(`backend/app/agents/base.py`) 때문에 생긴 질문
+  - 스캐폴드·설정 파일이 아직 없다(어떻게 초기화하나)는 질문
+- 그 외 질문(테스트 위치, 무엇을 테스트할지, 계약 해석 등)이 1건이라도 있으면 불합격이다. 불합격한 영역은 그 영역 docs만 보강하고 그 영역만 다시 돌린다.
+- 스텁이 아직 없을 때는 계약 3 스펙대로 작성한 import 실패 red 테스트를 첫 실패 테스트로 인정한다.
+
+### 다음 라운드 체크리스트
+- [ ] 팀원C 스텁(통합 순서 1단계) 병합 후 에이전트 3개 영역(balance·loan·interest) 재드라이런
+- [ ] 실제 팀원 착수 검증

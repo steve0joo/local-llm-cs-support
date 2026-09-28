@@ -19,6 +19,7 @@ frontend/
     └── types/
         └── chat.ts            # ChatRequest, ChatResponse, ChatOption (계약 1과 동일)
 ```
+테스트(Vitest + Testing Library, FE-004)는 대상 파일 옆에 `<이름>.test.ts(x)`로 둔다. 예: `src/lib/fillSlots.test.ts`, `src/components/OptionButtons.test.tsx`.
 
 ## 패턴
 - 페이지는 챗봇 하나다. 상호작용이 전부라서 `page.tsx`에서 Client Component 하나로 시작한다.

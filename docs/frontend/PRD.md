@@ -1,7 +1,7 @@
 # PRD: 프론트엔드 (챗봇 UI)
 
 - 담당: 나 · 브랜치: `feat-frontend`
-- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 1), `docs/frontend/UI_GUIDE.md`
+- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 1, 계약 4의 슬롯 형식, 계약 6의 데모 고객 ID), `docs/frontend/UI_GUIDE.md`
 
 ## 목표
 고객이 메시지 한 번으로 상담을 시작하고, 선택지 버튼으로 적은 단계 안에 업무를 끝내는 챗봇 화면을 만든다.

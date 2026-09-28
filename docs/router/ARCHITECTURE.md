@@ -18,7 +18,7 @@ backend/
 │   └── agents/
 │       ├── base.py             # AgentRequest, AgentReply, Agent (계약 3)
 │       └── {balance,loan,interest}/__init__.py   # 스텁 → 각 담당이 교체
-├── tests/{gateway,masking,router}/
+├── tests/{gateway,masking,llm,router}/
 ├── training/
 │   ├── common/                 # 은행 필터 + source_id 분할 → data/processed/split.json
 │   └── router/                 # 라우터 학습 데이터 생성 + QLoRA 학습
