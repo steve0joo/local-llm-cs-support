@@ -1,7 +1,7 @@
 # PRD: 잔액조회 에이전트 (거래내역/잔액조회)
 
 - 담당: 나 · 브랜치: `feat-agent-balance`
-- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6), `docs/ADR.md`
+- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6, 코드·테스트 규칙, 통합 순서), `docs/ADR.md`
 
 ## 목표
 "내 잔액 얼마야?" 같은 문의에 mock 계좌 API를 조회해, 금액이 슬롯으로 채워진 존댓말 상담 답변을 돌려준다.
@@ -29,7 +29,7 @@
 - PM 고정 질문 10건 중 9건 이상 통과(주제 적합 · 지어내지 않음 · 존댓말 톤)
 - 잔액 시나리오에서 모델 출력에 `{{balance}}`가 있고, 실제 금액 숫자는 없다
 - 지어낸 사실 0건. 금리·상품명·서류 요건을 지어내면 즉시 불합격
-- `pytest backend/tests/balance` 통과(모델 호출은 목으로 대체)
+- `cd backend && pytest tests/balance` 통과(모델 호출은 목으로 대체)
 
 ## 제외
 - 이체·송금 등 실제 거래, 계좌 개설, 기간 지정 거래내역 검색, 잔액 카드/표 UI
