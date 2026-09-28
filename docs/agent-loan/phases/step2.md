@@ -61,7 +61,7 @@ cd backend && python -m pytest tests/loan -q
    - 에이전트가 `Agent` Protocol(`name`, `handle`)을 만족하고 패키지가 `agent`·`mock_router`만 export하는가?
    - 모델 호출이 `llm.generate` 하나를 거치는가(직접 `requests`/`ollama` 호출 금지)?
    - 원금 숫자가 프롬프트·history 어디에도 없는가?
-3. 결과에 따라 `phases/agent-loan/index.json`의 해당 step을 업데이트한다:
+3. 결과에 따라 `docs/agent-loan/phases/index.json`의 해당 step을 업데이트한다:
    - 성공 → `"status": "completed"`, `"summary": "산출물 한 줄 요약"`. `base.py`가 계약과 달라 맞춘 부분이 있으면 `deviation:`으로 적는다.
    - 수정 3회 시도 후에도 실패 → `"status": "error"`, `"error_message": "구체적 에러 내용"`
    - 사용자 개입 필요 → `"status": "blocked"`, `"blocked_reason": "구체적 사유"` 후 즉시 중단

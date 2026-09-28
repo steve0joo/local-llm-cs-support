@@ -46,7 +46,7 @@ cd backend && python -m pytest tests/loan/test_mock_api_loan.py -q
    - 파일이 `backend/app/agents/loan/`, `backend/tests/loan/` 밖에 만들어지지 않았는가?
    - `product_type`이 일반 명칭(신용대출, 주택담보대출)이고 금리 필드가 없는가?
    - 금액은 정수(원), 날짜는 `YYYY-MM-DD` 문자열, `extendable`은 boolean인가?
-3. 결과에 따라 `phases/agent-loan/index.json`의 해당 step을 업데이트한다:
+3. 결과에 따라 `docs/agent-loan/phases/index.json`의 해당 step을 업데이트한다:
    - 성공 → `"status": "completed"`, `"summary": "산출물 한 줄 요약"`
    - 수정 3회 시도 후에도 실패 → `"status": "error"`, `"error_message": "구체적 에러 내용"`
    - 사용자 개입 필요 → `"status": "blocked"`, `"blocked_reason": "구체적 사유"` 후 즉시 중단
