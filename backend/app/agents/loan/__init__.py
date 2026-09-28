@@ -4,7 +4,7 @@ from app.agents.base import AgentReply, AgentRequest
 
 
 class _StubAgent:
-    name = "balance"
+    name = "loan"
 
     def handle(self, req: AgentRequest) -> AgentReply:
         return AgentReply(text="준비 중인 기능입니다.", slots={}, options=[])
