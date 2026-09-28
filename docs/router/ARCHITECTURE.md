@@ -69,12 +69,11 @@ POST /api/chat
 ## 라우터 모델
 - 입력: 마스킹된 고객 문장. 출력: 주제 코드(계약 2) 하나.
 - `classify()`는 모델 출력에 복합 키워드 규칙(RT-002)을 더해 `topics`를 만든다.
-- 학습 데이터: `training/common` 분할의 train에서 9개 주제 전부. 고객 발화는 `qa_data[].input.question`(없으면 상담 원문 첫 고객 발화)을 쓰고, 라벨은 `consulting_topic`이다. 필드명은 데이터 확인 전 가정이다(공통 ARCHITECTURE 학습 파이프라인).
-- 클래스 불균형(대출문의·이자/연체가 약 52%)은 주제별 상한 샘플링으로 맞춘다.
+- 학습 데이터: `training/common` 분할의 train에서 9개 주제 전부. 고객 발화는 `qa_data[].input.question`, 라벨은 `consulting_topic`이다. 필드명은 2026-09-28 실제 데이터로 확인했다. 라벨 필터·`●` 금액 정규화·주제별 상한 샘플링(대출문의·이자/연체가 약 52%)은 RT-005.
 - `classify()`는 Ollama 출력을 파싱한다. 계약 2에 없는 값이면 빈 topics를 돌려준다.
 
 ## 제공하는 인터페이스
 - `app.masking.mask(text) -> MaskResult` — 학습 스크립트도 이 함수를 import한다
-- `app.llm.generate(model, messages, **options) -> str`
+- `app.llm.generate(model, messages, **options) -> str` — 요청에 항상 `think: false`를 넣는다(RT-006)
 - `app.agents.base` — 계약 3
 - `data/processed/split.json` — `{source_id: "train" | "val" | "test"}`
