@@ -19,7 +19,7 @@ step 0에서 만들어진 코드를 읽고 대출 dict 구조(`loan_id, product_
 
 **테스트를 먼저** 작성한다(TDD 가드).
 
-1. `backend/tests/loan/test_validate_loan.py`, `backend/tests/loan/test_prompt_loan.py`
+1. `backend/tests/loan/test_validate.py`, `backend/tests/loan/test_prompt.py`
 2. `backend/app/agents/loan/validate.py`
    ```python
    DOCUMENT_KEYWORDS: tuple[str, ...]        # ("서류", "증명서", "등본", "재직", "소득") 이상
@@ -55,7 +55,7 @@ step 0에서 만들어진 코드를 읽고 대출 dict 구조(`loan_id, product_
 ## Acceptance Criteria
 
 ```bash
-cd backend && python -m pytest tests/loan/test_validate_loan.py tests/loan/test_prompt_loan.py -q
+cd backend && python -m pytest tests/loan/test_validate.py tests/loan/test_prompt.py --import-mode=importlib -q
 ```
 
 ## 검증 절차

@@ -24,7 +24,7 @@
 
 **테스트를 먼저** 작성한다(TDD 가드).
 
-1. `backend/tests/loan/test_prepare_loan.py` — 픽스처는 테스트 안에서 `tmp_path`에 합성 JSON으로 만든다. 실제 데이터·가공본을 저장소에 넣지 마라.
+1. `backend/tests/loan/test_prepare.py` — 픽스처는 테스트 안에서 `tmp_path`에 합성 JSON으로 만든다. 실제 데이터·가공본을 저장소에 넣지 마라.
 2. `backend/training/loan/prepare.py`
    ```python
    TOPIC = "대출문의(만기/연장/조회 등)"
@@ -54,7 +54,7 @@
 ## Acceptance Criteria
 
 ```bash
-cd backend && python -m pytest tests/loan/test_prepare_loan.py -q
+cd backend && python -m pytest tests/loan/test_prepare.py --import-mode=importlib -q
 ```
 
 ## 검증 절차

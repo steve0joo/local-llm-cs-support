@@ -24,7 +24,7 @@
 
 **테스트를 먼저** 작성한다(TDD 가드).
 
-1. `backend/tests/loan/test_agent_loan.py` — `llm.generate`는 목으로 대체한다. 이 파일에서 모델·Ollama를 실제로 호출하면 안 된다.
+1. `backend/tests/loan/test_agent.py` — `llm.generate`는 목으로 대체한다. 이 파일에서 모델·Ollama를 실제로 호출하면 안 된다.
 2. `backend/app/agents/loan/agent.py`
    ```python
    class LoanAgent:
@@ -36,7 +36,7 @@
    - 모델 호출은 `from app import llm` 후 `llm.generate("cs-loan", messages)`로 **모듈 속성 경유**로 부른다. 이유: 테스트가 `monkeypatch.setattr("app.llm.generate", ...)`로 바꿀 수 있어야 한다.
    - 검증 실패 시 `prompt.fallback_text(loan)`을 쓴다. 대출 없음이면 `prompt.NO_LOAN_TEXT`이며 모델을 호출하지 않는다.
    - `req.mask_map`을 프롬프트에 넣지 마라(계약 3).
-3. `backend/app/agents/loan/__init__.py` — `agent`와 `mock_router`를 export한다(`from .agent import agent`, `from .mock_api import mock_router`). 팀원C가 만든 스텁이 이미 있으면 **교체**한다(통합 순서 2단계).
+3. `backend/app/agents/loan/__init__.py` — `agent`와 `mock_router`를 export한다(`from .agent import agent`, `from .mock_api import mock_router`). 팀원C가 만든 스텁(`agent` + 빈 `mock_router`)이 main에 있어 병합 때 이 파일이 충돌하면, 먼저 스텁 쪽을 받은 뒤 실제 구현으로 **교체**한다(통합 순서 2단계). 대출 없음 응답은 `AgentReply(text=NO_LOAN_TEXT, slots={}, options=[])` 형태로 돌려준다.
 
 ## 테스트로 고정할 핵심 규칙
 
@@ -51,7 +51,7 @@
 ## Acceptance Criteria
 
 ```bash
-cd backend && python -m pytest tests/loan -q
+cd backend && python -m pytest tests/loan --import-mode=importlib -q
 ```
 
 ## 검증 절차

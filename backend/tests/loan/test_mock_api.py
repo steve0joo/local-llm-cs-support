@@ -1,13 +1,8 @@
-import json
-from pathlib import Path
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.agents.loan.mock_api import get_loans, mock_router
-
-APP_DIR = Path(__file__).resolve().parents[2] / "app"
 
 
 @pytest.fixture()
@@ -79,18 +74,16 @@ def test_get_loans_unknown_customer():
     assert get_loans("C999") == []
 
 
-def test_matches_interest_mock_when_present():
-    interest_path = APP_DIR / "agents" / "interest" / "mock_data.json"
-    if not interest_path.exists():
-        pytest.skip("interest mock_data.json 아직 없음")
-    interest = json.loads(interest_path.read_text(encoding="utf-8"))
-    loan_types = {
-        loan["loan_id"]: loan["product_type"]
-        for loans in (get_loans(c) for c in ("C001", "C002", "C003"))
-        for loan in loans
-    }
-    items = interest.values() if isinstance(interest, dict) else [interest]
-    for entries in items:
-        for entry in entries if isinstance(entries, list) else []:
-            if entry.get("loan_id") in loan_types:
-                assert entry["product_type"] == loan_types[entry["loan_id"]]
+@pytest.mark.parametrize(
+    ("customer_id", "loan_id", "product_type"),
+    [
+        ("C002", "L001", "신용대출"),
+        ("C003", "L002", "주택담보대출"),
+    ],
+)
+def test_shared_ids_match_contract_6(customer_id, loan_id, product_type):
+    # 이자/연체 mock과 공유하는 값은 계약 6을 기대값으로 확인한다(이자/연체 모듈은 import하지 않는다)
+    loans = get_loans(customer_id)
+    assert [(loan["loan_id"], loan["product_type"]) for loan in loans] == [
+        (loan_id, product_type)
+    ]

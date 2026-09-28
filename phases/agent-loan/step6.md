@@ -26,7 +26,7 @@
 ## Acceptance Criteria
 
 ```bash
-cd backend && python -m pytest tests/loan -q
+cd backend && python -m pytest tests/loan --import-mode=importlib -q
 ```
 
 ## 검증 절차
