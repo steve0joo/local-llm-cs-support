@@ -6,7 +6,8 @@ backend/
 ├── app/agents/loan/
 │   ├── __init__.py        # agent, mock_router export (계약 3)
 │   ├── agent.py           # LoanAgent.handle()
-│   ├── prompt.py
+│   ├── prompt.py          # 시스템 프롬프트, build_messages(), build_slots(), fallback_text()
+│   ├── validate.py        # 출력 검증(LN-004) — 서류 키워드 목록·허용 슬롯 상수 포함
 │   ├── mock_api.py        # mock_router + get_loans()
 │   └── mock_data.json     # C001: 대출 없음, C002: L001 신용대출, C003: L002 주택담보대출
 ├── tests/loan/
@@ -46,7 +47,7 @@ backend/
 6. 출력 검증(LN-004) — 아래 중 하나라도 걸리면 기본 문장으로 대체
    a. 허용 날짜(프롬프트에 준 만기일의 `YYYY-MM-DD`·`YYYY년 M월 D일` 표기)를 제거한 뒤 아라비아 숫자가 남아 있음(금액·퍼센트·다른 날짜·기간 포함)
    b. 사용하도록 준 슬롯(`{{loan_label}}`, `{{principal_remaining}}`) 밖의 `{{...}}`가 있음
-   c. 서류 요건 키워드가 있음(서류·증명서·등본·재직·소득 — 목록은 `agent.py` 상수)
+   c. 서류 요건 키워드가 있음(서류·증명서·등본·재직·소득 — 목록은 `validate.py` 상수)
    d. `extendable=false`인데 부정 표현(불가·않·어렵·없) 없이 "가능"이 있음
    기본 문장(코드가 조립, <…>는 조회값):
      "{{loan_label}}의 만기일은 <만기일>이고, 남은 원금은 {{principal_remaining}}입니다."
