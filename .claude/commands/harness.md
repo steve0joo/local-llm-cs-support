@@ -25,6 +25,11 @@
 5. **AC는 실행 가능한 커맨드** — "~가 동작해야 한다" 같은 추상적 서술이 아닌 `npm run build && npm test` 같은 실제 실행 가능한 검증 커맨드를 포함한다.
 6. **주의사항은 구체적으로** — "조심해라" 대신 "X를 하지 마라. 이유: Y" 형식으로 적는다.
 7. **네이밍** — step name은 kebab-case slug로, 해당 step의 핵심 모듈/작업을 한두 단어로 표현한다 (예: `project-setup`, `api-layer`, `auth-flow`).
+8. **AC는 executor가 다시 실행한다** — `## Acceptance Criteria`의 첫 ```bash 블록을 execute.py가 세션 종료 후 `bash -e -o pipefail`로 직접 실행하고, 이어서 `scripts/verify.sh`를 실행한다. 둘 다 통과해야 completed다. 그러므로 블록에는 **실제로 실행되는 커맨드만** 넣는다. 수동 확인·주석으로 적은 기대값은 넣지 마라(검증 절차나 human step으로 옮긴다). 외부 자격증명(API 키 등)이 필요한데 없으면 세션이 `blocked`로 표시한다.
+9. **버그를 막는 테스트를 AC에** — "동작한다" 스모크만으로는 부족하다. 핵심 규칙(멱등성·권한·금전 처리 등)은 그 규칙을 깨는 입력을 재현하는 테스트를 AC에 포함한다.
+10. **설계는 참조하고 복사하지 않는다** — step 파일에는 설계 문서의 절(§)을 가리키고 규칙은 한 곳에만 둔다. 구현이 설계와 달라지면 summary에 `deviation:`으로 적는다(설계 문서가 여러 곳에 복사되면 드리프트가 생긴다).
+11. **사람 확인은 human step으로** — 브라우저 수동 확인·라벨링처럼 사람이 해야 하는 일은 `"type": "human"` step으로 분리한다. executor는 이 step에서 멈추고, 사람이 체크리스트를 끝낸 뒤 status를 `completed`로 바꾸면 이어서 실행된다.
+12. **마지막 step은 리뷰** — phase의 마지막 step은 `/review` 체크리스트로 phase 전체 diff를 검토하는 `review` step으로 둔다. CRITICAL 위반이나 치명 결함이 있으면 `blocked`로 멈춘다.
 
 ### D. 파일 생성
 
@@ -55,10 +60,12 @@
 {
   "project": "<프로젝트명>",
   "phase": "<task-name>",
+  "guardrail_docs": ["docs/ARCHITECTURE.md", "docs/ADR.md"],
   "steps": [
     { "step": 0, "name": "project-setup", "status": "pending" },
     { "step": 1, "name": "core-types", "status": "pending" },
-    { "step": 2, "name": "api-layer", "status": "pending" }
+    { "step": 2, "name": "manual-check", "status": "pending", "type": "human" },
+    { "step": 3, "name": "review", "status": "pending" }
   ]
 }
 ```
@@ -70,12 +77,16 @@
 - `steps[].step`: 0부터 시작하는 순번.
 - `steps[].name`: kebab-case slug.
 - `steps[].status`: 초기값은 모두 `"pending"`.
+- `steps[].type` (선택): `"human"`이면 executor가 Claude를 호출하지 않고 멈춘다(원칙 11).
+- `guardrail_docs` (선택): 매 step 프롬프트에 주입할 문서 목록. 생략하면 `docs/*.md` 전부. 문서가 늘어나면 프롬프트가 비대해지므로 phase에 필요한 문서만 적는다. CLAUDE.md는 `claude -p`가 자동으로 읽으므로 주입하지 않는다.
+
+이 저장소 규칙: task(phase) 이름은 영역 이름(`frontend`, `router`, `agent-balance`, `agent-loan`, `agent-interest`)으로 한다. 그러면 execute.py가 `feat-<영역>` 브랜치에서 실행된다. `guardrail_docs`에는 `docs/ARCHITECTURE.md`, `docs/ADR.md`와 `docs/<영역>/`의 ARCHITECTURE·ADR를 적는다.
 
 상태 전이와 자동 기록 필드:
 
 | 전이 | 기록되는 필드 | 기록 주체 |
 |------|-------------|----------|
-| → `completed` | `completed_at`, `summary` | Claude 세션 (summary), execute.py (timestamp) |
+| → `completed` | `completed_at`, `summary`, `ac_verified`, `files`, `cost_usd`, `num_turns` | Claude 세션 (summary), execute.py (나머지: AC 재실행 결과·변경 파일·비용) |
 | → `error` | `failed_at`, `error_message` | Claude 세션 (message), execute.py (timestamp) |
 | → `blocked` | `blocked_at`, `blocked_reason` | Claude 세션 (reason), execute.py (timestamp) |
 
@@ -127,23 +138,35 @@ npm test        # 테스트 통과
 
 - {이 step에서 하지 말아야 할 것. "X를 하지 마라. 이유: Y" 형식}
 - 기존 테스트를 깨뜨리지 마라
+- git commit을 하지 마라. 이유: 커밋은 execute.py가 AC 재검증 후 수행한다
 ```
 
 ### E. 실행
 
 ```bash
-python3 scripts/execute.py {task-name}        # 순차 실행
-python3 scripts/execute.py {task-name} --push  # 실행 후 push
+python3 scripts/execute.py {task-name}                # 순차 실행 (작업 트리가 깨끗해야 시작)
+python3 scripts/execute.py {task-name} --base main    # 새 브랜치를 main에서 분기
+python3 scripts/execute.py {task-name} --push         # 실행 후 push
 ```
 
 execute.py가 자동으로 처리하는 것:
 
-- `feat-{task-name}` 브랜치 생성/checkout
+- 시작 전 점검 — 작업 트리가 깨끗하지 않으면 중단(미추적 파일이 커밋에 휩쓸려 들어가는 것 방지), CLAUDE.md가 git에 추적되지 않으면 경고(새 클론에서 규칙 누락)
+- `feat-{task-name}` 브랜치 생성/checkout (`--base`로 분기 기준 지정)
 - 가드레일 주입 — CLAUDE.md + docs/*.md 내용을 매 step 프롬프트에 포함
 - 컨텍스트 누적 — 완료된 step의 summary를 다음 step 프롬프트에 전달
-- 자가 교정 — 실패 시 최대 3회 재시도하며, 이전 에러 메시지를 프롬프트에 피드백
-- 2단계 커밋 — 코드 변경(`feat`)과 메타데이터(`chore`)를 분리 커밋
+- AC 재검증 — 세션이 completed로 보고해도 AC 블록과 `scripts/verify.sh`를 직접 실행해 통과해야 완료로 인정한다(`ac_verified`)
+- 자가 교정 — 실패(AC 실패·타임아웃 포함) 시 최대 3회 재시도하며, 이전 에러 메시지를 프롬프트에 피드백
+- 2단계 커밋 — 코드 변경(`feat`)과 메타데이터(`chore`)를 분리 커밋. 커밋은 executor만 한다(세션이 커밋하면 되감아 합친다)
+- 커밋 가드 — `.env*`·키 파일·`.claude/worktrees/`·gitlink(서브모듈)가 스테이징되면 커밋하지 않고 `blocked`로 멈춘다
+- 실패 격리 — 최종 실패 시 코드를 커밋하지 않고 작업 트리에 남긴다(메타데이터만 `chore: step N failed`로 커밋)
+- 비용 기록 — step별 `cost_usd`·`num_turns`, phase 합계 `total_cost_usd`
 - 타임스탬프 — started_at, completed_at, failed_at, blocked_at 자동 기록
+
+스택 번안(웹앱이 아닌 프로젝트):
+
+- `scripts/verify.sh` — 프로젝트 전역 검증 커맨드. Stop 훅과 executor가 함께 쓴다. 템플릿은 npm이다. 다른 스택이면 이 파일만 고친다(예: Python `python -m py_compile ... && python -m pytest -q`).
+- `.claude/hooks/tdd-guard.sh` — TS/JS와 Python(`test_<모듈>.py`·`test_<모듈>_*.py`·`<모듈>_test.py`)을 지원한다. 다른 언어는 case를 추가한다.
 
 에러 복구:
 
