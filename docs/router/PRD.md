@@ -1,7 +1,7 @@
 # PRD: 라우터 + 게이트웨이
 
 - 담당: 팀원C · 브랜치: `feat-router`
-- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 1~5 전부), `docs/ADR.md`
+- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 1~5 전부, 코드·테스트 규칙, 통합 순서), `docs/ADR.md`
 
 ## 목표
 고객 메시지를 마스킹하고, 9개 주제로 분류해 올바른 에이전트·되묻기·미지원 안내로 보낸다. 모든 모델 호출이 한 곳을 거치며 입력이 기록되게 한다.

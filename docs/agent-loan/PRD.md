@@ -1,7 +1,7 @@
 # PRD: 대출문의 에이전트 (대출문의 — 만기/연장/조회 등)
 
 - 담당: 팀원A · 브랜치: `feat-agent-loan`
-- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6), `docs/ADR.md`
+- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6, 코드·테스트 규칙, 통합 순서), `docs/ADR.md`
 
 ## 목표
 대출 만기·연장·조회 문의에 mock 대출 API를 조회해, 전문적인 존댓말 상담 답변을 돌려준다.

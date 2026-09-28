@@ -29,12 +29,12 @@ frontend/
 ## fillSlots 규칙
 - `fillSlots(text: string, slots: Record<string, string>): SlotPart[]`, `type SlotPart = { text: string; slot: boolean }`. 둘 다 `lib/fillSlots.ts`에서 export한다.
 - 문자열 대신 조각 배열을 돌려주는 이유: `MessageBubble`이 `slot: true` 조각에만 금액 스타일(`font-semibold tabular-nums`, UI_GUIDE)을 준다.
-- 슬롯 토큰은 `{{`와 `}}` 사이의 이름이다(앞뒤 공백은 무시). 한 문장의 여러 슬롯, 같은 슬롯의 반복을 모두 치환한다.
-- 토큰 경계마다 조각을 나눈다. 토큰 밖 글자는 `slot: false` 조각, 값이 있는 토큰은 그 값으로 된 `slot: true` 조각이다. 빈 문자열 조각은 만들지 않는다.
-- `slots`에 키가 없으면 그 토큰 자리만 `"확인할 수 없습니다"`(`slot: false`)로 바꾼다(계약 1). 값이 빈 문자열이면 빈 조각이라 만들지 않는다. `text`에 없는 `slots` 키는 무시한다.
+- 슬롯 토큰은 `{{`와 `}}` 사이의 이름이다(앞뒤 공백은 무시, 이름에 중괄호는 들어가지 않음). 한 문장의 여러 슬롯, 같은 슬롯의 반복을 모두 치환한다. 짝이 맞지 않는 중괄호는 일반 글자로 두고, 치환한 값 안의 `{{...}}`는 다시 치환하지 않는다.
+- 토큰 경계마다 조각을 나눈다. 토큰 밖 글자는 `slot: false` 조각, 값이 있는 토큰은 그 값으로 된 `slot: true` 조각이다. 인접한 `slot: false` 조각도 합치지 않고, 빈 문자열 조각은 만들지 않는다.
+- `slots`에 그 이름의 키가 없거나(자기 속성 기준, `Object.hasOwn`) 값이 빈 문자열이면 "값이 없는" 슬롯이다(PRD 기능 범위). 그 토큰 자리만 `"확인할 수 없습니다"`(`slot: false`)로 바꾼다(계약 1). 이름이 빈 토큰(`{{}}`)도 값이 없는 슬롯이다. `text`에 없는 `slots` 키는 무시한다.
   - 예: `fillSlots("현재 잔액은 {{balance}}입니다.", {balance: "1,234,567원"})` → `[{text: "현재 잔액은 ", slot: false}, {text: "1,234,567원", slot: true}, {text: "입니다.", slot: false}]`
   - 예: `fillSlots("현재 잔액은 {{balance}}입니다.", {})` → `[{text: "현재 잔액은 ", slot: false}, {text: "확인할 수 없습니다", slot: false}, {text: "입니다.", slot: false}]`
-- 슬롯이 없는 문장은 `[{text, slot: false}]` 하나를 돌려준다.
+- 슬롯이 없는 문장은 `[{text, slot: false}]` 하나를 돌려준다. `text`가 빈 문자열이면 `[]`다.
 - 봇 말풍선만 `fillSlots`를 거친다. 고객 말풍선은 `text`를 그대로 보여준다. `slots`가 없는 메시지는 `{}`를 넘긴다.
 
 ## 패턴
@@ -56,6 +56,12 @@ frontend/
 - `customerId: "C001" | "C002" | "C003"`
 - `messages: {role: "user" | "bot", text: string, slots?: Record<string,string>, options?: ChatOption[]}[]`
 - `pending: boolean` — 요청 중 입력·버튼 비활성화
+
+## 타입·API 규칙
+- `types/chat.ts`는 계약 1을 그대로 옮긴다. `ChatRequest.choice?: string`(선택지를 누르지 않은 요청은 필드를 생략), `ChatResponse.type: "answer" | "clarify" | "unsupported"`, `agent: "balance" | "loan" | "interest" | null`, `topic: string | null`, `ChatOption = { label: string; choice: string }`. 계좌 선택 선택지의 `choice`도 에이전트 이름(`"balance"`)이다.
+- `sendChat(req: ChatRequest): Promise<ChatResponse>`는 `/api/chat`에 JSON으로 POST한다. 네트워크 오류나 2xx가 아닌 응답이면 throw하고, `page.tsx`가 잡아 "잠시 후 다시 시도해 주세요" 봇 메시지를 추가한다.
+- 봇 말풍선은 `type`과 관계없이 `text`(fillSlots)와 `options`를 보여준다. 미지원·상담원 안내 문구는 백엔드 `text`에 들어 있다.
+- 선택지를 누르면 `label`을 고객 말풍선으로 추가한 뒤 요청을 보낸다. 요청 중(`pending`)에는 선택지도 비활성화한다.
 
 ## 핵심 규칙
 - 슬롯 치환은 `fillSlots` 한 곳에서만 한다. 원본 `text`와 `slots`는 메시지에 그대로 저장하고, 렌더링할 때만 치환한다.

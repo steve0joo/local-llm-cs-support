@@ -1,6 +1,8 @@
 # 아키텍처 (공통)
 
 > 영역 간 **계약**(디렉토리 소유권, API 스키마, 인터페이스)을 정의한다. 여기 적힌 계약을 바꾸려면 이 문서를 먼저 고치고 팀 합의 후 반영한다. 영역 내부 설계는 `docs/<영역>/ARCHITECTURE.md`에 적는다.
+>
+> "팀 합의 대기" 표기는 팀 합의 전의 임시 결정이다. 합의 전에도 그대로 따르고, 합의에서 바뀌면 이 문서를 먼저 고친다.
 
 ## 디렉토리 구조
 ```
@@ -38,7 +40,7 @@
     ├── data/                      # gitignore — AI Hub 원본·가공본
     └── logs/                      # gitignore — model_inputs.jsonl
 ```
-각 담당은 자기 영역 폴더와 `backend/tests/<폴더>/`, `backend/training/<폴더>/`, `backend/models/<폴더>/`만 수정한다. `<폴더>`는 `router`·`balance`·`loan`·`interest`이고, 팀원C는 `tests/{gateway,masking,llm}/`도 맡는다.
+각 담당은 자기 영역 폴더와 `backend/tests/<폴더>/`, `backend/training/<폴더>/`, `backend/models/<폴더>/`만 수정한다. `<폴더>`는 `router`·`balance`·`loan`·`interest`이고, 팀원C는 `tests/{gateway,masking,llm}/`도 맡는다. 예외로 통합 순서 1단계의 에이전트 스텁(`app/agents/<영역>/__init__.py`)은 팀원C가 넣는다.
 
 ## 패턴
 - 백엔드는 **FastAPI 단일 프로세스**다. 라우터·에이전트는 별도 서비스가 아니라 같은 프로세스 안의 Python 모듈이다.
@@ -165,15 +167,15 @@ AI Hub 원본(backend/data/raw)
 ## 코드·테스트 규칙 (공통, 팀 합의 대기)
 - 패키지의 공개 이름은 `__init__.py`에서 export한다: `from app.masking import mask`, `from app.llm import generate`, `from app.router import classify`, `from app.agents.<영역> import agent, mock_router`(계약 3). `agent`는 import하면 바로 쓸 수 있는 모듈 수준 인스턴스다. mock 조회 함수는 `app.agents.<영역>.mock_api`에서 import한다.
 - 모델을 부르는 코드는 `from app import llm` 뒤 `llm.generate(...)`로 호출한다. 테스트는 `monkeypatch.setattr("app.llm.generate", 가짜_함수)` 한 곳만 바꾼다.
-- mock 조회 함수(`get_accounts`, `get_loans`, `get_interest` 등)는 동기 함수이고 `list[dict]`를 돌려준다. dict의 키는 각 영역 문서의 mock API 표와 정확히 같고(추가 필드 없음), 금액은 정수(원)다. 데모 고객이 아니거나 항목이 없으면 `[]`를 돌려준다. 데이터는 같은 폴더의 `mock_data.json`에서 읽고, mock 라우트는 함수 결과를 그대로 돌려준다.
-- 테스트 파일 이름: backend는 `backend/tests/<폴더>/test_<구현 모듈 파일명>.py`(예: `app/masking/mask.py` → `tests/masking/test_mask.py`), frontend는 대상 파일 옆 `<이름>.test.ts(x)`다. TDD 훅(`.claude/hooks/tdd-guard.sh`)이 이 이름으로 테스트가 있는지 확인하고, 없으면 구현 파일 작성을 막는다. 폴더가 달라도 파일 이름이 같을 수 있어서 pytest는 `--import-mode=importlib`로 돌린다.
+- mock 조회 함수(`get_accounts`, `get_loans`, `get_interest` 등)는 동기 함수이고 `list[dict]`를 돌려준다. dict의 키는 각 영역 문서의 mock API 표와 정확히 같고(추가 필드 없음), 값의 타입은 금액·일수는 정수(원·일), 여부는 bool, 그 밖의 필드(ID·번호·이름·종류·날짜)는 문자열이다. 결과는 mock 데이터 표의 행 순서를 따른다. 데모 고객이 아니거나 항목이 없으면 `[]`를 돌려준다. 데이터는 같은 폴더의 `mock_data.json`에서 읽고, mock 라우트는 함수 결과를 그대로 돌려준다.
+- 테스트 파일 이름: backend는 `backend/tests/<폴더>/test_<구현 모듈 파일명>.py`(예: `app/masking/mask.py` → `tests/masking/test_mask.py`), frontend는 대상 파일 옆 `<이름>.test.ts(x)`다. TDD 훅(`.claude/hooks/tdd-guard.sh`)이 이 이름으로 테스트가 있는지 확인하고, 없으면 구현 파일 작성을 막는다. 폴더가 달라도 파일 이름이 같을 수 있어서 pytest는 `--import-mode=importlib`로 돌리고, 테스트 폴더(`tests/<폴더>/`)에는 `__init__.py`를 두지 않는다.
 - 테스트 실행: `cd backend && pytest tests/<폴더>`, `cd frontend && npm run test`.
 - 목은 pytest `monkeypatch`로 만든다. 조회·로직은 함수를 직접 테스트하고, HTTP 라우트 테스트(FastAPI `TestClient`)는 필요할 때만 쓴다.
-- 첫 실패 테스트는 파일 하나로 시작하고 케이스 수는 자유다. 테스트 함수 이름·설명 문구의 언어, 주석, 예시 입력 문장, 테스트용 값은 작성자가 정한다.
+- 첫 실패 테스트는 파일 하나로 시작하고 케이스 수는 자유다. 테스트 코드를 어떻게 쓸지(함수 이름·설명 문구의 언어, 주석, 예시 입력 문장, 테스트용 값, 테스트를 나누는 구조, assert·matcher 선택, 타입까지 import해 확인할지)는 작성자가 정한다.
 - 각 영역의 첫 테스트는 `docs/<영역>/ARCHITECTURE.md`의 "TDD 착수점"을 따른다.
 
 ## 통합 순서
-1. 팀원C가 스캐폴드(`backend/pyproject.toml`, `app/__init__.py`, `app/agents/__init__.py`), `agents/base.py`, 세 에이전트의 스텁 패키지(`handle()`이 고정 문구 "준비 중인 기능입니다."를 돌려줌), `llm`, `masking`, `/api/chat`을 먼저 main에 머지한다.
+1. 팀원C가 스캐폴드(`backend/pyproject.toml`, `app/__init__.py`, `app/agents/__init__.py`), `agents/base.py`, 세 에이전트의 스텁 패키지, `llm`, `masking`, `/api/chat`을 먼저 main에 머지한다. 스텁 패키지는 `app/agents/<영역>/__init__.py` 하나이고, 계약 3의 `agent`(`handle()`이 고정 문구 "준비 중인 기능입니다."를 돌려줌)와 빈 `mock_router`만 담는다. `mock_api.py`·`agent.py` 등 나머지는 각 담당이 만든다. 스텁이 오기 전에는 각 담당이 자기 패키지의 `__init__.py`를 빈 파일로 두고 mock 조회 함수부터 만든다.
 2. 스텁이 main에 머지되면 각 feat 브랜치는 main을 병합한 뒤 스텁을 실제 구현으로 교체한다. 프론트는 스텁 응답으로 먼저 개발한다.
 3. 모델이 준비되기 전에는 각 영역이 `llm.generate`를 목(mock)으로 바꿔 테스트한다.
 
@@ -185,6 +187,7 @@ AI Hub 원본(backend/data/raw)
   - 스캐폴드·설정 파일이 아직 없다(어떻게 초기화하나)는 질문
 - 그 외 질문(테스트 위치, 무엇을 테스트할지, 계약 해석 등)이 1건이라도 있으면 불합격이다. 불합격한 영역은 그 영역 docs만 보강하고 그 영역만 다시 돌린다.
 - 스텁이 아직 없을 때는 계약 3 스펙대로 작성한 import 실패 red 테스트를 첫 실패 테스트로 인정한다.
+- 스캐폴드(`backend/pyproject.toml`, `app/__init__.py`, frontend `package.json` 등)가 아직 없어서 나는 import·실행 실패도 red로 인정한다. 이때 실행은 생략하거나 pyproject에 적을 설정을 명령줄로 넘겨 확인한다.
 
 ### 다음 라운드 체크리스트
 - [ ] 팀원C 스텁(통합 순서 1단계) 병합 후 에이전트 3개 영역(balance·loan·interest) 재드라이런

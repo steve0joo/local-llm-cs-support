@@ -1,7 +1,7 @@
 # PRD: 잔액조회 에이전트 (거래내역/잔액조회)
 
 - 담당: 나 · 브랜치: `feat-agent-balance`
-- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6), `docs/ADR.md`
+- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6, 코드·테스트 규칙, 통합 순서), `docs/ADR.md`
 
 ## 목표
 "내 잔액 얼마야?" 같은 문의에 mock 계좌 API를 조회해, 금액이 슬롯으로 채워진 존댓말 상담 답변을 돌려준다.

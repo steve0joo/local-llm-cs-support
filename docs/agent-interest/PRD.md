@@ -1,7 +1,7 @@
 # PRD: 이자/연체 에이전트 (이자/연체금액)
 
 - 담당: 팀원B · 브랜치: `feat-agent-interest`
-- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6), `docs/ADR.md`
+- 먼저 읽을 문서: `docs/PRD.md`, `docs/ARCHITECTURE.md`(계약 3~6, 코드·테스트 규칙, 통합 순서), `docs/ADR.md`
 
 ## 목표
 이자·연체 문의에 mock 이자 API를 조회해, 납부 예정 이자와 연체 현황을 상담원 연결 없이 바로 안내한다.
