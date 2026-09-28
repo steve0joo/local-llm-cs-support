@@ -29,9 +29,11 @@ frontend/
 ## fillSlots 규칙
 - `fillSlots(text: string, slots: Record<string, string>): SlotPart[]`, `type SlotPart = { text: string; slot: boolean }`. 둘 다 `lib/fillSlots.ts`에서 export한다.
 - 문자열 대신 조각 배열을 돌려주는 이유: `MessageBubble`이 `slot: true` 조각에만 금액 스타일(`font-semibold tabular-nums`, UI_GUIDE)을 준다.
-- 슬롯 토큰은 `{{`와 `}}` 사이의 이름이다(앞뒤 공백은 무시, 이름에 중괄호는 들어가지 않음). 한 문장의 여러 슬롯, 같은 슬롯의 반복을 모두 치환한다. 짝이 맞지 않는 중괄호는 일반 글자로 두고, 치환한 값 안의 `{{...}}`는 다시 치환하지 않는다.
+- 슬롯 토큰은 정규식 `/\{\{([^{}]*)\}\}/g`에 맞는 구간이고, 이름은 캡처한 문자열에 `trim()`을 적용한 값이다. 한 문장의 여러 슬롯, 같은 슬롯의 반복을 모두 치환한다. 이 정규식에 맞지 않는 중괄호는 토큰이 아니라 일반 글자다.
+- `slots` 값은 백엔드가 포맷을 끝낸 표시용 문자열이라(계약 1) 그대로 넣고 다시 치환하지 않는다.
+- 계약 1의 "치환되지 않은 `{{...}}`"와 PRD의 "`{{`가 남지 않는다"는 `text` 안의 슬롯 토큰(위 정규식에 맞는 구간)을 말한다. 토큰이 아닌 중괄호와 `slots` 값 안의 글자는 그대로 보인다.
 - 토큰 경계마다 조각을 나눈다. 토큰 밖 글자는 `slot: false` 조각, 값이 있는 토큰은 그 값으로 된 `slot: true` 조각이다. 인접한 `slot: false` 조각도 합치지 않고, 빈 문자열 조각은 만들지 않는다.
-- `slots`에 그 이름의 키가 없거나(자기 속성 기준, `Object.hasOwn`) 값이 빈 문자열이면 "값이 없는" 슬롯이다(PRD 기능 범위). 그 토큰 자리만 `"확인할 수 없습니다"`(`slot: false`)로 바꾼다(계약 1). 이름이 빈 토큰(`{{}}`)도 값이 없는 슬롯이다. `text`에 없는 `slots` 키는 무시한다.
+- `slots`에 그 이름의 키가 없거나(자기 속성 기준, `Object.hasOwn`) 값이 빈 문자열이면 "값이 없는" 슬롯이다(PRD 기능 범위). 그 토큰 자리만 `"확인할 수 없습니다"`(`slot: false`)로 바꾼다(계약 1). 이름이 빈 문자열인 토큰(`{{}}`, `{{ }}`)은 `slots`를 보지 않고 값이 없는 슬롯으로 본다. `text`에 없는 `slots` 키는 무시한다.
   - 예: `fillSlots("현재 잔액은 {{balance}}입니다.", {balance: "1,234,567원"})` → `[{text: "현재 잔액은 ", slot: false}, {text: "1,234,567원", slot: true}, {text: "입니다.", slot: false}]`
   - 예: `fillSlots("현재 잔액은 {{balance}}입니다.", {})` → `[{text: "현재 잔액은 ", slot: false}, {text: "확인할 수 없습니다", slot: false}, {text: "입니다.", slot: false}]`
 - 슬롯이 없는 문장은 `[{text, slot: false}]` 하나를 돌려준다. `text`가 빈 문자열이면 `[]`다.
