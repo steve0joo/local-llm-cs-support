@@ -65,7 +65,7 @@ cd backend && python -m pytest tests/loan/test_validate_loan.py tests/loan/test_
    - ARCHITECTURE.md 디렉토리 구조(`validate.py`, `prompt.py`)를 따르는가?
    - 검증이 금지 목록이 아니라 **허용 목록 방식**(LN-004)인가?
    - `llm`·`agents.base`·`masking`을 import하지 않았는가?
-3. 결과에 따라 `docs/agent-loan/phases/index.json`의 해당 step을 업데이트한다:
+3. 결과에 따라 `phases/agent-loan/index.json`의 해당 step을 업데이트한다:
    - 성공 → `"status": "completed"`, `"summary": "산출물 한 줄 요약"` (함수 시그니처와 서류 키워드 목록을 요약에 포함)
    - 수정 3회 시도 후에도 실패 → `"status": "error"`, `"error_message": "구체적 에러 내용"`
    - 사용자 개입 필요 → `"status": "blocked"`, `"blocked_reason": "구체적 사유"` 후 즉시 중단

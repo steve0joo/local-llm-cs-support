@@ -64,7 +64,7 @@ cd backend && python -m pytest tests/loan/test_prepare_loan.py -q
    - 산출물 경로가 `backend/data/` 아래(gitignore)이고, 저장소에 데이터·가공본이 추가되지 않았는가? (`git status --short`로 확인)
    - 마스킹에 팀원C의 `app.masking.mask`를 그대로 import했는가(자체 정규식 복제 금지)?
    - 학습 스크립트가 `backend/training/loan/` 밖에 만들어지지 않았는가?
-3. 결과에 따라 `docs/agent-loan/phases/index.json`의 해당 step을 업데이트한다:
+3. 결과에 따라 `phases/agent-loan/index.json`의 해당 step을 업데이트한다:
    - 성공 → `"status": "completed"`, `"summary": "산출물 한 줄 요약"` (어댑터 함수명, 정제 규칙 상수, 기본 출력 경로 포함. 원본 필드명이 가정임을 명시)
    - 수정 3회 시도 후에도 실패 → `"status": "error"`, `"error_message": "구체적 에러 내용"`
    - 사용자 개입 필요 → `"status": "blocked"`, `"blocked_reason": "구체적 사유"` 후 즉시 중단

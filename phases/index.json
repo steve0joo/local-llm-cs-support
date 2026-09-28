@@ -1,7 +1,7 @@
 {
   "phases": [
     {
-      "dir": "docs/agent-loan/phases",
+      "dir": "agent-loan",
       "status": "pending"
     }
   ]

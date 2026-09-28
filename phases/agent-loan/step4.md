@@ -1,6 +1,6 @@
 # Step 4: train-model (human)
 
-이 step은 사람이 직접 수행한다. executor는 여기서 멈춘다. 체크리스트를 끝낸 뒤 `docs/agent-loan/phases/index.json`의 step 4 `status`를 `"completed"`로 바꾸면 이어서 실행된다.
+이 step은 사람이 직접 수행한다. executor는 여기서 멈춘다. 체크리스트를 끝낸 뒤 `phases/agent-loan/index.json`의 step 4 `status`를 `"completed"`로 바꾸면 이어서 실행된다.
 
 ## 읽어야 할 파일
 
