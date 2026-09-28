@@ -12,10 +12,12 @@
 │   ├── agent-loan/                # 팀원A
 │   ├── agent-interest/            # 팀원B
 │   └── router/                    # 팀원C
-├── frontend/                      # Next.js 챗봇 UI — 나
+├── frontend/                      # Next.js 챗봇 UI — 나 (package.json·vitest 설정 등 스캐폴드 포함)
 │   └── src/{app,components,lib,types}
 └── backend/
+    ├── pyproject.toml             # pytest 설정(pythonpath = ["."], --import-mode=importlib) — 팀원C
     ├── app/
+    │   ├── __init__.py            # 빈 파일(agents/__init__.py도) — 팀원C
     │   ├── main.py                # FastAPI 진입점, 라우트 등록 — 팀원C
     │   ├── gateway/               # POST /api/chat, 세션, 분기 — 팀원C
     │   ├── masking/               # 개인정보 마스킹 — 팀원C
@@ -160,8 +162,18 @@ AI Hub 원본(backend/data/raw)
 ```
 원본 데이터는 아직 받지 않았다. 문서에 적은 폴더 구조와 필드명(`consulting_topic`, `qa_data[].input.question` 등)은 가정이다. 팀원C가 `training/common`을 시작할 때 실제 파일로 확인하고, 다르면 이 문서와 영역 문서를 고친다.
 
+## 코드·테스트 규칙 (공통, 팀 합의 대기)
+- 패키지의 공개 이름은 `__init__.py`에서 export한다: `from app.masking import mask`, `from app.llm import generate`, `from app.router import classify`, `from app.agents.<영역> import agent, mock_router`(계약 3). `agent`는 import하면 바로 쓸 수 있는 모듈 수준 인스턴스다. mock 조회 함수는 `app.agents.<영역>.mock_api`에서 import한다.
+- 모델을 부르는 코드는 `from app import llm` 뒤 `llm.generate(...)`로 호출한다. 테스트는 `monkeypatch.setattr("app.llm.generate", 가짜_함수)` 한 곳만 바꾼다.
+- mock 조회 함수(`get_accounts`, `get_loans`, `get_interest` 등)는 동기 함수이고 `list[dict]`를 돌려준다. dict의 키는 각 영역 문서의 mock API 표와 정확히 같고(추가 필드 없음), 금액은 정수(원)다. 데모 고객이 아니거나 항목이 없으면 `[]`를 돌려준다. 데이터는 같은 폴더의 `mock_data.json`에서 읽고, mock 라우트는 함수 결과를 그대로 돌려준다.
+- 테스트 파일 이름: backend는 `backend/tests/<폴더>/test_<구현 모듈 파일명>.py`(예: `app/masking/mask.py` → `tests/masking/test_mask.py`), frontend는 대상 파일 옆 `<이름>.test.ts(x)`다. TDD 훅(`.claude/hooks/tdd-guard.sh`)이 이 이름으로 테스트가 있는지 확인하고, 없으면 구현 파일 작성을 막는다. 폴더가 달라도 파일 이름이 같을 수 있어서 pytest는 `--import-mode=importlib`로 돌린다.
+- 테스트 실행: `cd backend && pytest tests/<폴더>`, `cd frontend && npm run test`.
+- 목은 pytest `monkeypatch`로 만든다. 조회·로직은 함수를 직접 테스트하고, HTTP 라우트 테스트(FastAPI `TestClient`)는 필요할 때만 쓴다.
+- 첫 실패 테스트는 파일 하나로 시작하고 케이스 수는 자유다. 테스트 함수 이름·설명 문구의 언어, 주석, 예시 입력 문장, 테스트용 값은 작성자가 정한다.
+- 각 영역의 첫 테스트는 `docs/<영역>/ARCHITECTURE.md`의 "TDD 착수점"을 따른다.
+
 ## 통합 순서
-1. 팀원C가 `agents/base.py`, 세 에이전트의 스텁 패키지(고정 문구를 돌려줌), `llm`, `masking`, `/api/chat`을 먼저 main에 머지한다.
+1. 팀원C가 스캐폴드(`backend/pyproject.toml`, `app/__init__.py`, `app/agents/__init__.py`), `agents/base.py`, 세 에이전트의 스텁 패키지(`handle()`이 고정 문구 "준비 중인 기능입니다."를 돌려줌), `llm`, `masking`, `/api/chat`을 먼저 main에 머지한다.
 2. 스텁이 main에 머지되면 각 feat 브랜치는 main을 병합한 뒤 스텁을 실제 구현으로 교체한다. 프론트는 스텁 응답으로 먼저 개발한다.
 3. 모델이 준비되기 전에는 각 영역이 `llm.generate`를 목(mock)으로 바꿔 테스트한다.
 

@@ -15,10 +15,15 @@ backend/
 └── models/loan/Modelfile
 ```
 
+## TDD 착수점
+- 첫 테스트: `tests/loan/test_mock_api.py` — `get_loans(customer_id)`가 아래 mock 데이터대로 돌려주는지 확인한다.
+- 이후 순서: `handle()` 대출 없음 고정 문장(LN-003) → 슬롯·프롬프트 구성 → 출력 검증(모델은 목). `agents/base.py` 스텁이 main에 오기 전이면 `handle()` 테스트는 import 실패 red로 시작한다.
+
 ## mock API
 | 메서드 | 경로 | 응답 |
 |--------|------|------|
 | GET | `/mock/customers/{customer_id}/loans` | `[{loan_id, product_type, principal_remaining, maturity_date, extendable}]` |
+- 조회 함수: `get_loans(customer_id: str) -> list[dict]`. 공통 규칙은 `docs/ARCHITECTURE.md` "코드·테스트 규칙"을 따른다.
 - `product_type`에는 일반 명칭만 쓴다. 실제 상품명은 쓰지 않는다. 금리 필드는 두지 않는다.
 - 대출이 없거나 모르는 `customer_id`는 404가 아니라 `[]`를 돌려준다.
 - 금액은 정수(원), 날짜는 `YYYY-MM-DD` 문자열, `extendable`은 boolean으로 저장한다. 표시용 포맷(`12,000,000원`)은 에이전트가 슬롯을 만들 때 한다.
@@ -35,7 +40,7 @@ backend/
 ## handle() 흐름
 ```
 1. loans = get_loans(customer_id)
-2. 대출 없음 → 고정 문장 "고객님 명의로 조회되는 대출이 없습니다." (모델 호출 없음)
+2. 대출 없음 → AgentReply(text="고객님 명의로 조회되는 대출이 없습니다.", slots={}, options=[]) (모델 호출 없음)
 3. 대상 대출: mock 고객은 대출이 최대 1건이다(계약 6). 여러 건 선택 되묻기는 만들지 않는다. 2건 이상이면 첫 번째를 쓴다.
 4. slots 생성: loan_label = product_type, principal_remaining = "12,000,000원" 형태
 5. messages = 시스템 프롬프트 + history + masked_text

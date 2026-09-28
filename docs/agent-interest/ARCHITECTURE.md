@@ -14,16 +14,29 @@ backend/
 └── models/interest/Modelfile
 ```
 
+## TDD 착수점
+- 첫 테스트: `tests/interest/test_mock_api.py` — `get_interest(customer_id)`가 아래 mock 데이터대로 돌려주는지 확인한다.
+- 이후 순서: `handle()` 내역 없음 고정 문장(INT-003) → 슬롯·프롬프트 구성 → 출력 검증(모델은 목). `agents/base.py` 스텁이 main에 오기 전이면 `handle()` 테스트는 import 실패 red로 시작한다.
+
 ## mock API
 | 메서드 | 경로 | 응답 |
 |--------|------|------|
 | GET | `/mock/customers/{customer_id}/interest` | `[{loan_id, product_type, next_due_date, interest_due, overdue_amount, overdue_days}]` |
+- 조회 함수: `get_interest(customer_id: str) -> list[dict]`. 공통 규칙은 `docs/ARCHITECTURE.md` "코드·테스트 규칙"을 따른다.
 - 금리·이율 필드는 두지 않는다. 금액은 정수(원)로 저장한다.
+- 타입: `next_due_date`는 `"YYYY-MM-DD"` 문자열, `overdue_days`는 정수다. 연체가 없으면 `overdue_amount`와 `overdue_days`가 모두 0이다.
+
+### mock 데이터
+| customer_id | loan_id | product_type | next_due_date | interest_due | overdue_amount | overdue_days |
+|-------------|---------|--------------|---------------|--------------|----------------|--------------|
+| `C002` | `L001` | 신용대출 | 2026-10-15 | 58000 | 0 | 0 |
+| `C003` | `L002` | 주택담보대출 | 2026-10-25 | 312500 | 625000 | 12 |
+- `C001`은 대출이 없어 `[]`다.
 
 ## handle() 흐름
 ```
 1. items = get_interest(customer_id)
-2. 없음 → 고정 문장 "고객님 명의로 조회되는 대출 이자 내역이 없습니다." (모델 호출 없음)
+2. 없음 → AgentReply(text="고객님 명의로 조회되는 대출 이자 내역이 없습니다.", slots={}, options=[]) (모델 호출 없음)
 3. 대상 대출: mock 고객은 대출이 최대 1건이다(계약 6). 여러 건 선택 되묻기는 만들지 않는다
 4. slots 생성 (loan_label, interest_due, 연체가 있으면 overdue_amount)
 5. messages = 시스템 프롬프트 + history + masked_text

@@ -24,7 +24,7 @@
 - 복합 문의는 되묻기로 처리(한쪽으로 보내면 불합격)
 - 마스킹: 고정 시나리오(예: "제 계좌 110-1234-5678이고 주민번호 900101-1234567인데 잔액 알려줘") 입력 후 모델 입력 로그에 원본 값 0건
 - 첫 응답 10초 이내에서 라우터가 차지하는 시간을 측정해 보고한다
-- `pytest backend/tests/router backend/tests/gateway backend/tests/masking backend/tests/llm` 통과
+- `cd backend && pytest tests/router tests/gateway tests/masking tests/llm` 통과
 
 ## 제외
 - 미지원 6개 주제의 답변 생성, 실제 상담원 연결, 인증, 세션 영속화(DB)
