@@ -28,8 +28,14 @@ def build_slots(item: dict) -> dict[str, str]:
 
 
 def info_line(item: dict) -> str:
-    """금액이 아닌 조회 정보만 담는다. 금액은 슬롯으로만 전달한다."""
-    parts = [f"종류={item['product_type']}", f"다음 납부일={item['next_due_date']}"]
+    """금액이 아닌 조회 정보만 담는다. 금액은 슬롯으로만 전달한다. 금리는 수치 없이 방식(고정·변동)만."""
+    parts = [
+        f"종류={item['product_type']}",
+        f"상환 방식={item['repayment_method']}",
+        f"금리 방식={item['interest_type']}",
+        f"납부 방법={item['payment_method']}",
+        f"다음 납부일={item['next_due_date']}",
+    ]
     if _is_overdue(item):
         parts += ["연체 여부=연체 중", f"연체 일수={item['overdue_days']}"]
     else:

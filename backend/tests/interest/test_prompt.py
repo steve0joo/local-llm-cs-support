@@ -11,6 +11,9 @@ from app.agents.interest.prompt import (
 NORMAL = {
     "loan_id": "L001",
     "product_type": "신용대출",
+    "repayment_method": "만기일시",
+    "interest_type": "변동",
+    "payment_method": "자동이체",
     "next_due_date": "2026-10-25",
     "interest_due": 48000,
     "overdue_amount": 0,
@@ -19,6 +22,9 @@ NORMAL = {
 OVERDUE = {
     "loan_id": "L002",
     "product_type": "주택담보대출",
+    "repayment_method": "원리금균등",
+    "interest_type": "고정",
+    "payment_method": "가상계좌 입금",
     "next_due_date": "2026-10-25",
     "interest_due": 312500,
     "overdue_amount": 625000,
@@ -46,12 +52,12 @@ def test_slots_with_overdue():
 def test_info_line_has_no_amount():
     # 금액은 슬롯으로만 흐른다. 날짜·일수·종류만 프롬프트에 넣는다.
     line = info_line(OVERDUE)
-    assert line == "이자 정보: 종류=주택담보대출, 다음 납부일=2026-10-25, 연체 여부=연체 중, 연체 일수=12"
+    assert line == "이자 정보: 종류=주택담보대출, 상환 방식=원리금균등, 금리 방식=고정, 납부 방법=가상계좌 입금, 다음 납부일=2026-10-25, 연체 여부=연체 중, 연체 일수=12"
     assert "312" not in line and "625" not in line
 
 
 def test_info_line_states_no_overdue():
-    assert info_line(NORMAL) == "이자 정보: 종류=신용대출, 다음 납부일=2026-10-25, 연체 여부=연체 없음"
+    assert info_line(NORMAL) == "이자 정보: 종류=신용대출, 상환 방식=만기일시, 금리 방식=변동, 납부 방법=자동이체, 다음 납부일=2026-10-25, 연체 여부=연체 없음"
 
 
 def test_slot_line():
@@ -71,7 +77,7 @@ def test_build_messages_order_and_content():
     assert last["role"] == "user"
     assert last["content"] == (
         "연체된 거 있어요?\n"
-        "이자 정보: 종류=주택담보대출, 다음 납부일=2026-10-25, 연체 여부=연체 중, 연체 일수=12\n"
+        "이자 정보: 종류=주택담보대출, 상환 방식=원리금균등, 금리 방식=고정, 납부 방법=가상계좌 입금, 다음 납부일=2026-10-25, 연체 여부=연체 중, 연체 일수=12\n"
         "사용할 수 있는 슬롯: {{loan_label}}, {{interest_due}}, {{overdue_amount}}"
     )
 

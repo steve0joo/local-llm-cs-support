@@ -69,3 +69,29 @@ def test_requires_required_slots():
 def test_rejects_empty():
     assert not check("")
     assert not check("   ")
+
+
+# --- 필수 슬롯 판정: 연체 상태를 묻는 질문에만 {{overdue_amount}}를 요구한다 ------------
+
+from app.agents.interest.validate import required_slots  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["연체된 거 있어요?", "제 대출 연체됐어요?", "연체 금액 얼마예요?", "저 연체 없죠?", "밀린 거 있나요?", "미납된 이자 있는지 봐 주세요"],
+)
+def test_overdue_question_requires_overdue_amount(question):
+    assert required_slots(question, overdue=True) == {"overdue_amount"}
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["대출 금리가 몇 %예요?", "연체 가산금리는 얼마예요?", "이자가 왜 이렇게 많이 나왔어요?", "연체이자가 뭐예요?", "납부일 바꿔 주세요"],
+)
+def test_other_questions_do_not_require_overdue_amount(question):
+    # 연체 고객이 금리를 물을 때 상담원 안내만 한 좋은 답이 기본 문장으로 바뀌지 않게 한다.
+    assert required_slots(question, overdue=True) == set()
+
+
+def test_not_overdue_requires_nothing():
+    assert required_slots("연체된 거 있어요?", overdue=False) == set()
