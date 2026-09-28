@@ -35,10 +35,11 @@
    ```
    - 원천은 `split_path`(`{source_id: "train"|"val"|"test"}`)의 해당 분할 중 `consulting_topic == TOPIC`인 항목이다.
    - **원본 필드명은 가정이다**(`consulting_topic`, `source_id`, `qa_data[].input.question`·`input.answer`·`input.follow_up_question`·`output`). 필드 접근은 `_extract_turns(item)` 같은 **한 곳의 어댑터 함수로 모은다**. 실제 데이터 구조가 다르면 그 함수만 고치면 되게 한다.
+   - 추론 입력과 맞추기 위해(LN-006) **마지막 user 발화 뒤에 `prompt.build_messages`와 같은 형식의 "대출 정보"·"사용할 수 있는 슬롯" 줄을 붙인다**. 대출 정보 값은 합성 고정값을 쓰고, 원금 숫자는 넣지 않는다. 시스템 메시지는 `prompt.SYSTEM_PROMPT`를 그대로 쓴다.
    - 모든 user·assistant 발화에 `app.masking.mask()`를 적용한 `masked_text`를 쓴다. 원본 텍스트를 결과 파일에 남기지 마라.
    - `is_clean` 정제 규칙(`output` 기준, `input`에 없는 것이 있으면 **제외**):
      - 숫자(금액·퍼센트·기간)
-     - `validate.DOCUMENT_KEYWORDS`의 서류 키워드
+     - `validate.DOCUMENT_KEYWORDS`의 구체적인 서류명 키워드("서류"라는 일반 단어는 제외 대상이 아니다 — LN-002)
      - 일반 명칭이 아닌 상품명으로 보이는 표현(예: `○○대출`, `○○통장`처럼 일반 명칭 허용 목록 `신용대출`·`주택담보대출`·`전세자금대출` 등에 없는 것). 휴리스틱이다. 규칙을 코드 상수로 두고 요약에 적는다.
    - 출력은 JSONL(`{"messages": [...]}` 한 줄 한 대화) — `backend/data/processed/loan_train.jsonl`이 기본 경로다. `backend/data/`는 gitignore 대상이다.
    - CLI 진입점(`python -m training.loan.prepare --raw ... --split ... --out ... [--limit N]`)을 둔다.
@@ -47,7 +48,7 @@
 
 - 분할 필터: `val`·`test` 항목이나 다른 `consulting_topic` 항목이 `train` 결과에 섞이지 않는다(누수 방지 — ADR-008)
 - 마스킹: 합성 입력에 주민번호·계좌번호·금액 원본이 있으면 결과 JSONL 어디에도 그 원본 문자열이 없다
-- 정제: `output`에 `input`에 없는 퍼센트("연 3.5%")·서류 키워드("재직증명서")·일반 명칭 밖 상품명이 있으면 제외되고, `input`에도 같은 값이 있으면 유지된다
+- 정제: `output`에 `input`에 없는 퍼센트("연 3.5%")·서류명 키워드("재직증명서")·일반 명칭 밖 상품명이 있으면 제외되고, `input`에도 같은 값이 있으면 유지된다
 - 어댑터 격리: 필드명을 바꾼 합성 데이터는 `_extract_turns`만 교체해 처리된다(다른 함수에 필드명 하드코딩 없음)
 - `limit`이 결과 수를 제한한다
 

@@ -22,15 +22,15 @@ step 0에서 만들어진 코드를 읽고 대출 dict 구조(`loan_id, product_
 1. `backend/tests/loan/test_validate.py`, `backend/tests/loan/test_prompt.py`
 2. `backend/app/agents/loan/validate.py`
    ```python
-   DOCUMENT_KEYWORDS: tuple[str, ...]        # ("서류", "증명서", "등본", "재직", "소득") 이상
+   DOCUMENT_KEYWORDS: tuple[str, ...]        # 구체적인 서류명만: ("증명서", "등본", "초본", "재직", "소득", "신분증", "인감", "원천징수", "사본"). "서류" 자체는 넣지 않는다(LN-004 c)
    ALLOWED_SLOTS: tuple[str, ...]            # ("loan_label", "principal_remaining")
    def is_valid_output(text: str, *, maturity_date: str, extendable: bool) -> bool: ...
    ```
    `False`가 되는 조건(하나라도 해당) — `docs/agent-loan/ARCHITECTURE.md` handle() 6단계 a~d가 기준이다:
-   - a. 허용 날짜(`maturity_date`의 `YYYY-MM-DD`, `YYYY년 M월 D일` 표기)를 지운 뒤에도 아라비아 숫자가 남음
+   - a. 허용 표기(`maturity_date`의 `YYYY-MM-DD`·`YYYY년 M월 D일`, 계약 4 마스킹 토큰 `[금액_1]` 등)를 지운 뒤에도 아라비아 숫자가 남음
    - b. `ALLOWED_SLOTS` 밖 이름의 `{{...}}`가 있음
    - c. `DOCUMENT_KEYWORDS` 중 하나가 있음
-   - d. `extendable=False`인데 부정 표현(불가·않·어렵·없) 없이 "가능"이 있음
+   - d. `extendable=False`인데 **같은 문장 안에** 부정 표현(불가·않·어렵·없) 없이 "가능"이 있음(문장은 `.`·`!`·`?`·줄바꿈으로 나눔)
 3. `backend/app/agents/loan/prompt.py`
    ```python
    NO_LOAN_TEXT = "고객님 명의로 조회되는 대출이 없습니다."
