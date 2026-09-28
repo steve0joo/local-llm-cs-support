@@ -1,0 +1,19 @@
+{
+  "project": "local-llm-cs-support",
+  "phase": "agent-loan",
+  "guardrail_docs": [
+    "docs/ARCHITECTURE.md",
+    "docs/ADR.md",
+    "docs/agent-loan/ARCHITECTURE.md",
+    "docs/agent-loan/ADR.md"
+  ],
+  "steps": [
+    { "step": 0, "name": "mock-api", "status": "pending" },
+    { "step": 1, "name": "prompt-validate", "status": "pending" },
+    { "step": 2, "name": "agent-handle", "status": "pending" },
+    { "step": 3, "name": "train-prepare", "status": "pending" },
+    { "step": 4, "name": "train-model", "status": "pending", "type": "human" },
+    { "step": 5, "name": "manual-check", "status": "pending", "type": "human" },
+    { "step": 6, "name": "review", "status": "pending" }
+  ]
+}
