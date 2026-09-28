@@ -8,12 +8,43 @@
     "docs/agent-loan/ADR.md"
   ],
   "steps": [
-    { "step": 0, "name": "mock-api", "status": "pending" },
-    { "step": 1, "name": "prompt-validate", "status": "pending" },
-    { "step": 2, "name": "agent-handle", "status": "pending" },
-    { "step": 3, "name": "train-prepare", "status": "pending" },
-    { "step": 4, "name": "train-model", "status": "pending", "type": "human" },
-    { "step": 5, "name": "manual-check", "status": "pending", "type": "human" },
-    { "step": 6, "name": "review", "status": "pending" }
+    {
+      "step": 0,
+      "name": "mock-api",
+      "status": "completed",
+      "summary": "backend/app/agents/loan/{mock_data.json,mock_api.py,__init__.py(빈 패키지)}와 tests/loan/test_mock_api_loan.py 추가. get_loans(customer_id)->list[dict](deepcopy, 모르는 ID는 []), mock_router는 GET /mock/customers/{id}/loans. 8 passed 1 skipped(interest mock 부재로 공유 값 정합성 테스트 skip — 팀원B 데이터 머지 후 재확인). __init__의 agent export는 step 2."
+    },
+    {
+      "step": 1,
+      "name": "prompt-validate",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "agent-handle",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "train-prepare",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "train-model",
+      "status": "pending",
+      "type": "human"
+    },
+    {
+      "step": 5,
+      "name": "manual-check",
+      "status": "pending",
+      "type": "human"
+    },
+    {
+      "step": 6,
+      "name": "review",
+      "status": "pending"
+    }
   ]
 }
