@@ -39,7 +39,7 @@ POST /api/chat
        topics 있음, supported 없음 → type=unsupported
        topics 없음             → type=clarify, options=세 지원 주제
  4. reply = agents[target].handle(AgentRequest(...)) → type=answer
- 5. session.history에 (masked_text, reply.text) 추가 → 응답 반환
+ 5. session.history에 {"role": "user", "content": 에이전트에 넘긴 masked_text}, {"role": "assistant", "content": reply.text} 추가 (계약 3) → 응답 반환
 ```
 
 ## 마스킹 규칙 (초안 — 테스트로 확정)
@@ -55,8 +55,9 @@ POST /api/chat
 - 같은 원본 값은 같은 토큰으로 바꾼다.
 
 ## 라우터 모델
-- 입력: 마스킹된 고객 문장. 출력: 주제 코드(계약 2) 문자열.
-- 학습 데이터: `training/common` 분할의 train에서 9개 주제 전부. 고객 발화는 `qa_data[].input.question`(없으면 상담 원문 첫 고객 발화)을 쓰고, 라벨은 `consulting_topic`이다.
+- 입력: 마스킹된 고객 문장. 출력: 주제 코드(계약 2) 하나.
+- `classify()`는 모델 출력에 복합 키워드 규칙(RT-002)을 더해 `topics`를 만든다.
+- 학습 데이터: `training/common` 분할의 train에서 9개 주제 전부. 고객 발화는 `qa_data[].input.question`(없으면 상담 원문 첫 고객 발화)을 쓰고, 라벨은 `consulting_topic`이다. 필드명은 데이터 확인 전 가정이다(공통 ARCHITECTURE 학습 파이프라인).
 - 클래스 불균형(대출문의·이자/연체가 약 52%)은 주제별 상한 샘플링으로 맞춘다.
 - `classify()`는 Ollama 출력을 파싱한다. 계약 2에 없는 값이면 빈 topics를 돌려준다.
 

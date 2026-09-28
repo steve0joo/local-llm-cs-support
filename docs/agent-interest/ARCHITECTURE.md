@@ -24,14 +24,17 @@ backend/
 ```
 1. items = get_interest(customer_id)
 2. 없음 → 고정 문장 "고객님 명의로 조회되는 대출 이자 내역이 없습니다." (모델 호출 없음)
-3. 대상 대출 결정: 1건이면 그 대출, 여러 건이면 options(choice: "interest")로 되묻기
+3. 대상 대출: mock 고객은 대출이 최대 1건이다(계약 6). 여러 건 선택 되묻기는 만들지 않는다
 4. slots 생성 (loan_label, interest_due, 연체가 있으면 overdue_amount)
 5. messages = 시스템 프롬프트 + history + masked_text
             + "이자 정보: 종류=주택담보대출, 다음 납부일=2026-10-25, 연체 일수=12"
             + "사용할 수 있는 슬롯: {{loan_label}}, {{interest_due}}, {{overdue_amount}}"
    → llm.generate("cs-interest", messages)
 6. 출력 검증: 금액 형태의 숫자나 퍼센트(%) 수치가 있거나, 연체 상태인데 {{overdue_amount}}가 없으면 기본 문장으로 대체
-7. AgentReply(text, slots, options)
+   기본 문장(코드가 조립, <…>는 조회값): "{{loan_label}}의 다음 납부일은 <다음 납부일>이고, 납부 예정 이자는 {{interest_due}}입니다."
+   + 연체가 있으면 " 현재 <연체 일수>일 연체 중이며 연체 금액은 {{overdue_amount}}입니다."
+   + " 자세한 사항은 상담원에게 확인해 주세요."
+7. AgentReply(text, slots, options=[])
 ```
 
 ## 학습 데이터

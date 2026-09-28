@@ -26,10 +26,11 @@ backend/
 1. accounts = get_accounts(customer_id)
 2. 대상 계좌 결정 (Python 코드)
    - mask_map에 [계좌번호_n]이 있으면 원본 번호로 매칭
-   - 선택지 응답(masked_text가 account_label)이면 라벨로 매칭
+   - 선택지 응답(masked_text가 account_label과 일치)이면 라벨로 매칭하고, 원래 질문은 history의 직전 user 메시지로 한다
    - 계좌가 1개면 그 계좌
    - 그 외 → AgentReply(text="어느 계좌의 잔액을 알려드릴까요?", options=[{label: account_label, choice: "balance"}...])
-3. 의도 판단: "거래내역·내역·입금·출금" 키워드가 있으면 거래내역, 없으면 잔액
+3. 의도 판단(원래 질문 기준): "거래내역·내역·입금·출금" 키워드가 있으면 거래내역, 없으면 잔액
+   - 예: C002 "최근 거래내역 보여줘" → 계좌 선택 → 라벨 클릭 턴에서도 거래내역으로 답해야 한다(테스트로 고정)
 4. slots 생성 (account_label, balance 또는 recent_transactions)
 5. messages = 시스템 프롬프트 + history + masked_text + "사용할 수 있는 슬롯: {{account_label}}, {{balance}}"
    → llm.generate("cs-balance", messages)
@@ -39,7 +40,7 @@ backend/
 ```
 
 ## 학습 데이터
-- 원천: `split.json`의 train 중 `consulting_topic == "거래내역/잔액조회"`인 라벨링 데이터 `qa_data[]`
+- 원천: `split.json`의 train 중 `consulting_topic == "거래내역/잔액조회"`인 라벨링 데이터 `qa_data[]` (필드명은 데이터 확인 전 가정 — 공통 ARCHITECTURE 학습 파이프라인)
 - 한 항목 = 대화 1개: user(`input.question`) → assistant(`input.answer`) → user(`input.follow_up_question`) → **assistant 목표(`output`)**
 - 전처리 순서: `masking.mask()`로 치환 → `output`에 `input`에 없는 수치·상품명이 있으면 제외 → 베이스 모델 채팅 템플릿 적용
 - 검증: val 분할에서 샘플을 뽑아 사람이 읽어 확인한다. test 분할은 최종 점검에만 쓴다.

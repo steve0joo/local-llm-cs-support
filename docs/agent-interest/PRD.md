@@ -8,7 +8,7 @@
 
 ## 담당 범위
 1. mock 이자/연체 API와 데이터(대출 ID `L001`·`L002`는 대출문의 mock과 공유 — 계약 6)
-2. `agent.handle()` — 조회, 대출 선택 되묻기, 프롬프트 구성, 출력 검증
+2. `agent.handle()` — 조회, 프롬프트 구성, 출력 검증
 3. `cs-interest` 모델 — 전처리, QLoRA 학습, GGUF 변환, Modelfile
 
 ## 사용자 스토리

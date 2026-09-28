@@ -26,8 +26,10 @@
     │       ├── balance/           # 잔액조회 에이전트 + mock API·데이터 — 나
     │       ├── loan/              # 대출문의 에이전트 + mock API·데이터 — 팀원A
     │       └── interest/          # 이자/연체 에이전트 + mock API·데이터 — 팀원B
+    ├── requirements.txt           # 런타임 의존성(fastapi·uvicorn·pytest 등) — 팀원C, 추가는 PR로
     ├── tests/<영역>/              # pytest, 영역별 폴더
     ├── training/
+    │   ├── requirements.txt       # 학습 의존성(torch·transformers·peft·trl 등) — Windows 학습 장비 전용, Mac 데모에는 설치하지 않음
     │   ├── common/                # 은행 데이터 필터 + source_id 기준 분할 — 팀원C
     │   └── {router,balance,loan,interest}/   # 영역별 전처리·학습 스크립트
     ├── models/<영역>/Modelfile    # Ollama Modelfile은 커밋, .gguf는 커밋 금지
@@ -97,7 +99,7 @@ frontend: text의 {{balance}}를 slots 값으로 치환해 화면에 표시
 | `rate_discount` | 부수거래금리감면 | 미지원 안내 |
 | `fx` | 환전문의 | 미지원 안내 |
 
-`router.classify(masked_text: str) -> RouteResult` — `RouteResult.topics: list[str]`(확신 높은 순, 0개 이상).
+`router.classify(masked_text: str) -> RouteResult` — `RouteResult.topics: list[str]`(확신 높은 순, 0개 이상). 모델은 주제 1개를 출력하고, 키워드 규칙이 지원 주제 2개 이상을 감지하면 그 주제들을 돌려준다(`docs/router/ADR.md` RT-002).
 
 ## 계약 3 — 에이전트 인터페이스 (`backend/app/agents/base.py`)
 ```python
@@ -107,7 +109,7 @@ class AgentRequest:
     customer_id: str
     masked_text: str
     mask_map: dict[str, str]      # 마스킹 토큰 → 원본. Python 코드에서만 사용, 프롬프트 금지
-    history: list[dict]           # 이전 턴 (마스킹본만)
+    history: list[dict]           # 이전 턴 [{"role": "user" | "assistant", "content": str}] — Ollama messages 형식 그대로
 
 @dataclass
 class AgentReply:
@@ -120,6 +122,8 @@ class Agent(Protocol):
     def handle(self, req: AgentRequest) -> AgentReply: ...
 ```
 각 에이전트 패키지(`app/agents/<영역>/__init__.py`)는 `agent: Agent`와 `mock_router: APIRouter`를 export한다. `main.py`와 gateway는 이 두 이름만 import한다.
+
+`history`는 gateway가 턴마다 채운다. user에는 그 턴에 에이전트로 넘긴 `masked_text`(되묻기 선택이면 보관해 둔 원래 질문), assistant에는 `reply.text`(`{{슬롯}}` 그대로)를 넣는다. 원본 값이나 슬롯 값은 넣지 않는다. 에이전트가 선택지 응답(예: 계좌 라벨)을 받으면 history의 직전 user 메시지로 원래 질문을 알 수 있다.
 
 ## 계약 4 — 마스킹 토큰과 슬롯
 - 마스킹 토큰(입력 → 모델): `[주민번호_1]`, `[카드번호_1]`, `[계좌번호_1]`, `[전화번호_1]`, `[주소_1]`, `[금액_1]`. 같은 종류가 여러 개면 번호가 증가한다.
@@ -153,8 +157,9 @@ AI Hub 원본(backend/data/raw)
   → LoRA 병합 → GGUF 변환(Q4_K_M) → models/<영역>/Modelfile → ollama create cs-<영역>
   → 같은 .gguf를 Mac에 복사해 ollama create (Mac에서도 로컬 추론)
 ```
+원본 데이터는 아직 받지 않았다. 문서에 적은 폴더 구조와 필드명(`consulting_topic`, `qa_data[].input.question` 등)은 가정이다. 팀원C가 `training/common`을 시작할 때 실제 파일로 확인하고, 다르면 이 문서와 영역 문서를 고친다.
 
 ## 통합 순서
 1. 팀원C가 `agents/base.py`, 세 에이전트의 스텁 패키지(고정 문구를 돌려줌), `llm`, `masking`, `/api/chat`을 먼저 main에 머지한다.
-2. 각 에이전트 담당은 스텁을 실제 구현으로 교체한다. 프론트는 스텁 응답으로 먼저 개발한다.
+2. 스텁이 main에 머지되면 각 feat 브랜치는 main을 병합한 뒤 스텁을 실제 구현으로 교체한다. 프론트는 스텁 응답으로 먼저 개발한다.
 3. 모델이 준비되기 전에는 각 영역이 `llm.generate`를 목(mock)으로 바꿔 테스트한다.
