@@ -112,7 +112,17 @@
     {
       "step": 6,
       "name": "chat-window",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T09:47:56+0900",
+      "summary": "components/ChatWindow.tsx — props(messages·pending·onSend·onSelect)만 받고 sendChat은 부르지 않음, 입력값은 로컬 useState·폼 onSubmit 한 경로(Enter·전송 버튼 공통, trim 빈 값 무시·전송 후 비움), 목록은 role=log 컨테이너(flex-1 overflow-y-auto, space-y-3)·빈 목록이면 가운데 안내 문구, 메시지마다 MessageBubble + options 있으면 바로 아래 OptionButtons(활성 = findLastIndex(봇 && !error) && !pending, FE-007), pending이면 입력창·전송·선택지 비활성 + 봇 쪽 animate-pulse 점 3개·sr-only '답변 작성 중', 자동 스크롤은 useEffect([messages.length, pending])에서 scrollTop=scrollHeight(setState·scrollIntoView 없음), UI_GUIDE 입력/전송 클래스 + ChatWindow.test.tsx 11케이스(user-event: 안내 문구 유무, Enter·버튼 전송 trim·입력창 비움, 공백 입력 비활성·Enter 무시, pending 비활성·입력 중 표시, 마지막 봇 선택지만 활성, 오류 뒤 활성, 고객 말풍선이 마지막이어도 활성, 일반 봇 뒤 비활성, onSelect 객체 전달, scrollHeight getter 목으로 scrollTop 확인)",
+      "cost_usd": 1.1373,
+      "num_turns": 16,
+      "completed_at": "2026-09-29T09:50:54+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/ChatWindow.test.tsx",
+        "frontend/src/components/ChatWindow.tsx"
+      ]
     },
     {
       "step": 7,
