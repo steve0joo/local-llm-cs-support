@@ -13,7 +13,7 @@ backend/
 │   ├── mock_api.py        # mock_router + get_accounts(), get_transactions()
 │   └── mock_data.json     # C001~C003 계좌·거래내역
 ├── tests/balance/         # test_<모듈>.py (학습 진입점은 test_train.py)
-├── training/balance/      # train.py·requirements-mac.txt·MAC_TRAINING.md, prepare.py(3차 예정, BAL-008)
+├── training/balance/      # train.py·requirements-mac.txt·MAC_TRAINING.md, prepare.py(BAL-008)
 └── models/balance/Modelfile   # 3차 예정 — GGUF 변환 검증 뒤 만든다(BAL-006)
 ```
 
@@ -210,9 +210,9 @@ MVP 원칙: 데모에서 실제로 생기는 경우만 코드로 막고, 나머�
   - 사실(금리·상품명·수수료·서류·메뉴 이름)은 넣지 않는다. 슬롯과 안내 문구만 쓴다.
   - 첫 실행은 아래 인터페이스의 기본값(질문 각 20개 이상 × 응답 각 5개 이상)으로 하고, 질문 목록과 합성 비중은 첫 소규모 학습 결과를 보고 조정한다.
 - 검증: val 분할에서 샘플을 뽑아 사람이 읽어 확인한다. test 분할은 최종 점검에만 쓴다.
-- 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔지만 `prepare.py`와 실제 가공 데이터는 아직 없으므로 전처리·학습 완료로 표시하지 않는다. main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.
+- 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔고, 실제 가공 데이터는 step 5에서 만든다(`phases/agent-balance/`, 사람). main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.
 
-### `prepare.py` 인터페이스 (3차)
+### `prepare.py` 인터페이스
 `backend/training/balance/prepare.py`. 원본 zip 경로와 분할 파일 경로는 `training.common.split`의 `TL_ZIP`·`VL_ZIP`·`OUT_PATH`를 import해서 쓴다(경로를 다시 적지 않는다).
 ```python
 TOPIC = "거래내역/잔액조회"
@@ -222,16 +222,17 @@ SPLIT_FILES = {"train": "train.jsonl", "val": "valid.jsonl", "test": "test.jsonl
 def load_qas(zip_path: Path) -> Iterator[dict]: ...
     # {"source_id", "question", "answer", "follow_up", "output"}. 원본 필드 접근은 이 함수에만 둔다
     # consulting.consulting_topic == TOPIC 이고 qa_data[].qa_topic == TOPIC 인 QA만 (RT-005 라벨 규칙)
-def normalize_amounts(text: str) -> str: ...        # 비식별 금액 "●…원" → "[금액_n]" (n은 1부터, RT-005)
+def normalize_amounts(text: str) -> str: ...        # 비식별 금액 "●…원" → "[금액_n]" (n은 1부터, RT-005). mask() 금액 규칙의 숫자 자리를 ●로 바꾼 모양(쉼표·억만천백십 허용)
 def build_sample(qa: dict) -> dict | None: ...      # 제외면 None
 def synth_samples() -> dict[str, list[dict]]: ...   # {"train": [...], "val": [...], "test": [...]}
 def build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path]) -> dict[str, int]: ...  # 분할별 기록 수
-# CLI: cd backend && python -m training.balance.prepare   (인자 없으면 위 기본 경로)
+def main(argv: list[str] | None = None) -> None: ...  # --split·--out-dir·--zip(여러 개), 인자 없으면 OUT_PATH·OUT_DIR·[TL_ZIP, VL_ZIP]
+# CLI: cd backend && python -m training.balance.prepare
 ```
 - `build_sample` 순서: 네 필드에 `normalize_amounts` → `mask()`(masked_text만 쓴다) → 제외 규칙 → `{"messages": prompt.build_messages([user: question, assistant: answer], follow_up, "general") + [assistant: output]}`.
 - 제외 규칙(`output` 기준, 하나라도 걸리면 제외):
   1. `validate.is_valid(output, (), ())`가 `False`(숫자·`%`·마스킹 토큰·슬롯·서류 키워드, BAL-008). 공통 ADR-005의 "input에 없는 수치"는 숫자 전부 제외로 대신한다
-  2. 상품명 휴리스틱(ADR-005): 정규식 `[가-힣A-Za-z]+(통장|적금|예금|카드|대출)`에 걸린 단어가 입력 세 필드에 없고 일반 명칭 허용 목록(`입출금통장`·`정기예금`·`정기적금`·`신용카드`·`체크카드`·`신용대출`·`주택담보대출`·`전세자금대출`)에도 없다
+  2. 상품명 휴리스틱(ADR-005): 정규식 `[가-힣A-Za-z]+(통장|적금|예금|카드|대출)`에 걸린 단어가 입력 세 필드에 없고 일반 명칭 허용 목록 `GENERIC_PRODUCT_NAMES`(`입출금통장`·`정기예금`·`정기적금`·`신용카드`·`체크카드`·`신용대출`·`주택담보대출`·`전세자금대출`)에도 없다
 - 분할: `split.json`의 `source_id` 값으로 정한다. `split.json`에 없는 `source_id`는 버린다.
 - `synth_samples` 규칙:
   - 질문 목록 `BALANCE_QUESTIONS`·`TRANSACTION_QUESTIONS`(각 20개 이상)의 모든 질문은 `intent.classify_intent`가 자기 의도로 판단해야 한다. 추론 때와 같은 분기로 들어가게 하기 위해서다.
