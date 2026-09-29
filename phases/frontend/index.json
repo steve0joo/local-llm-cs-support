@@ -204,7 +204,17 @@
     {
       "step": 12,
       "name": "api-response-check",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T11:12:53+0900",
+      "summary": "lib/api.ts sendChat — 2xx 본문 파싱 뒤 text가 문자열이 아니거나 options가 null·undefined가 아니면서 배열도 아니면 throw('/api/chat 응답 형식 오류'), 형식이 맞으면 본문 그대로 반환(보정 없음·slots·항목 안쪽 미검사·검증 라이브러리/타임아웃/재시도/env 분기 없음, 시그니처 유지) + api.test.ts 8케이스 추가(it.each, vi.stubGlobal fetch 200: reject text null·123·키 없음·options {}·'a' + fetch 1회, resolve options null·키 없음·clarify 정상 응답 toStrictEqual 본문 그대로) | AC 전부 통과(api 15케이스, 전체 7파일 73케이스, lint·tsc·build·grep), fetch는 lib/api.ts 상대경로 /api/chat 한 곳",
+      "cost_usd": 0.7206,
+      "num_turns": 13,
+      "completed_at": "2026-09-29T11:14:09+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/lib/api.test.ts",
+        "frontend/src/lib/api.ts"
+      ]
     },
     {
       "step": 13,
