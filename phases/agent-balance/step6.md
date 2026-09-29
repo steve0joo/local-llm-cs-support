@@ -1,39 +1,42 @@
-# Step 6: self-check (human)
+# Step 6: train-export (human)
 
 이 step은 사람이 직접 수행한다. executor는 여기서 멈춘다. 체크리스트를 끝낸 뒤 `phases/agent-balance/index.json`의 step 6 `status`를 `"completed"`로 바꾸면 이어서 실행된다.
 
+사람이 하는 이유: 원본 데이터 접근, 약 8GB 베이스 다운로드, 수십 분 이상 걸리는 학습, llama.cpp 빌드·변환은 세션 타임아웃과 맞지 않고 결과를 사람이 읽어 판단해야 한다.
+
 ## 읽어야 할 파일
 
-- `/docs/PRD.md` (인수 기준 3~7)
-- `/docs/agent-balance/PRD.md` ("사용자 여정" J1~J12, "자체 점검 셋" Q1~Q10, "영역 간 요청")
-- `/docs/agent-balance/ARCHITECTURE.md` ("에러 처리·보안", "알려진 한계")
-- `/backend/README.md` (구동 절차)
+- `/backend/training/balance/MAC_TRAINING.md` (명령의 기준 — 여기 명령을 그대로 따른다)
+- `/docs/agent-balance/ARCHITECTURE.md` ("학습 데이터", "`prepare.py` 인터페이스", "Modelfile")
+- `/docs/agent-balance/ADR.md` (BAL-006, BAL-008, BAL-009)
+- `/backend/training/balance/prepare.py`, `/backend/models/balance/Modelfile` (step 3·4·5 산출물)
+- 참고: `git show origin/feat-agent-interest:backend/training/interest/export.md` (팀원B의 llama.cpp 설치·변환 기록)
 
 ## 체크리스트
 
-선행 조건:
+데이터:
 
-- [ ] `cs-balance`가 Ollama에 등록돼 있다(step 5)
-- [ ] `rm -f backend/logs/model_inputs.jsonl`로 로그를 비웠다
-- [ ] 백엔드를 기본 호스트로 띄웠다: `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (`--host 0.0.0.0` 금지 — ARCHITECTURE "에러 처리·보안")
+- [ ] `backend/data/raw/TL_은행.zip`·`VL_은행.zip` 링크를 만들었다(`MAC_TRAINING.md` 선행 조건 1)
+- [ ] `cd backend && .venv/bin/python -m training.common.split` → `data/processed/split.json` 생성
+- [ ] `cd backend && .venv/bin/python -m training.balance.prepare` → 분할별 기록 수를 적어 둔다(참고: 합성 train 192·val 24·test 24를 뺀 AI Hub 통과분은 약 2,046건, ARCHITECTURE "학습 데이터" BAL-009 집계)
+- [ ] `valid.jsonl`에서 20건 이상을 읽었다: 원본 개인정보 없음, 슬롯 응답은 `{{account_label}}` 등 허용 슬롯만, 지어낸 금리·상품명·서류 없음, 존댓말, 개인정보 요구·할 수 없는 행동 약속 없음(BAL-009). 문제가 있으면 멈추고 `prepare.py` 수정 step을 추가한다
 
-자체 점검 셋(라우터 영향 없이 에이전트만):
+학습:
 
-- [ ] Q1~Q10을 `"choice": "balance"`로 보냈다. 예: `curl -s -X POST localhost:8000/api/chat -H 'Content-Type: application/json' -d '{"session_id":"q1","customer_id":"C001","message":"잔액 얼마 남았어요?","choice":"balance"}'`. Q9는 같은 `session_id`로 계좌 라벨을 `choice`와 함께 한 번 더 보낸다
-- [ ] 각 문항을 ① 주제 적합 ② 지어내지 않음 ③ 존댓말로 판정했다. 9/10 이상
-- [ ] 기본 문장으로 대체된 횟수를 셌다(대체가 많으면 합성 비중·검증 규칙을 다시 본다)
-- [ ] C001 "제 계좌 110-1234-5678 잔액 알려줘"를 보낸 뒤 `grep -c -e 1234567 -e 1,234,567 -e 110-1234-5678 backend/logs/model_inputs.jsonl`이 0이다
-- [ ] 한 요청의 첫 응답이 10초 안에 온다(모델 워밍업 뒤, 공통 인수 기준 7)
+- [ ] `.venv-train` 생성, `requirements-mac.txt` 설치
+- [ ] `mlx_lm convert`로 `Qwen/Qwen3-4B-Instruct-2507` 4bit MLX 베이스 생성, `config.json`에 `quantization` 확인
+- [ ] `train check` 통과 → `train --iters 100` 소규모 학습에서 loss가 줄고 메모리가 24GB 안에서 도는지 확인
+- [ ] 반복 수를 정해 본 학습 → `train test`로 test loss 기록
 
-사용자 여정(챗봇 UI, `cd frontend && npm run dev` 후 `http://localhost:3000`):
+변환·등록:
 
-- [ ] J1·J2·J4·J5·J6·J7이 PRD 표대로 된다. 화면 금액이 `1,234,567원` 형식이고 `{{`가 남지 않는다
-- [ ] J8("입출금 계좌 잔액 알려줘")이 잔액으로, J9(되묻기 뒤 "생활비 계좌 잔액 알려줘")가 되묻기 반복 없이 답한다
-- [ ] 거래내역이 줄마다 나뉘어 보인다(J3). `cs-router`가 없으면 J3은 R1 때문에 주제 없음 되묻기로 빠지는 것이 예상 동작이다
-- [ ] Ollama를 멈추고 잔액을 물으면 "지금은 답변을 드릴 수 없습니다. 상담원 연결을 도와드릴까요?"가 보인다(J12, BAL-007)
+- [ ] `mlx_lm fuse --dequantize` → llama.cpp `convert_hf_to_gguf.py` → `llama-quantize` Q4_K_M
+- [ ] 결과를 `backend/models/balance/cs-balance.gguf`로 복사
+- [ ] `ollama create cs-balance -f backend/models/balance/Modelfile` 성공, `ollama run cs-balance "잔액 알려줘"`가 한국어 존댓말로 답한다
+- [ ] 변환이나 로딩이 실패하면 완료 처리하지 않고 원인을 `MAC_TRAINING.md`에 적는다(BAL-006)
 
-기록:
+기록·커밋 위생:
 
-- [ ] 결과(점수, 실패 문항과 원인, 대체 횟수, 응답 시간)를 `docs/agent-balance/PRD.md` "자체 점검 셋"·"사용자 여정" 아래에 적었다. 새로 찾은 키워드 누락은 알려진 한계 (e)의 후보로 적는다
-- [ ] 9/10 미만이면 원인별로 수정 step을 `phases/agent-balance/index.json`에 pending으로 추가하고 review 전에 끝낸다
-- [ ] `docs(agent-balance): 자체 점검 결과` 형식으로 커밋했다
+- [ ] 베이스 리비전, MLX LM 버전, 분할별 샘플 수(AI Hub·합성), 반복 수, test loss를 `docs/agent-balance/PRD.md` "구현 진행"에 한 줄로 적었다
+- [ ] `git status --short`에 `.gguf`·`.safetensors`·`backend/data/`·`training/balance/outputs/`가 없다
+- [ ] 문서만 `docs(agent-balance): cs-balance 첫 학습 기록` 형식으로 커밋했다

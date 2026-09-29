@@ -171,6 +171,7 @@ backend/
     - 분할: val·test 상담이나 다른 `consulting_topic`, `qa_topic`이 다른 QA가 train 결과에 섞이지 않는다
     - 마스킹: 입력에 계좌번호·전화번호·주민번호 원본을 넣으면 결과 파일 어디에도 원본 문자열이 없다
     - 제외: 숫자가 든 `output`, 서류 키워드가 든 `output`, 입력에 없는 상품명(예: `○○자유통장`)이 든 `output`은 빠지고, 허용 목록 명칭(`체크카드`)만 든 `output`은 남는다
+    - 콜센터식 정답 제외(BAL-009): 아래 "학습 데이터"의 빠질 예문은 모두 빠지고, 남길 예문은 모두 남는다
     - 합성: 모든 합성 질문의 `classify_intent`가 자기 의도, 모든 응답 템플릿이 `is_valid` 통과, 합성 샘플 전체 문자열에 mock 계좌번호(하이픈 유무)·잔액(원 단위 정수·쉼표 표기)이 없다
     - 형식: 기록한 파일이 `training.balance.train.check_dataset(out_dir, "train")`과 `"test"` 모드를 통과한다
   - `test_modelfile.py`: `Modelfile`의 `SYSTEM """..."""` 내용이 `prompt.SYSTEM_PROMPT`와 같고, `FROM ./cs-balance.gguf`와 `stop "<|im_end|>"`가 있다
@@ -202,15 +203,20 @@ MVP 원칙: 데모에서 실제로 생기는 경우만 코드로 막고, 나머�
 - 원천: 로컬 은행 라벨링 ZIP의 JSON에서 `consulting.consulting_topic == "거래내역/잔액조회"`인 `qa_data[]`를 추출하고 `source.source_id`로 공통 `split.json`을 적용한다. 실제 확인된 건수는 Training 4,017건, Validation 503건이다. 원천 Training·Validation에 함께 있는 상담 2건은 공통 분할이 train으로 보낸다(main `docs/router/ADR.md` RT-005).
 - RT-005의 영역 규칙을 따른다: 같은 QA의 `qa_topic`이 `consulting_topic`과 다르면 뺀다. 원본에서 가려진 금액 `●●●원`은 `[금액_n]`으로 바꾼 뒤 `mask()`를 적용한다.
 - 한 항목 = 대화 1개: user(`input.question`) → assistant(`input.answer`) → user(`input.follow_up_question`) → **assistant 목표(`output`)**
-- 전처리 순서: 게이트웨이와 같은 `app.masking.mask()`로 치환 → `output`에 `input`에 없는 수치·상품명이 있으면 제외 → `output`이 general 출력 검증(`validate.is_valid(output, (), ())`)에 걸리면 제외(BAL-008) → `prompt.build_messages([question, answer], follow_up_question, "general")`로 입력을 만든다. 채팅 템플릿은 MLX LM이 베이스 토크나이저로 입힌다. `app.masking` import 실패 시 전처리를 중단한다. 임시 정규식·fallback 마스킹은 허용하지 않는다(계약 4).
+- 전처리 순서: 게이트웨이와 같은 `app.masking.mask()`로 치환 → `output`에 `input`에 없는 수치·상품명이 있으면 제외 → `output`이 general 출력 검증(`validate.is_valid(output, (), ())`)에 걸리면 제외(BAL-008) → `output`이 콜센터식 정답(아래)이면 제외(BAL-009) → `prompt.build_messages([question, answer], follow_up_question, "general")`로 입력을 만든다. 채팅 템플릿은 MLX LM이 베이스 토크나이저로 입힌다. `app.masking` import 실패 시 전처리를 중단한다. 임시 정규식·fallback 마스킹은 허용하지 않는다(계약 4).
 - 원천의 한계(2026-09-29 로컬 집계, Training 4,017건): `output`은 대부분 절차 안내형 장문이고 `{{슬롯}}`을 쓰는 답은 0건, 아라비아 숫자가 든 답이 1,311건(33%)이다. 이것만 학습하면 잔액·거래내역 턴의 모델 출력은 필수 슬롯 검사(BAL-002)에 걸려 거의 항상 기본 문장으로 바뀐다.
+- 콜센터식 정답 제외(BAL-009): 마스킹 뒤 `output`만 본다(학습은 `--mask-prompt`라 history의 assistant 답은 loss에 들지 않는다).
+  - 개인정보 요구: 성함·생년월일·계좌번호(`계좌 번호`)·비밀번호·주민(등록)번호·카드번호(`카드 번호`) 뒤 같은 문장 25자 안에 `알려`·`말씀해`·`입력해`·`눌러`가 오면 뺀다. 빠질 예문: "성함과 생년월일 앞 여섯 자리를 알려주시기 바랍니다", "계좌 비밀번호 네 자리를 입력해 주십시오", "계좌 번호를 알려 주시면 확인해 드리겠습니다"
+  - 행동 약속: `보내`·`전송해`·`발급해`·`조치해`·`정정해`·`처리해` 뒤에 `드리겠`·`드리니`가 오면(띄어쓰기 유무 모두) 뺀다. 빠질 예문: "문자로 상세 정보를 보내드리겠습니다", "필요하시면 영수증도 전송해 드리니 잠시만 기다려 주시기 바랍니다", "PDF 파일이나 우편으로 발급해 드리겠습니다", "신속히 확인하여 조치해 드리겠습니다"
+  - 남길 예문: "카드사 상담원과 연결해 드리겠습니다", "담당 부서로 연결해 드리겠습니다", "고객센터로 문의해 주시기 바랍니다", "조회 방법을 안내해 드리겠습니다"
+  - 2026-09-29 로컬 집계: AI Hub 통과분 2,327건(train 2,029·val 139·test 159) → 2,046건(train 1,805·val 109·test 132)
 - 합성 슬롯 샘플(BAL-008): `prepare.py`가 잔액·거래내역 질문 변형 → `{{슬롯}}` 응답 변형 샘플을 템플릿으로 만들어 AI Hub 샘플과 섞는다.
   - 입력은 추론과 같은 `prompt.build_messages`로 만든다(`SYSTEM_PROMPT`, "사용할 수 있는 슬롯:" 줄 포함). 첫 턴 모양과 라벨 클릭 턴 모양 두 가지다(아래 "`prepare.py` 인터페이스"). 학습 입력과 추론 입력의 모양을 맞추기 위해서다(계약 4와 같은 이유).
   - 응답 템플릿은 그 의도로 `validate.is_valid`를 통과해야 한다(필수 슬롯 포함, 숫자·`%`·마스킹 토큰·서류 키워드 없음). 테스트로 고정한다.
   - 사실(금리·상품명·수수료·서류·메뉴 이름)은 넣지 않는다. 슬롯과 안내 문구만 쓴다.
   - 첫 실행은 아래 인터페이스의 기본값(질문 각 20개 이상 × 응답 각 5개 이상)으로 하고, 질문 목록과 합성 비중은 첫 소규모 학습 결과를 보고 조정한다.
 - 검증: val 분할에서 샘플을 뽑아 사람이 읽어 확인한다. test 분할은 최종 점검에만 쓴다.
-- 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔고, 실제 가공 데이터는 step 5에서 만든다(`phases/agent-balance/`, 사람). main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.
+- 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔고, 실제 가공 데이터는 step 6에서 만든다(`phases/agent-balance/`, 사람). main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.
 
 ### `prepare.py` 인터페이스
 `backend/training/balance/prepare.py`. 원본 zip 경로와 분할 파일 경로는 `training.common.split`의 `TL_ZIP`·`VL_ZIP`·`OUT_PATH`를 import해서 쓴다(경로를 다시 적지 않는다).

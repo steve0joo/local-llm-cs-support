@@ -67,10 +67,10 @@ main `7466702`의 게이트웨이(`/api/chat` 처리 순서) 위에 이 브랜�
   0. main 병합 — 충돌 4개는 BAL-005 "병합 시험 결과"대로 푼다. 팀원C의 `tests/gateway/test_api.py`는 fixture의 `classify`가 `["loan"]`을 돌려주고 기대 `agent`를 `"loan"`으로 바꾼다(아직 스텁인 영역으로 옮겨 검사 의도 유지, ARCHITECTURE "알려진 한계"). 전체 pytest가 통과해야 다음으로 간다
   1. `'입출금'` 오분류 수정(J8) — 거래내역 키워드를 보기 전에 질문에서 `입출금`을 지운다(ARCHITECTURE "의도 판단")
   2. 입력한 별칭·끝 4자리로 계좌 선택(J9) — 본인 계좌 하나와만 맞으면 되묻지 않는다(ARCHITECTURE "대상 계좌 결정", BAL-003)
-  3. `training/balance/prepare.py` — AI Hub 샘플 + 템플릿 합성 슬롯 샘플, 입력은 `build_messages`와 같은 형식(BAL-008)
+  3. `training/balance/prepare.py` — AI Hub 샘플 + 템플릿 합성 슬롯 샘플, 입력은 `build_messages`와 같은 형식(BAL-008), 콜센터식 정답 제외(BAL-009)
   4. `models/balance/Modelfile`(SYSTEM이 `SYSTEM_PROMPT`와 같은지 테스트로 고정) → 학습 → GGUF 변환 → `ollama create cs-balance`(BAL-006, `MAC_TRAINING.md`)
   5. 아래 "자체 점검 셋"과 사용자 여정 J1~J12를 실제 `/api/chat`으로 확인
-  - 실행 계획은 `phases/agent-balance/`(Harness, `python3 scripts/execute.py agent-balance`)에 있다. 대응: 0 → step 0 `main-merge`(사람), 1 → step 1 `intent-alias`, 2 → step 2 `resolve-typed`, 3 → step 3 `train-prepare`, 4 → step 4 `modelfile` + step 5 `train-export`(사람), 5 → step 6 `self-check`(사람), 마지막 step 7 `review`. 사람 step이 아닌 것은 모두 모델 없이 TDD로 한다.
+  - 실행 계획은 `phases/agent-balance/`(Harness, `python3 scripts/execute.py agent-balance`)에 있다. 대응: 0 → step 0 `main-merge`(사람), 1 → step 1 `intent-alias`, 2 → step 2 `resolve-typed`, 3 → step 3 `train-prepare` + step 5 `prepare-filter`(step 6 valid 점검에서 추가, BAL-009), 4 → step 4 `modelfile` + step 6 `train-export`(사람), 5 → step 7 `self-check`(사람), 마지막 step 8 `review`. 사람 step이 아닌 것은 모두 모델 없이 TDD로 한다.
 - 끝났다
   - 프론트엔드의 슬롯 값 속 줄바꿈(`{{recent_transactions}}`) 표시 — main의 frontend가 `whitespace-pre-line`으로 처리한다(`docs/frontend/ARCHITECTURE.md` "화면 동작 규칙", main 기준)
 - 미룬다

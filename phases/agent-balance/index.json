@@ -85,18 +85,23 @@
     },
     {
       "step": 5,
+      "name": "prepare-filter",
+      "status": "pending"
+    },
+    {
+      "step": 6,
       "name": "train-export",
       "status": "pending",
       "type": "human"
     },
     {
-      "step": 6,
+      "step": 7,
       "name": "self-check",
       "status": "pending",
       "type": "human"
     },
     {
-      "step": 7,
+      "step": 8,
       "name": "review",
       "status": "pending"
     }
