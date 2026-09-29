@@ -1,0 +1,301 @@
+{
+  "project": "local-llm-cs-support",
+  "phase": "frontend",
+  "guardrail_docs": [
+    "docs/ARCHITECTURE.md",
+    "docs/ADR.md",
+    "docs/frontend/ARCHITECTURE.md",
+    "docs/frontend/ADR.md"
+  ],
+  "steps": [
+    {
+      "step": 0,
+      "name": "project-setup",
+      "status": "completed",
+      "started_at": "2026-09-29T09:39:08+0900",
+      "summary": "create-next-app@16.3.6 --empty 스캐폴드(next 16.3.6·react 19.2.8·tailwind 4.3.3·typescript 5.9.3·eslint 9.39.5) + vitest 5.0.2·vite 8.3.1·jsdom 29.1.1·RTL 16·@types/node 24, next.config.ts(rewrites→:8000·proxyTimeout 120_000·agentRules false), vitest.config.ts·src/test/setup.ts, types/chat.ts, layout.tsx(lang=ko·제목 '은행 상담'), tsconfig의 @/* alias 제거",
+      "cost_usd": 0.8806,
+      "num_turns": 22,
+      "completed_at": "2026-09-29T09:41:06+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/.gitignore",
+        "frontend/eslint.config.mjs",
+        "frontend/next.config.ts",
+        "frontend/package-lock.json",
+        "frontend/package.json",
+        "frontend/postcss.config.mjs",
+        "frontend/src/app/globals.css",
+        "frontend/src/app/layout.tsx",
+        "frontend/src/app/page.tsx",
+        "frontend/src/test/setup.ts",
+        "frontend/src/types/chat.ts",
+        "frontend/tsconfig.json",
+        "frontend/vitest.config.ts"
+      ]
+    },
+    {
+      "step": 1,
+      "name": "fill-slots",
+      "status": "completed",
+      "started_at": "2026-09-29T09:41:11+0900",
+      "summary": "lib/fillSlots.ts(SlotPart[] 반환, /\\{\\{([^{}]*)\\}\\}/g·trim·Object.hasOwn·빈 이름/빈 값→'확인할 수 없습니다' slot:false·재치환 없음·빈 조각 없음) + fillSlots.test.ts 26케이스(문서 예시 2건·빈 문자열·다중/반복·공백 이름·상속 속성·$ 패턴·비토큰 중괄호·조각 경계·줄바꿈·순수성)",
+      "cost_usd": 0.7863,
+      "num_turns": 12,
+      "completed_at": "2026-09-29T09:42:55+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/lib/fillSlots.test.ts",
+        "frontend/src/lib/fillSlots.ts"
+      ]
+    },
+    {
+      "step": 2,
+      "name": "api-client",
+      "status": "completed",
+      "started_at": "2026-09-29T09:42:59+0900",
+      "summary": "lib/api.ts sendChat(req) — 상대경로 /api/chat에 POST·Content-Type application/json·JSON.stringify(req)(choice 없으면 키 없음), !res.ok면 throw, 타임아웃·재시도·런타임 목 없음 + api.test.ts 7케이스(vi.stubGlobal fetch 목: 요청 형태·choice 유무·2xx 반환·500/404 reject·네트워크 오류 reject, 실패 시 fetch 1회)",
+      "cost_usd": 0.6007,
+      "num_turns": 10,
+      "completed_at": "2026-09-29T09:43:58+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/lib/api.test.ts",
+        "frontend/src/lib/api.ts"
+      ]
+    },
+    {
+      "step": 3,
+      "name": "option-buttons",
+      "status": "completed",
+      "started_at": "2026-09-29T09:44:01+0900",
+      "summary": "components/OptionButtons.tsx — props(options·disabled·onSelect)만 받는 표시 컴포넌트, 선택지마다 type=button 버튼(UI_GUIDE 선택지 버튼 클래스, flex flex-wrap gap-2), 클릭 시 onSelect(option), 빈 배열이면 null, key는 index(계좌 선택지는 choice가 모두 'balance'라 중복) + OptionButtons.test.tsx 4케이스(user-event: label별 버튼·onSelect 객체 1회 호출·disabled 시 전부 비활성·미호출·빈 배열 버튼 없음)",
+      "cost_usd": 0.6618,
+      "num_turns": 11,
+      "completed_at": "2026-09-29T09:45:09+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/OptionButtons.test.tsx",
+        "frontend/src/components/OptionButtons.tsx"
+      ]
+    },
+    {
+      "step": 4,
+      "name": "message-bubble",
+      "status": "completed",
+      "started_at": "2026-09-29T09:45:12+0900",
+      "summary": "components/MessageBubble.tsx — props(message)만 받는 표시 컴포넌트, 봇은 fillSlots(text, slots ?? {}) 조각을 그리고 slot:true만 font-semibold tabular-nums span, 고객은 text 그대로(치환 없음), 오류는 text-red-700, 공통 w-fit max-w-[80%] rounded-lg px-4 py-3 text-sm leading-relaxed whitespace-pre-line animate-fade-in(UI_GUIDE 말풍선), 선택지는 그리지 않음·dangerouslySetInnerHTML 없음 + MessageBubble.test.tsx 9케이스(금액 스타일·{{ 없음·원본 불변, 누락 슬롯, slots 없음, 고객 무치환, 오류 색, text·슬롯 줄바꿈, HTML 비해석)",
+      "cost_usd": 0.8663,
+      "num_turns": 12,
+      "completed_at": "2026-09-29T09:46:46+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/MessageBubble.test.tsx",
+        "frontend/src/components/MessageBubble.tsx"
+      ]
+    },
+    {
+      "step": 5,
+      "name": "customer-picker",
+      "status": "completed",
+      "started_at": "2026-09-29T09:46:49+0900",
+      "summary": "components/CustomerPicker.tsx — props(value·disabled·onChange)만 받는 표시 컴포넌트, useId로 연결한 '데모 고객' label(text-sm text-stone-500) + select(UI_GUIDE 데모 고객 선택 클래스), 항목은 types/chat.ts의 CUSTOMER_IDS로 그림(ID 재기재 없음), 변경 시 onChange(e.target.value as CustomerId), 초기화는 하지 않음(page.tsx 몫) + CustomerPicker.test.tsx 3케이스(user-event: 라벨·combobox·C001~C003 순서·value 선택, C002 선택 시 onChange('C002') 1회, disabled 시 비활성)",
+      "cost_usd": 0.6672,
+      "num_turns": 10,
+      "completed_at": "2026-09-29T09:47:53+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/CustomerPicker.test.tsx",
+        "frontend/src/components/CustomerPicker.tsx"
+      ]
+    },
+    {
+      "step": 6,
+      "name": "chat-window",
+      "status": "completed",
+      "started_at": "2026-09-29T09:47:56+0900",
+      "summary": "components/ChatWindow.tsx — props(messages·pending·onSend·onSelect)만 받고 sendChat은 부르지 않음, 입력값은 로컬 useState·폼 onSubmit 한 경로(Enter·전송 버튼 공통, trim 빈 값 무시·전송 후 비움), 목록은 role=log 컨테이너(flex-1 overflow-y-auto, space-y-3)·빈 목록이면 가운데 안내 문구, 메시지마다 MessageBubble + options 있으면 바로 아래 OptionButtons(활성 = findLastIndex(봇 && !error) && !pending, FE-007), pending이면 입력창·전송·선택지 비활성 + 봇 쪽 animate-pulse 점 3개·sr-only '답변 작성 중', 자동 스크롤은 useEffect([messages.length, pending])에서 scrollTop=scrollHeight(setState·scrollIntoView 없음), UI_GUIDE 입력/전송 클래스 + ChatWindow.test.tsx 11케이스(user-event: 안내 문구 유무, Enter·버튼 전송 trim·입력창 비움, 공백 입력 비활성·Enter 무시, pending 비활성·입력 중 표시, 마지막 봇 선택지만 활성, 오류 뒤 활성, 고객 말풍선이 마지막이어도 활성, 일반 봇 뒤 비활성, onSelect 객체 전달, scrollHeight getter 목으로 scrollTop 확인)",
+      "cost_usd": 1.1373,
+      "num_turns": 16,
+      "completed_at": "2026-09-29T09:50:54+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/ChatWindow.test.tsx",
+        "frontend/src/components/ChatWindow.tsx"
+      ]
+    },
+    {
+      "step": 7,
+      "name": "chat-page",
+      "status": "completed",
+      "started_at": "2026-09-29T09:50:59+0900",
+      "summary": "app/page.tsx — 'use client' 컴포넌트 하나에 useState(sessionId=useState(()=>crypto.randomUUID())·customerId 'C001'·messages·pending), send(message, choice?)가 고객 말풍선 추가→pending→sendChat({session_id, customer_id, message, ...(choice ? {choice} : {})})→봇 말풍선(text·slots·options) 또는 오류 말풍선('잠시 후 다시 시도해 주세요', error: true)→finally pending 해제, onSelect는 label로 말풍선+choice 전송, 고객 변경은 CustomerPicker onChange 핸들러에서 customerId·새 sessionId·messages [] 동시 변경(useEffect 없음), 레이아웃 main mx-auto flex h-dvh max-w-2xl flex-col + 상단 header('은행 상담' text-base font-semibold text-stone-900 + CustomerPicker disabled=pending) + ChatWindow, sendChat 호출은 page.tsx 한 곳 + globals.css @theme --animate-fade-in(0.2s)·@keyframes fade-in, @layer base body 배경 #f5f5f4 (layout.tsx 변경 없음) + page.test.tsx 5케이스(vi.mock('../lib/api'): 잔액 치환·{{ 없음·첫 요청 C001/문자열 session_id/choice 키 없음, clarify 선택지 클릭 시 고객 말풍선·choice 'interest'·같은 session_id, reject 시 오류 말풍선 text-red-700·입력창 활성, 미해결 promise 동안 고객 선택·입력창 비활성·입력 중 표시 후 resolve 뒤 활성, 고객 C002 변경 시 log가 안내 문구만·다음 요청 C002·새 session_id)",
+      "cost_usd": 1.0628,
+      "num_turns": 17,
+      "completed_at": "2026-09-29T09:53:22+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/app/globals.css",
+        "frontend/src/app/page.test.tsx",
+        "frontend/src/app/page.tsx"
+      ]
+    },
+    {
+      "step": 8,
+      "name": "manual-check",
+      "status": "completed",
+      "type": "human"
+    },
+    {
+      "step": 9,
+      "name": "review",
+      "status": "completed",
+      "started_at": "2026-09-29T10:20:42+0900",
+      "summary": "review.md 7항목 전부 ✅ (코드 수정 없음) | 아키텍처 준수 ✅ docs/frontend/ARCHITECTURE 디렉토리 구조·named export·상대경로 import 일치, sendChat 호출은 page.tsx 한 곳, 표시 컴포넌트는 props만 | 기술 스택 준수 ✅ lock 기준 next 16.3.6·react 19.2.8·tailwind 4.3.3·vitest 5.0.2·vite 8.3.1·jsdom 29.1.1·RTL 16·@types/node 24, 상태·페칭 라이브러리 없음, next.config.ts에 proxyTimeout 120_000·agentRules false, 런타임 목·타임아웃·재시도·env 없음(FE-005·006) | 테스트 존재 ✅ 구현 파일 7개 모두 옆에 <이름>.test.ts(x), 7파일 65케이스 통과 | CRITICAL 규칙 ✅ src에 localhost:8000·11434·/mock/·dangerouslySetInnerHTML 없음, fetch는 lib/api.ts의 상대경로 /api/chat뿐이고 백엔드 주소는 rewrites에만, 슬롯 치환은 fillSlots 한 곳(MessageBubble 봇 말풍선만)·고객 말풍선 무치환, UI_GUIDE 금지 패턴(backdrop-blur·bg-gradient·bg-clip-text·purple/indigo/violet·글로우 그림자·Powered by AI) 없음 | 검증 통과 ✅ lint·tsc --noEmit·build·test·grep·AGENTS.md/CLAUDE.md 부재 AC 전부 통과, scripts/verify.sh exit 0(backend/tests 없어 frontend만) | 핵심 규칙 테스트 ✅ fillSlots 누락·빈 값·빈 이름({{}}·{{ }})·상속 속성(toString·__proto__)·값 재치환 금지, api choice 키 없음·500/404·네트워크 오류 reject 1회 호출, ChatWindow 최신 비오류 봇만 선택지 활성(오류 뒤 활성·일반 봇 뒤 비활성)·pending 시 입력/전송/선택지 전부 비활성·공백 입력 차단, page 1,234,567원 표시·{{ 없음·clarify 선택 요청 choice·고객 변경 시 로그 초기화·새 session_id | 커밋 위생 ✅ node_modules·.next·.env*·AGENTS.md·CLAUDE.md·가중치·gitlink·비밀키 없음, lock resolved 전부 registry.npmjs.org, step 커밋(c33886e..41fee4d)은 frontend/·phases/frontend/만 변경, phases/index.json 변경 없음, main 대비 그 밖의 변경은 phase 전 계획 커밋 da6b969의 자기 영역 docs/frontend/*뿐(공통 docs·docs/agent-*·backend·CLAUDE.md·.claude 변경 없음) | 참고(결함 아님): vitest가 vitest.config.ts를 CJS로 읽는다는 Vite configLoader 경고 출력",
+      "cost_usd": 1.2081,
+      "num_turns": 17,
+      "completed_at": "2026-09-29T10:22:48+0900",
+      "ac_verified": true
+    },
+    {
+      "step": 10,
+      "name": "landing-assets",
+      "status": "completed",
+      "started_at": "2026-09-29T11:10:10+0900",
+      "summary": "웹사이트 원본(~/Projects/local-llm-cs-support-website)에서 cp로 6개 파일 복사 — public/scroll-world/{scrub-engine.js, scene02.webp, finetune.webp, reception.webp, office.webp, vid/scene02.mp4}, SHA-256 6건 원본·AC와 일치(수정·재인코딩 없음, .DS_Store 없음) + eslint.config.mjs globalIgnores에 \"public/scroll-world/**\" 추가(주석: 엔진 원본 lint 제외, FE-008; ignore 없이 lint하면 경고 4건) | lint·build·test(7파일 65케이스) 통과",
+      "cost_usd": 0.7059,
+      "num_turns": 10,
+      "completed_at": "2026-09-29T11:11:03+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/eslint.config.mjs",
+        "frontend/public/scroll-world/finetune.webp",
+        "frontend/public/scroll-world/office.webp",
+        "frontend/public/scroll-world/reception.webp",
+        "frontend/public/scroll-world/scene02.webp",
+        "frontend/public/scroll-world/scrub-engine.js",
+        "frontend/public/scroll-world/vid/scene02.mp4",
+        "phases/frontend/step10.md",
+        "phases/frontend/step11.md",
+        "phases/frontend/step12.md",
+        "phases/frontend/step13.md",
+        "phases/frontend/step14.md",
+        "phases/frontend/step15.md",
+        "phases/frontend/step16.md",
+        "phases/frontend/step17.md",
+        "phases/frontend/step18.md"
+      ]
+    },
+    {
+      "step": 11,
+      "name": "theme-tokens",
+      "status": "completed",
+      "started_at": "2026-09-29T11:11:09+0900",
+      "summary": "globals.css @theme에 UI_GUIDE 색 토큰 8개(--color-cream #FCF1E6·surface #FFFBF6·bubble #F3E6D8·ink #2A2118·ink-soft #7A6A5C·accent-orange #E07B2E·accent-blue #3A6FD0·accent-yellow #E5A527)와 --font-sans(\"Pretendard Variable\", Pretendard, -apple-system, system-ui, sans-serif) 추가, 기존 --animate-fade-in·@keyframes 유지, @layer base body 배경 var(--color-cream) + 레이어 밖 엔진 덮어쓰기 3종(:root,.sw-root의 --sw-bg/ink/ink-soft/accent=var(--color-…)·--sw-font-display/body=var(--font-sans), .sw-copy__title/.sw-copy__body word-break keep-all, @media (min-width:861px) .sw-scene__video/.sw-scene__still object-fit contain) — hex는 @theme에만 | layout.tsx <head>에 Pretendard 1.3.9 jsdelivr CSS <link>, metadata.title 'Local LLM — 은행 상담 AI', lang=ko·children 타입 직접 표기 유지 | AC grep 16건·lint·tsc·build·test(7파일 65케이스) 통과, 빌드 CSS에서 덮어쓰기가 @layer 밖에 있음 확인 | 참고: Tailwind v4는 쓰인 토큰만 :root에 출력하므로 현재 빌드엔 cream·ink·ink-soft·accent-orange·font-sans만 나오고 surface·bubble·accent-blue·accent-yellow는 step 14~16에서 클래스로 쓰일 때 출력됨",
+      "cost_usd": 0.9551,
+      "num_turns": 13,
+      "completed_at": "2026-09-29T11:12:45+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/app/globals.css",
+        "frontend/src/app/layout.tsx"
+      ]
+    },
+    {
+      "step": 12,
+      "name": "api-response-check",
+      "status": "completed",
+      "started_at": "2026-09-29T11:12:53+0900",
+      "summary": "lib/api.ts sendChat — 2xx 본문 파싱 뒤 text가 문자열이 아니거나 options가 null·undefined가 아니면서 배열도 아니면 throw('/api/chat 응답 형식 오류'), 형식이 맞으면 본문 그대로 반환(보정 없음·slots·항목 안쪽 미검사·검증 라이브러리/타임아웃/재시도/env 분기 없음, 시그니처 유지) + api.test.ts 8케이스 추가(it.each, vi.stubGlobal fetch 200: reject text null·123·키 없음·options {}·'a' + fetch 1회, resolve options null·키 없음·clarify 정상 응답 toStrictEqual 본문 그대로) | AC 전부 통과(api 15케이스, 전체 7파일 73케이스, lint·tsc·build·grep), fetch는 lib/api.ts 상대경로 /api/chat 한 곳",
+      "cost_usd": 0.7206,
+      "num_turns": 13,
+      "completed_at": "2026-09-29T11:14:09+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/lib/api.test.ts",
+        "frontend/src/lib/api.ts"
+      ]
+    },
+    {
+      "step": 13,
+      "name": "scroll-world",
+      "status": "completed",
+      "started_at": "2026-09-29T11:14:17+0900",
+      "summary": "components/ScrollWorld.tsx — 'use client', props 없음, 컨테이너 div(data-testid=scroll-world, ref, 실패면 hidden·아니면 min-h-dvh) + next/script(src '/scroll-world/scrub-engine.js', afterInteractive), onReady에서만 초기화(폴링 없음)·컨테이너가 비었을 때만 window.mountScrollWorld(container, LANDING), 실패 3종(onError·함수 없음·마운트 예외 try/catch)→hidden, 마운트 직후 location.hash==='#chat'이면 #chat scrollIntoView, declare global Window.mountScrollWorld?, LANDING 상수(PRD 랜딩 표 4섹션 backlog·finetune·onboard·privacy 카피·에셋 /scroll-world/ 절대경로·accent·scroll, 04 CTA primary '직접 물어보기' #chat만, brand 'Local LLM' #top, 상단 cta '직접 물어보기' #chat, hint '스크롤해서 들어가기', diveScroll 1.3·crossfade 0.35·connectors [], 정적 문자열만 — PRD 표와 44건 문자열 대조 일치) + ScrollWorld.test.tsx 9케이스(vi.hoisted+vi.mock next/script로 props 보관, fakeMount가 컨테이너에 자식 추가: Script props, 초기 min-h-dvh·미마운트, onReady 1회 마운트·설정 확인, onReady 2회에도 1회, onError hidden·미마운트, 함수 없음 hidden, 예외 미전파·hidden, hash #chat이면 scrollIntoView 1회·없으면 0회) | AC 전부 통과(전체 8파일 82케이스, lint·tsc·build·grep), page.tsx 미연결(step 16)",
+      "cost_usd": 1.2569,
+      "num_turns": 17,
+      "completed_at": "2026-09-29T11:16:42+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/ScrollWorld.test.tsx",
+        "frontend/src/components/ScrollWorld.tsx"
+      ]
+    },
+    {
+      "step": 14,
+      "name": "chat-restyle",
+      "status": "completed",
+      "started_at": "2026-09-29T11:16:50+0900",
+      "summary": "표시 컴포넌트 3개 클래스만 UI_GUIDE로 교체(props·마크업·문구·라벨·테스트 무변경) — MessageBubble: 공통 BUBBLE에서 rounded-lg 빼고 봇 rounded-[18px] rounded-bl-md bg-bubble text-ink(오류는 text-red-700)·고객 rounded-[18px] rounded-br-md bg-ink text-white ml-auto, whitespace-pre-line·animate-fade-in·슬롯 font-semibold tabular-nums 유지 | OptionButtons: rounded-full border-[1.5px] border-accent-blue px-4 py-1.5 text-sm font-medium text-accent-blue hover:bg-accent-blue/10 disabled:opacity-40 | CustomerPicker: 라벨 text-sm text-ink-soft, select rounded-full border border-ink/20 bg-white px-3 py-1.5 text-sm text-ink focus:border-accent-blue focus:outline-none disabled:opacity-40 | teal·stone·hex·arbitrary 색·금지 패턴 없음, 빌드 CSS에서 rounded-[18px]이 rounded-b[lr]-md보다 앞에 출력돼 꼬리 모서리 적용 확인 | AC 전부 통과(대상 3파일 16케이스, 전체 8파일 82케이스, lint·tsc·build·grep, 테스트 파일 diff 없음)",
+      "cost_usd": 0.9209,
+      "num_turns": 19,
+      "completed_at": "2026-09-29T11:18:05+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/CustomerPicker.tsx",
+        "frontend/src/components/MessageBubble.tsx",
+        "frontend/src/components/OptionButtons.tsx"
+      ]
+    },
+    {
+      "step": 15,
+      "name": "chat-window",
+      "status": "completed",
+      "started_at": "2026-09-29T11:18:13+0900",
+      "summary": "components/ChatWindow.tsx — props 그대로(messages·pending·onSend·onSelect), EXAMPLE_CHIPS 상수(PRD 표 순서 5개)를 messages가 빌 때만 role=log 밖·폼 바로 위(flex flex-wrap gap-2 px-4 pb-2)에 type=button 칩으로 그리고 클릭 시 onSend(칩 문구)·pending이면 비활성, 클래스를 UI_GUIDE로 교체(목록 flex-1 overflow-y-auto overscroll-contain p-4, 안내 문구 text-ink-soft, 입력 중 표시 rounded-[18px] rounded-bl-md bg-bubble text-ink-soft, 폼 border-ink/10, 입력 rounded-full border-ink/20 bg-white px-5 text-ink focus:border-accent-blue disabled:opacity-40, 전송 rounded-full bg-ink px-5 font-semibold hover:bg-ink/90, 칩 rounded-full border-accent-orange/30 bg-accent-orange/15 font-semibold text-ink hover:bg-accent-orange/25), 바깥 래퍼의 bg-white 제거(step 16 패널 bg-surface가 보이게), FE-007 활성 판정·자동 스크롤·입력 처리 무변경 + ChatWindow.test.tsx 9케이스 추가(기존 11케이스 무변경·삭제 줄 0: 칩 5개 log 밖·log textContent=안내 문구, messages 생기면 칩 사라짐, it.each 칩 클릭→onSend 1회·onSelect 미호출, pending 칩 비활성·클릭 무시, log overscroll-contain) | AC 전부 통과(ChatWindow 20케이스, 전체 8파일 91케이스, lint·tsc·build·grep), teal·stone·sendChat·scrollIntoView 없음",
+      "cost_usd": 1.2011,
+      "num_turns": 18,
+      "completed_at": "2026-09-29T11:20:12+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/ChatWindow.test.tsx",
+        "frontend/src/components/ChatWindow.tsx"
+      ]
+    },
+    {
+      "step": 16,
+      "name": "landing-page",
+      "status": "completed",
+      "started_at": "2026-09-29T11:20:21+0900",
+      "summary": "app/page.tsx — 'use client' 컴포넌트 하나에 main > sr-only h1 'Local LLM — 은행 상담 AI' → <ScrollWorld /> → <section id=\"chat\">(relative z-[45] min-h-dvh bg-cream px-[clamp(18px,5vw,64px)] pt-24 pb-10, grid lg:grid-cols-[1fr_minmax(0,40rem)] lg:items-center — 카피: eyebrow '직접 체험' text-accent-blue text-[0.8rem] font-bold tracking-[.16em]·h2 '데모 고객으로 물어보세요.' text-[clamp(2rem,4.4vw,3.5rem)] leading-tight break-keep·본문 '가상 고객 데이터입니다. 실제 개인정보는 입력하지 마세요.' text-ink-soft break-keep, 패널: flex flex-col h-[min(44rem,calc(100dvh_-_8rem))] max-w-[40rem] bg-surface border-ink/12 rounded-[20px] overflow-hidden, 상단 border-b border-ink/10에 CustomerPicker + type=button '새 대화'(UI_GUIDE ghost 클래스, pending이면 비활성), 그 아래 ChatWindow), handleCustomerChange를 reset(id)로 바꿔 고객 변경(onChange=reset)과 새 대화(reset(customerId))가 같은 함수를 이벤트 핸들러에서 호출(useEffect 없음), send()·sendChat 호출은 그대로 page.tsx 한 곳, 연타 테스트가 가드 없이 통과해 useRef 가드 넣지 않음 + page.test.tsx에 vi.mock ScrollWorld와 7케이스 추가(기존 5케이스·import 무변경, 삭제 줄 0: #chat 섹션 안 h2·개인정보 문구·고객 선택·새 대화·입력창(toContainElement), h1 하나, 칩 클릭 1회·choice 키 없음·C001, 칩 dblClick 1회, Enter 두 번 1회, C002 요청 reject→새 대화→log=안내 문구·칩 재표시·고객 C002 유지→다음 요청 C002·새 session_id, 요청 중 새 대화 비활성·응답 뒤 활성) | AC 전부 통과(page 12케이스, 전체 8파일 98케이스, lint·tsc·build·grep), 빌드 CSS에 z-[45]·border-ink/12·h-[min(...)]·lg:grid-cols 등 출력 확인",
+      "cost_usd": 1.3504,
+      "num_turns": 15,
+      "completed_at": "2026-09-29T11:23:14+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/app/page.test.tsx",
+        "frontend/src/app/page.tsx"
+      ]
+    },
+    {
+      "step": 17,
+      "name": "landing-manual-check",
+      "status": "completed",
+      "type": "human"
+    },
+    {
+      "step": 18,
+      "name": "landing-review",
+      "status": "completed",
+      "started_at": "2026-09-29T11:30:23+0900",
+      "summary": "review.md 7항목 전부 ✅ (코드 수정 없음, 랜딩 통합 step 10~16 중점) | 아키텍처 준수 ✅ ScrollWorld는 next/script(afterInteractive) onReady에서만 초기화·폴링 없음, 마운트 조건 childElementCount===0, 실패 3종(onError·함수 없음·마운트 예외 try/catch) 모두 hidden, hash #chat이면 마운트 뒤 scrollIntoView, LANDING은 정적 문자열·숫자뿐이고 PRD 랜딩 표(4섹션 id·라벨·에셋·accent·scroll·eyebrow·제목·본문·태그, 04 CTA primary만, brand·상단 CTA·hint, diveScroll 1.3·crossfade 0.35·connectors [])와 스크립트로 전수 대조 일치, 엔진 설정 키(brand·cta·hint·sections·cta.primary·connectors)가 scrub-engine.js 사용처와 일치, page.tsx가 상태·sendChat 한 곳·reset(id)를 고객 변경·새 대화 핸들러에서 호출(useEffect 없음), #chat 섹션 relative z-[45] | 기술 스택 준수 ✅ next 16.3.6·react 19.2.8·vitest 5·jsdom 29, 상태·페칭 라이브러리 없음, next.config.ts proxyTimeout 120_000·agentRules false 유지(step 10~16에서 next.config·fillSlots·types·package.json 무변경), 런타임 목·타임아웃·재시도 없음(FE-005·006) | 테스트 존재 ✅ 구현 파일 8개 모두 옆에 테스트, 8파일 98케이스 통과, step 9 이후 테스트 삭제 줄 0 | CRITICAL 규칙 ✅ fetch는 lib/api.ts 상대경로 /api/chat뿐, src에 localhost:8000·11434·/mock/·dangerouslySetInnerHTML 없음, sendChat 호출 page.tsx 한 곳, 외부 URL은 layout.tsx Pretendard 1.3.9 CSS 하나(CDN JS 없음), 엔진은 src에서 import·번들링 없이 /scroll-world/scrub-engine.js로만 로드하고 fetch는 같은 origin clip뿐, public/scroll-world 6파일 SHA-256 원본 일치(FE-008), globals.css 엔진 덮어쓰기(--sw-*·keep-all·object-fit contain)는 @layer 밖이고 변수·클래스 이름이 엔진과 일치, globals.css hex는 @theme에만(src의 다른 hex는 PRD 표가 정한 LANDING accent 값뿐), teal·stone·backdrop-blur·gradient·purple/indigo/violet·shadow·Powered by AI 없음 | 검증 통과 ✅ AC 전부(shasum 6건·lint·tsc·build·test·grep 4건·AGENTS.md/CLAUDE.md 부재) 통과, scripts/verify.sh exit 0 | 핵심 규칙 테스트 ✅ api: text null·숫자·누락·options 객체·문자열 reject(fetch 1회)·options null·누락 resolve(본문 그대로), ScrollWorld: onReady 2회→mount 1회·onError/함수 없음/예외→hidden·예외 미전파·hash #chat→scrollIntoView 1회·없으면 0회, ChatWindow: 칩은 빈 대화에서만·log 밖(log textContent=안내 문구)·pending 비활성·클릭→onSend(칩)·onSelect 미호출, page: 칩 요청 choice 키 없음·칩 dblClick·Enter 연타→요청 1회·새 대화→같은 고객(C002)·새 session_id·칩 재표시·요청 중 새 대화 비활성, 기존 fillSlots·FE-007·고객 변경 초기화·오류 말풍선 테스트 유지 | 커밋 위생 ✅ main...HEAD 변경은 frontend/·phases/frontend/·docs/frontend/, docs/PRD.md 디자인 절 1줄, phases/index.json 끝 줄바꿈만(docs/ARCHITECTURE·ADR·agent-*·router·backend·CLAUDE.md·.claude 무변경), AGENTS.md·CLAUDE.md·node_modules·.next·.env*·.DS_Store·next-env.d.ts·가중치·gitlink·비밀값 없음, lock resolved 548건 전부 registry.npmjs.org | 참고(결함 아님): vitest.config.ts CJS 로드 경고, options null 응답은 page 수준 렌더 테스트 없이 ChatWindow의 message.options && 가드로 처리",
+      "cost_usd": 1.4869,
+      "num_turns": 21,
+      "completed_at": "2026-09-29T11:33:12+0900",
+      "ac_verified": true
+    }
+  ],
+  "created_at": "2026-09-29T09:39:08+0900",
+  "completed_at": "2026-09-29T11:33:21+0900",
+  "total_cost_usd": 16.4689
+}
