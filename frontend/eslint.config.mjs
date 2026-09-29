@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 스크롤 월드 엔진 원본은 수정하지 않으므로 lint하지 않는다 (FE-008)
+    "public/scroll-world/**",
   ]),
 ]);
 
