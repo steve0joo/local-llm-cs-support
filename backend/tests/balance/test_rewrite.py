@@ -68,6 +68,27 @@ def test_rewrite_system_matches_code_constants():
     assert "key" in rewrite.REWRITE_SYSTEM
 
 
+# 1차 시범 판독에서 나온 위반을 막는 규칙 5·7·10·11 문구(BAL-010 보강)
+@pytest.mark.parametrize("phrase", [
+    "정확한 원인을 파악하여 안내해 드리겠습니다",
+    "해결되면 문자로 안내하므로 기다려 주세요",
+    "수수료는 발생하지 않습니다",
+    "출금일이 휴일이면 전 영업일에 처리됩니다",
+    "보류 금액은 자동으로 해제됩니다",
+    "금융보안 관련 규정이 변경되었습니다",
+    "개인 정보 관리 메뉴에서 변경하실 수 있습니다",
+    "지급정지 상태는 해외 결제 등으로 자금이 일시적으로 보류된 상태를 의미합니다",
+    "앱을 최신 버전으로 업데이트한 뒤 다시 시도",
+    "모바일 앱이나 인터넷 뱅킹에서 거래내역 확인",
+    "송금한 은행이나 카드사에 문의",
+    "비밀번호 정기 변경",
+    "items는 서로 다른 상담이다",
+    "다른 item의 내용을 가져오지 않는다",
+])
+def test_rewrite_system_has_pilot_rule_phrases(phrase):
+    assert phrase in rewrite.REWRITE_SYSTEM
+
+
 def test_build_command_shape():
     command = rewrite.build_command("claude-test-model")
     assert command[:2] == ["claude", "-p"]
