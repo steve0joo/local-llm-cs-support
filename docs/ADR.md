@@ -8,7 +8,7 @@ MVP다. 동작하는 최소 구현을 고른다. 서비스·추상화·설정을
 ---
 
 ### ADR-001: frontend / backend 모노레포 + 영역별 브랜치
-**결정**: 저장소 하나에 `frontend/`와 `backend/`를 둔다. 담당 영역마다 `feat-<영역>` 브랜치를 만들고 main으로 PR 머지한다.
+**결정**: 저장소 하나에 `frontend/`와 `backend/`를 둔다. 담당 영역마다 `feat-<영역>` 브랜치를 만들고 main으로 PR 머지한다. main PR은 코드 오너인 나(`steve0joo`)나 팀원C(`qhdudedi`) 중 한 명이 승인해야 병합된다(`.github/CODEOWNERS`, main 보호 규칙: 코드 오너 리뷰 필수·승인 1명·관리자 포함). 자기 PR은 스스로 승인할 수 없으므로 내 PR은 팀원C가, 팀원C의 PR은 내가 승인한다.
 **이유**: 4명이 계약(API 스키마, 에이전트 인터페이스)을 한 곳에서 함께 본다. 브랜치 이름은 Harness `execute.py`가 만드는 `feat-{task-name}` 규칙과 같다.
 **트레이드오프**: 공통 파일(`main.py`, `base.py`)은 충돌할 수 있다. 소유자를 팀원C 한 명으로 정해 줄인다.
 

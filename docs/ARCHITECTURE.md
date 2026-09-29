@@ -94,14 +94,16 @@ frontend: text의 {{balance}}를 slots 값으로 치환해 화면에 표시
 | 코드 | 데이터셋 `consulting_topic` | 처리 |
 |------|---------------------------|------|
 | `balance` | 거래내역/잔액조회 | 잔액조회 에이전트 |
-| `loan` | 대출문의(만기/연장/조회 등) | 대출문의 에이전트 |
+| `loan` | 대출문의(만기/연장/조회등) | 대출문의 에이전트 |
 | `interest` | 이자/연체금액 | 이자/연체 에이전트 |
 | `auto_transfer` | 자동이체조회 | 미지원 안내 |
 | `transfer_error` | 중계요청/착오송금 | 미지원 안내 |
-| `deposit` | 만기, 연장/해지, 수신 | 미지원 안내 |
+| `deposit` | 만기,연장/해지,수신 | 미지원 안내 |
 | `limit` | 금융거래한도/비대면한도계좌 | 미지원 안내 |
 | `rate_discount` | 부수거래금리감면 | 미지원 안내 |
 | `fx` | 환전문의 | 미지원 안내 |
+
+라벨 문자열은 데이터셋 원문과 글자 단위로 같다(`조회등`·`만기,연장/해지,수신`에 공백 없음, 2026-09-28 확인). 코드에서는 `backend/app/router/topics.py`의 `TOPIC_LABELS`를 import하고 문자열을 다시 적지 않는다.
 
 `router.classify(masked_text: str) -> RouteResult` — `RouteResult.topics: list[str]`(확신 높은 순, 0개 이상). 모델은 주제 1개를 출력하고, 키워드 규칙이 지원 주제 2개 이상을 감지하면 그 주제들을 돌려준다(`docs/router/ADR.md` RT-002).
 
@@ -190,5 +192,5 @@ AI Hub 원본(backend/data/raw)
 - 스캐폴드(`backend/pyproject.toml`, `app/__init__.py`, frontend `package.json` 등)가 아직 없어서 나는 import·실행 실패도 red로 인정한다. 이때 실행은 생략하거나 pyproject에 적을 설정을 명령줄로 넘겨 확인한다.
 
 ### 다음 라운드 체크리스트
-- [ ] 팀원C 스텁(통합 순서 1단계) 병합 후 에이전트 3개 영역(balance·loan·interest) 재드라이런
-- [ ] 실제 팀원 착수 검증
+- [ ] [PR #4](https://github.com/steve0joo/local-llm-cs-support/pull/4)(통합 순서 1단계) 머지 후 main 커밋 하나에서 에이전트 3개 영역(balance·loan·interest)을 같은 스냅샷으로 재드라이런(실행 시 SHA 기록)
+- [ ] 실제 팀원 착수 검증(사후 드라이런, 위 판정 규칙 적용) — https://github.com/steve0joo/local-llm-cs-support/issues/5

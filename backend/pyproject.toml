@@ -1,0 +1,7 @@
+# pytest 설정 (docs/ARCHITECTURE.md 코드·테스트 규칙). 의존성은 requirements.txt·training/requirements.txt에 둔다.
+# - pythonpath: `cd backend && pytest`에서 `import app`, `import training`이 되게 한다.
+# - importlib 모드: tests/<폴더>/ 에 __init__.py 없이 같은 파일 이름(test_agent.py 등)이 여러 폴더에 있어도 충돌하지 않는다.
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
