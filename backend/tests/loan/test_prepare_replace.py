@@ -184,3 +184,46 @@ def test_v2_val_uses_held_out_manual_seeds_once_and_train_never_sees_them(tmp_pa
     train_text = train_out.read_text(encoding="utf-8")
     assert "대출 끝나는 날이 언제예요?" not in train_text
     assert "대출 끝나는 날이 언제예요?" in val_out.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# v4 거절 문형(2026-09-30): "~ㄹ 수 있/없"이 뒤집히면 처리 약속·사실 단정이 되므로 쓰지 않는다. v3는 그대로 재현한다.
+# ---------------------------------------------------------------------------
+import hashlib
+import re
+
+V3_TEMPLATES_SHA256 = "a706fd37b37cd331f77631e5de46afdbb79544cedff74549d1763026c5867bed"
+
+
+def test_v3_refusal_templates_are_frozen_so_v3_data_stays_reproducible():
+    assert hashlib.sha256("\n".join(REFUSAL_TEMPLATES).encode()).hexdigest() == V3_TEMPLATES_SHA256
+
+
+def test_v4_refusal_templates_keep_the_same_slots_and_avoid_able_unable_phrasing():
+    v4 = prepare.REFUSAL_TEMPLATES_V4
+    assert len(v4) == len(REFUSAL_TEMPLATES)
+    assert v4 != REFUSAL_TEMPLATES
+    for t in v4:
+        assert not re.search(r"수 있|수 없|처리해 드", t), t
+    for topic in ("서류·조건", "금리"):
+        for i in range(len(v4)):
+            for closing in (None, CLOSINGS[0]):
+                text = render_refusal(topic, i, closing, version="v4")
+                assert is_valid_output(text, maturity_date="2027-03-31", extendable=True), text
+
+
+def test_render_refusal_defaults_to_v3_and_the_flag_selects_v4():
+    assert render_refusal("금리", 1) == render_refusal("금리", 1, version="v3")
+    assert "안내드릴 수 없어" in render_refusal("금리", 1)  # v3 그대로
+    assert "안내드리기 어렵습니다" in render_refusal("금리", 1, version="v4")
+    with pytest.raises(ValueError):
+        render_refusal("금리", 1, version="v9")
+
+
+def test_dataset_builder_passes_the_refusal_version_through(tmp_path):
+    raw, split = _setup(tmp_path, [f"연장하려면 서류가 뭐가 필요한가요 {i}?" for i in range(6)])
+    out3, out4 = tmp_path / "v3.jsonl", tmp_path / "v4.jsonl"
+    build_dataset_v2(raw, split, out3)
+    build_dataset_v2(raw, split, out4, refusal_version="v4")
+    assert re.search(r"수 없어|받아보실 수", out3.read_text(encoding="utf-8"))
+    assert not re.search(r"수 있|수 없", "".join(m[-1]["content"] for m in _rows(out4)))
