@@ -1,0 +1,6 @@
+# 런타임 의존성 — 게이트웨이·에이전트·테스트 (모든 팀원). 담당: 팀원C, 추가는 PR로.
+# 설치: uv venv backend/.venv --python 3.11 && uv pip install --python backend/.venv/bin/python -r backend/requirements.txt
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27          # Ollama /api/chat 호출, FastAPI TestClient
+pytest>=8
