@@ -8,13 +8,61 @@
     "docs/agent-balance/ADR.md"
   ],
   "steps": [
-    { "step": 0, "name": "main-merge", "status": "completed", "type": "human", "summary": "origin/main(7466702)을 머지 커밋 cb892a6으로 병합. 충돌 4개는 BAL-005대로 해소(__init__.py·test_base.py·training/requirements.txt는 ours, README는 Mac 안내 뒤 main 구동 절차), test_api.py는 classify를 loan으로 옮김(세 번째 예외). backend pytest 253 passed" },
-    { "step": 1, "name": "intent-alias", "status": "pending" },
-    { "step": 2, "name": "resolve-typed", "status": "pending" },
-    { "step": 3, "name": "train-prepare", "status": "pending" },
-    { "step": 4, "name": "modelfile", "status": "pending" },
-    { "step": 5, "name": "train-export", "status": "pending", "type": "human" },
-    { "step": 6, "name": "self-check", "status": "pending", "type": "human" },
-    { "step": 7, "name": "review", "status": "pending" }
-  ]
+    {
+      "step": 0,
+      "name": "main-merge",
+      "status": "completed",
+      "type": "human",
+      "summary": "origin/main(7466702)을 머지 커밋 cb892a6으로 병합. 충돌 4개는 BAL-005대로 해소(__init__.py·test_base.py·training/requirements.txt는 ours, README는 Mac 안내 뒤 main 구동 절차), test_api.py는 classify를 loan으로 옮김(세 번째 예외). backend pytest 253 passed"
+    },
+    {
+      "step": 1,
+      "name": "intent-alias",
+      "status": "completed",
+      "started_at": "2026-09-29T14:34:09+0900",
+      "summary": "intent.classify_intent가 거래내역 키워드 검사 때만 질문에서 '입출금'을 지우도록 수정(J8, 단어 상수 그대로), test_intent.py에 입출금 3예문·출금 회귀 2예문 추가, ARCHITECTURE 의도 판단 절·알려진 한계 (b) 갱신. AC 26 passed, verify.sh 통과(frontend npm ci 후 lint·98 passed, backend 258 passed)",
+      "cost_usd": 1.5586,
+      "num_turns": 20,
+      "completed_at": "2026-09-29T14:36:16+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/app/agents/balance/intent.py",
+        "backend/tests/balance/test_intent.py",
+        "docs/agent-balance/ARCHITECTURE.md"
+      ]
+    },
+    {
+      "step": 2,
+      "name": "resolve-typed",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "train-prepare",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "modelfile",
+      "status": "pending"
+    },
+    {
+      "step": 5,
+      "name": "train-export",
+      "status": "pending",
+      "type": "human"
+    },
+    {
+      "step": 6,
+      "name": "self-check",
+      "status": "pending",
+      "type": "human"
+    },
+    {
+      "step": 7,
+      "name": "review",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-09-29T14:34:09+0900"
 }
