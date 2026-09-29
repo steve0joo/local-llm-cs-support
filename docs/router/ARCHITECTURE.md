@@ -14,6 +14,7 @@ backend/
 │   ├── llm/
 │   │   └── client.py           # generate(model, messages) + model_inputs.jsonl 기록
 │   ├── router/
+│   │   ├── topics.py           # 주제 표: 코드↔라벨 원문, 지원 주제, 되묻기 표시명, 키워드, 시스템 프롬프트
 │   │   └── classify.py         # classify(masked_text) -> RouteResult(topics)
 │   └── agents/
 │       ├── base.py             # AgentRequest, AgentReply, Agent (계약 3)
@@ -68,13 +69,23 @@ POST /api/chat
 
 ## 라우터 모델
 - 입력: 마스킹된 고객 문장. 출력: 주제 코드(계약 2) 하나.
-- `classify()`는 모델 출력에 복합 키워드 규칙(RT-002)을 더해 `topics`를 만든다.
-- 학습 데이터: `training/common` 분할의 train에서 9개 주제 전부. 고객 발화는 `qa_data[].input.question`(없으면 상담 원문 첫 고객 발화)을 쓰고, 라벨은 `consulting_topic`이다. 필드명은 데이터 확인 전 가정이다(공통 ARCHITECTURE 학습 파이프라인).
-- 클래스 불균형(대출문의·이자/연체가 약 52%)은 주제별 상한 샘플링으로 맞춘다.
-- `classify()`는 Ollama 출력을 파싱한다. 계약 2에 없는 값이면 빈 topics를 돌려준다.
+- 학습 데이터: `training/common` 분할의 train에서 9개 주제 전부. 고객 발화는 `qa_data[].input.question`, 라벨은 `consulting_topic`이다. 필드명은 2026-09-28 실제 데이터로 확인했다. 라벨 필터·`●` 금액 정규화·주제별 상한 샘플링(대출문의·이자/연체가 약 52%)은 RT-005.
+
+### `classify()` 처리 순서 (`app/router/classify.py`)
+```
+1. 키워드 규칙(RT-002)으로 지원 주제를 센다
+     2개 이상 → 모델을 부르지 않고 그 주제들을 topics로 (되묻기)
+2. llm.generate("cs-router", [system, user], temperature=0)
+     system = topics.SYSTEM_PROMPT, user = 마스킹 문장 그대로
+     호출 실패(Ollama 없음·모델 없음·타임아웃) → 1에서 센 지원 주제 0~1개로 폴백
+3. 출력을 파싱한다: 공백·따옴표·대소문자만 정리하고 계약 2 코드와 정확히 일치할 때만 채택
+     없는 값 → 빈 topics
+```
+- 주제에 관한 표는 전부 `app/router/topics.py`에 둔다: 코드↔라벨 원문(`TOPIC_LABELS`), 지원 주제(`SUPPORTED`), 되묻기 표시명(`DISPLAY_NAMES`), 키워드(`KEYWORDS`), 시스템 프롬프트(`SYSTEM_PROMPT`). 게이트웨이와 학습 스크립트(`training/router/prepare.py`)가 여기서 import한다.
+- `SYSTEM_PROMPT`는 학습 데이터와 추론이 글자 단위로 같아야 한다. 프롬프트 문구를 바꾸면 라우터를 다시 학습한다.
 
 ## 제공하는 인터페이스
 - `app.masking.mask(text) -> MaskResult` — 학습 스크립트도 이 함수를 import한다
-- `app.llm.generate(model, messages, **options) -> str`
+- `app.llm.generate(model, messages, **options) -> str` — 요청에 항상 `think: false`를 넣는다(RT-006)
 - `app.agents.base` — 계약 3
 - `data/processed/split.json` — `{source_id: "train" | "val" | "test"}`
