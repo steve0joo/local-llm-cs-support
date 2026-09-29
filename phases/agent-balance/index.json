@@ -133,7 +133,17 @@
     {
       "step": 8,
       "name": "prepare-rewrite",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T21:43:02+0900",
+      "summary": "prepare.build_sample(qa) → build_samples(qa, rewrite): rewrite가 None이면 [], mask_fields로 question·follow_up, 다시 쓴 answer·output에 mask(), 첫 턴 build_messages([], question, general)+answer·이어진 턴 build_messages([question, answer], follow_up, general)+output 순서, 원문 answer·output 미사용. 안전망 필터 1~6을 비공개 _rejected(target, inputs)로 모아 목표마다 따로 적용(상품명 입력은 첫 턴 (question,)·이어진 턴 (question, answer, follow_up), 길이 > MAX_CHARS 제외), _call_center_answer는 _rejected로 흡수. build_dataset에 rewrites_path=REWRITE_PATH 추가(load_rewrites + qa_key로 조회, 캐시에 없는 QA는 뺌, 반환 모양 그대로), 비공개 _build_dataset이 (분할별 수, 재작성 없음 QA 수)를 한 번에 세고 main은 --rewrites를 받아 '재작성 없음으로 빠진 QA N건'을 출력. 합성 샘플·rewrite.py 그대로, prepare는 rewrite를 import하지 않음. test_prepare.py: 기존 build_sample 테스트 전부 build_samples + 재작성 dict로 옮김(제외 예문은 다시 쓴 output에 넣어 이어진 턴이 빠지고 첫 턴만 남는지), output-only 두 테스트는 answer 탈락 시 이어진 턴만 남고 history에 그대로 있는지(2)·입력 규칙 표현 무판정(1)으로 교체, 새로 재작성 없음 [](1)·턴별 상품명 입력(1)·200/201자(2)·캐시 누락 QA 제외(1)·캐시 없으면 합성만(1)·원문 answer·output 파일 부재(1)·main 기본 REWRITE_PATH(1), build_dataset·main 테스트는 캐시 경로를 넘기고 전화번호 든 다시 쓴 answer의 마스킹·누락 수 출력 확인. 64 → 73개(순증 9), 먼저 54 failed red 확인. deviation: 없음(문서 미수정). 실제 AI Hub 데이터·캐시로 실행 안 함. AC 102 passed, backend 전체 369 passed",
+      "cost_usd": 2.6495,
+      "num_turns": 25,
+      "completed_at": "2026-09-29T21:49:34+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/prepare.py"
+      ]
     },
     {
       "step": 9,
