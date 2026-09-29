@@ -23,7 +23,8 @@
     {
       "step": 2,
       "name": "agent-handle",
-      "status": "pending"
+      "status": "completed",
+      "summary": "0(선행): {{extendable_status}} 슬롯 도입 — prompt.py의 SYSTEM_PROMPT·build_messages·build_slots·fallback_text와 validate.py의 ALLOWED_SLOTS 갱신(값은 mock의 extendable에서 코드가 만듦, LN-004 d는 이중 검증으로 유지). agent.py: LoanAgent.handle() — get_loans → 대출 없음 고정 문구(모델 미호출) → slots 생성 → build_messages+llm.generate(\"cs-loan\") → is_valid_output 실패 시 fallback_text로 대체 → AgentReply. __init__.py를 팀원C 스텁에서 실제 구현으로 교체. tests/loan 81 passed(test_agent.py 신설). base.py는 계약 3과 일치(deviation 없음). 전체 tests 159 passed, 2 failed는 tests/router/test_base.py(팀원C 영역, [loan] 파라미터) — 그 테스트가 3개 영역 모두 아직 스텁이라고 가정해 고정 문구를 기대하는데, 이 영역이 실제 구현으로 교체되며 깨짐. 통합 순서 2단계(스텁→실구현 교체)의 예상된 결과이지 이 step의 버그가 아님. 팀원C에게 전달 필요."
     },
     {
       "step": 3,

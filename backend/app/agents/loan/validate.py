@@ -12,7 +12,7 @@ DOCUMENT_KEYWORDS: tuple[str, ...] = (
     "원천징수",
     "사본",
 )
-ALLOWED_SLOTS: tuple[str, ...] = ("loan_label", "principal_remaining")
+ALLOWED_SLOTS: tuple[str, ...] = ("loan_label", "principal_remaining", "extendable_status")
 
 _NEGATIONS = ("불가", "않", "어렵", "없")
 _SLOT_PATTERN = re.compile(r"\{\{\s*([^{}]*?)\s*\}\}")

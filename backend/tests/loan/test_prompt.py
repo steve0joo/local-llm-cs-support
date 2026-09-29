@@ -36,6 +36,8 @@ def test_system_prompt_rules():
     # 숫자 예시(금리·금액 등)를 넣으면 모델이 그대로 답할 수 있다
     assert not re.search(r"\d", SYSTEM_PROMPT)
     assert "%" not in SYSTEM_PROMPT
+    # 연장 가능 여부는 직접 쓰지 말고 슬롯으로 표현하라는 지시가 있어야 한다(2026-09-29)
+    assert "{{extendable_status}}" in SYSTEM_PROMPT
 
 
 def test_build_messages_structure(extendable_loan):
@@ -53,7 +55,7 @@ def test_build_messages_structure(extendable_loan):
     assert "종류=신용대출" in last["content"]
     assert "만기일=2027-03-31" in last["content"]
     assert "연장 가능=예" in last["content"]
-    assert "{{loan_label}}, {{principal_remaining}}" in last["content"]
+    assert "{{loan_label}}, {{principal_remaining}}, {{extendable_status}}" in last["content"]
     assert len(messages) == 4
 
 
@@ -88,10 +90,12 @@ def test_build_slots():
     assert build_slots(get_loans("C002")[0]) == {
         "loan_label": "신용대출",
         "principal_remaining": "12,000,000원",
+        "extendable_status": "연장 가능 대상으로 조회됩니다.",
     }
     assert build_slots(get_loans("C003")[0]) == {
         "loan_label": "주택담보대출",
         "principal_remaining": "85,000,000원",
+        "extendable_status": "현재 연장 가능으로 조회되지 않습니다.",
     }
 
 
@@ -99,7 +103,7 @@ def test_fallback_text_extendable(extendable_loan):
     text = fallback_text(extendable_loan)
     assert text == (
         "{{loan_label}}의 만기일은 2027-03-31이고, 남은 원금은 {{principal_remaining}}입니다."
-        " 연장 가능 대상으로 조회됩니다."
+        " {{extendable_status}}"
         " 연장 조건 등 자세한 사항은 상담원에게 확인해 주세요."
     )
 
@@ -108,7 +112,7 @@ def test_fallback_text_non_extendable(non_extendable_loan):
     text = fallback_text(non_extendable_loan)
     assert text == (
         "{{loan_label}}의 만기일은 2035-06-30이고, 남은 원금은 {{principal_remaining}}입니다."
-        " 현재 연장 가능으로 조회되지 않습니다."
+        " {{extendable_status}}"
         " 연장 조건 등 자세한 사항은 상담원에게 확인해 주세요."
     )
 
@@ -120,6 +124,7 @@ def test_fallback_passes_own_validation(customer_id):
     text = fallback_text(loan)
     assert "{{loan_label}}" in text
     assert "{{principal_remaining}}" in text
+    assert "{{extendable_status}}" in text
     assert is_valid_output(
         text, maturity_date=loan["maturity_date"], extendable=loan["extendable"]
     )

@@ -14,7 +14,7 @@ def valid(text: str, *, extendable: bool = True, maturity: str = MATURITY) -> bo
 
 
 def test_constants():
-    assert ALLOWED_SLOTS == ("loan_label", "principal_remaining")
+    assert ALLOWED_SLOTS == ("loan_label", "principal_remaining", "extendable_status")
     for keyword in ("증명서", "등본", "재직", "소득"):
         assert keyword in DOCUMENT_KEYWORDS
     # "서류"라는 일반 단어는 막지 않는다(LN-002: 일반 안내는 허용). 구체적인 서류명만 막는다
@@ -80,6 +80,8 @@ def test_document_keywords_are_rejected(text):
         "필요한 서류는 상담원에게 확인해 주세요.",  # 일반 안내는 허용(LN-002)
         "[금액_1]에 대한 안내는 상담원에게 확인해 주세요.",  # 마스킹 토큰의 숫자는 검사에서 제외
         "[계좌번호_2]와 관련된 내용은 확인이 어렵습니다.",
+        "{{extendable_status}} 연장 조건 등 자세한 사항은 상담원에게 확인해 주세요.",  # extendable_status 슬롯(2026-09-29)
+        "{{loan_label}}의 만기일은 2027-03-31입니다. {{extendable_status}}",
     ],
 )
 def test_valid_outputs_pass(text):
