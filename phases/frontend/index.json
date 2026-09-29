@@ -127,7 +127,18 @@
     {
       "step": 7,
       "name": "chat-page",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T09:50:59+0900",
+      "summary": "app/page.tsx — 'use client' 컴포넌트 하나에 useState(sessionId=useState(()=>crypto.randomUUID())·customerId 'C001'·messages·pending), send(message, choice?)가 고객 말풍선 추가→pending→sendChat({session_id, customer_id, message, ...(choice ? {choice} : {})})→봇 말풍선(text·slots·options) 또는 오류 말풍선('잠시 후 다시 시도해 주세요', error: true)→finally pending 해제, onSelect는 label로 말풍선+choice 전송, 고객 변경은 CustomerPicker onChange 핸들러에서 customerId·새 sessionId·messages [] 동시 변경(useEffect 없음), 레이아웃 main mx-auto flex h-dvh max-w-2xl flex-col + 상단 header('은행 상담' text-base font-semibold text-stone-900 + CustomerPicker disabled=pending) + ChatWindow, sendChat 호출은 page.tsx 한 곳 + globals.css @theme --animate-fade-in(0.2s)·@keyframes fade-in, @layer base body 배경 #f5f5f4 (layout.tsx 변경 없음) + page.test.tsx 5케이스(vi.mock('../lib/api'): 잔액 치환·{{ 없음·첫 요청 C001/문자열 session_id/choice 키 없음, clarify 선택지 클릭 시 고객 말풍선·choice 'interest'·같은 session_id, reject 시 오류 말풍선 text-red-700·입력창 활성, 미해결 promise 동안 고객 선택·입력창 비활성·입력 중 표시 후 resolve 뒤 활성, 고객 C002 변경 시 log가 안내 문구만·다음 요청 C002·새 session_id)",
+      "cost_usd": 1.0628,
+      "num_turns": 17,
+      "completed_at": "2026-09-29T09:53:22+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/app/globals.css",
+        "frontend/src/app/page.test.tsx",
+        "frontend/src/app/page.tsx"
+      ]
     },
     {
       "step": 8,
