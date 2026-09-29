@@ -17,7 +17,7 @@ export function OptionButtons(props: {
           type="button"
           disabled={props.disabled}
           onClick={() => props.onSelect(option)}
-          className="rounded-md border border-teal-700 px-3 py-1.5 text-sm text-teal-700 hover:bg-teal-50 disabled:opacity-40"
+          className="rounded-full border-[1.5px] border-accent-blue px-4 py-1.5 text-sm font-medium text-accent-blue hover:bg-accent-blue/10 disabled:opacity-40"
         >
           {option.label}
         </button>

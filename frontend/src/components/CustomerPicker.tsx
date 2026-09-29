@@ -10,7 +10,7 @@ export function CustomerPicker(props: {
   const id = useId();
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor={id} className="text-sm text-stone-500">
+      <label htmlFor={id} className="text-sm text-ink-soft">
         데모 고객
       </label>
       <select
@@ -18,7 +18,7 @@ export function CustomerPicker(props: {
         value={props.value}
         disabled={props.disabled}
         onChange={(e) => props.onChange(e.target.value as CustomerId)}
-        className="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 focus:border-teal-700 focus:outline-none disabled:opacity-40"
+        className="rounded-full border border-ink/20 bg-white px-3 py-1.5 text-sm text-ink focus:border-accent-blue focus:outline-none disabled:opacity-40"
       >
         {CUSTOMER_IDS.map((customerId) => (
           <option key={customerId} value={customerId}>
