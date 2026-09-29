@@ -2,7 +2,9 @@ import pytest
 
 from app.agents.loan.validate import (
     ALLOWED_SLOTS,
+    CHANNEL_KEYWORDS,
     DOCUMENT_KEYWORDS,
+    PROMISE_PATTERNS,
     is_valid_output,
 )
 
@@ -19,6 +21,12 @@ def test_constants():
         assert keyword in DOCUMENT_KEYWORDS
     # "서류"라는 일반 단어는 막지 않는다(LN-002: 일반 안내는 허용). 구체적인 서류명만 막는다
     assert "서류" not in DOCUMENT_KEYWORDS
+    # v1 모델이 지어낸 서류명(2026-09-29 실측)
+    for keyword in ("명세서", "등기부", "계약서", "증빙"):
+        assert keyword in DOCUMENT_KEYWORDS
+    for keyword in ("앱", "어플", "모바일", "뱅킹", "고객센터", "콜센터", "영업점", "홈페이지"):
+        assert keyword in CHANNEL_KEYWORDS
+    assert PROMISE_PATTERNS
 
 
 @pytest.mark.parametrize(
@@ -126,3 +134,61 @@ def test_non_extendable_accepts_negative_or_neutral(text):
 
 def test_extendable_true_may_say_possible():
     assert valid("연장이 가능합니다.", extendable=True) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "연장 신청은 모바일 앱에서 간편하게 진행하실 수 있습니다.",  # 없는 채널(실측)
+        "자세한 내용은 저희 ★★ 어플을 통해 확인하실 수 있습니다.",
+        "인터넷뱅킹이나 스마트뱅킹에서 조회하실 수 있습니다.",
+        "고객센터로 연락 주시기 바랍니다.",
+        "콜센터에서 안내해 드립니다.",
+        "가까운 영업점을 방문해 주세요.",
+        "홈페이지에서 확인해 주세요.",
+    ],
+)
+def test_unavailable_channels_are_rejected(text):
+    assert valid(text) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "정확한 금리는 확인 후 안내해 드리겠습니다.",  # 못 지키는 약속(실측)
+        "상세 내역은 문자로 보내드리겠습니다.",
+        "잠시만 기다려 주세요.",
+        "조회해 보겠습니다.",
+        "상담원을 연결해 드리겠습니다.",
+        "처리해 드리겠습니다.",
+        "알려드리겠습니다.",
+        "확인한 후 알려 드리겠습니다.",  # 공백이 섞여도 잡는다
+    ],
+)
+def test_unkeepable_promises_are_rejected(text):
+    assert valid(text) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "연장 신청 시 기존 대출 계약서와 급여명세서가 필요합니다.",  # 실측
+        "최근 소득증명서가 필요합니다.",
+        "등기부등본을 준비해 주세요.",
+        "소득 증빙 자료가 필요합니다.",
+    ],
+)
+def test_more_document_names_are_rejected(text):
+    assert valid(text) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "제공된 정보로는 알 수 없어 상담원에게 확인해 주세요.",
+        "연장 조건은 상담원에게 확인해 주시기 바랍니다.",
+        "{{loan_label}}의 만기일은 2027-03-31입니다. {{extendable_status}} 자세한 사항은 상담원에게 문의해 주세요.",
+    ],
+)
+def test_counselor_referral_is_not_blocked(text):
+    assert valid(text) is True

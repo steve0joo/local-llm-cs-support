@@ -11,9 +11,34 @@ DOCUMENT_KEYWORDS: tuple[str, ...] = (
     "인감",
     "원천징수",
     "사본",
+    # v1 모델이 지어낸 서류명(2026-09-29 실측)
+    "명세서",
+    "등기부",
+    "계약서",
+    "증빙",
+)
+# 우리 서비스에 없는 채널. 모델이 안내하면 고객이 존재하지 않는 경로를 찾게 된다.
+CHANNEL_KEYWORDS: tuple[str, ...] = (
+    "앱",
+    "어플",
+    "모바일",
+    "뱅킹",
+    "홈페이지",
+    "웹사이트",
+    "콜센터",
+    "고객센터",
+    "영업점",
+)
+# 챗봇이 지킬 수 없는 약속. 공백이 섞여도 잡도록 정규식으로 둔다.
+PROMISE_PATTERNS: tuple[str, ...] = (
+    r"확인\s*(?:한\s*)?후",
+    r"(?:안내|알려|처리|연결|보내|조회해)\s*(?:해\s*)?(?:드리겠|보겠)",
+    r"잠시만\s*기다려",
+    r"문자로",
 )
 ALLOWED_SLOTS: tuple[str, ...] = ("loan_label", "principal_remaining", "extendable_status")
 
+_PROMISE = re.compile("|".join(PROMISE_PATTERNS))
 _NEGATIONS = ("불가", "않", "어렵", "없")
 _SLOT_PATTERN = re.compile(r"\{\{\s*([^{}]*?)\s*\}\}")
 # 계약 4의 마스킹 토큰. 모델이 되풀이해도 원본 값이 아니므로 숫자 검사에서 제외한다(LN-004 a)
@@ -45,6 +70,10 @@ def is_valid_output(text: str, *, maturity_date: str, extendable: bool) -> bool:
 
     # c. 구체적인 서류 요건
     if any(keyword in text for keyword in DOCUMENT_KEYWORDS):
+        return False
+
+    # c2. 없는 채널, 못 지키는 약속
+    if any(keyword in text for keyword in CHANNEL_KEYWORDS) or _PROMISE.search(text):
         return False
 
     # d. 연장 불가인데 같은 문장 안에 부정 표현 없이 "가능"이라고 한 경우
