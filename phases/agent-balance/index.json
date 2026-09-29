@@ -162,18 +162,23 @@
     },
     {
       "step": 10,
+      "name": "rewrite-rules",
+      "status": "pending"
+    },
+    {
+      "step": 11,
       "name": "train-export",
       "status": "pending",
       "type": "human"
     },
     {
-      "step": 11,
+      "step": 12,
       "name": "self-check",
       "status": "pending",
       "type": "human"
     },
     {
-      "step": 12,
+      "step": 13,
       "name": "review",
       "status": "pending"
     }

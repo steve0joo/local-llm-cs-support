@@ -1,47 +1,39 @@
-# Step 12: review
+# Step 12: self-check (human)
+
+이 step은 사람이 직접 수행한다. executor는 여기서 멈춘다. 체크리스트를 끝낸 뒤 `phases/agent-balance/index.json`의 step 12 `status`를 `"completed"`로 바꾸면 이어서 실행된다.
 
 ## 읽어야 할 파일
 
-먼저 아래 파일들을 읽고 프로젝트의 아키텍처와 설계 의도를 파악하라:
+- `/docs/PRD.md` (인수 기준 3~7)
+- `/docs/agent-balance/PRD.md` ("사용자 여정" J1~J12, "자체 점검 셋" Q1~Q10, "영역 간 요청")
+- `/docs/agent-balance/ARCHITECTURE.md` ("에러 처리·보안", "알려진 한계")
+- `/backend/README.md` (구동 절차)
 
-- `/CLAUDE.md`
-- `/docs/ARCHITECTURE.md`
-- `/docs/ADR.md`
-- `/docs/agent-balance/PRD.md`, `/docs/agent-balance/ARCHITECTURE.md`, `/docs/agent-balance/ADR.md`
-- `/.claude/commands/review.md` (체크리스트 기준)
-- `git diff --stat origin/main...HEAD`로 이 브랜치 전체 변경 파일 목록
+## 체크리스트
 
-## 작업
+선행 조건:
 
-`/.claude/commands/review.md`의 체크리스트 7개 항목으로 `feat-agent-balance` 브랜치의 `origin/main` 대비 diff를 검토한다. 이 step에서는 **코드를 수정하지 않는다**(발견 사항 보고만).
+- [ ] `cs-balance`가 Ollama에 등록돼 있다(step 11)
+- [ ] `rm -f backend/logs/model_inputs.jsonl`로 로그를 비웠다
+- [ ] 백엔드를 기본 호스트로 띄웠다: `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (`--host 0.0.0.0` 금지 — ARCHITECTURE "에러 처리·보안")
 
-이 영역에서 특히 확인할 것:
+자체 점검 셋(라우터 영향 없이 에이전트만):
 
-- 잔액·거래 금액 원본(`1234567`, `1,234,567`, `2400000` 등)과 전체 계좌번호가 프롬프트·history·합성 샘플 어디에도 들어가지 않는가? mock 값은 `slots`로만 나가는가?
-- 출력 검증(BAL-002)을 거치지 않고 모델 출력이 `AgentReply.text`로 나가는 경로가 없는가?
-- 테스트가 핵심 규칙을 깨는 입력을 재현하는가: `입출금` 오분류, 본인 아닌 계좌번호 + 별칭, 두 계좌가 함께 걸리는 입력, 숫자·서류·상품명이 든 학습 정답 제외, 개인정보 요구·행동 약속 학습 정답 제외와 상담원 연결 안내 유지(BAL-009), 합성 샘플의 mock 값 부재, Modelfile SYSTEM 일치. 스모크 테스트만 있으면 ❌
-- 수정 범위가 `backend/app/agents/balance/`, `backend/tests/balance/`, `backend/training/balance/`, `backend/models/balance/`, `docs/agent-balance/`, `phases/agent-balance/` 안에 있는가? 아래 알려진 예외 밖의 파일 변경은 ❌
-  - 알려진 예외(보고만, 막지 않는다): `backend/tests/router/test_base.py`·`backend/tests/gateway/test_api.py`(ARCHITECTURE "알려진 한계"), `backend/README.md`·`backend/training/requirements.txt`·`.gitignore`·`docs/ADR.md`·`docs/ARCHITECTURE.md`·`docs/PRD.md`(BAL-006 Mac 학습 안내 — 공통 문서라 팀 합의 필요로 보고), `phases/index.json`
-- `.gguf`·`.safetensors`·`backend/data/`·`backend/logs/`·`scripts/`·`.ouroboros/`가 커밋에 없는가?
+- [ ] Q1~Q10을 `"choice": "balance"`로 보냈다. 예: `curl -s -X POST localhost:8000/api/chat -H 'Content-Type: application/json' -d '{"session_id":"q1","customer_id":"C001","message":"잔액 얼마 남았어요?","choice":"balance"}'`. Q9는 같은 `session_id`로 계좌 라벨을 `choice`와 함께 한 번 더 보낸다
+- [ ] 각 문항을 ① 주제 적합 ② 지어내지 않음 ③ 존댓말로 판정했다. 9/10 이상
+- [ ] 기본 문장으로 대체된 횟수를 셌다(대체가 많으면 합성 비중·검증 규칙을 다시 본다)
+- [ ] C001 "제 계좌 110-1234-5678 잔액 알려줘"를 보낸 뒤 `grep -c -e 1234567 -e 1,234,567 -e 110-1234-5678 backend/logs/model_inputs.jsonl`이 0이다
+- [ ] 한 요청의 첫 응답이 10초 안에 온다(모델 워밍업 뒤, 공통 인수 기준 7)
 
-## Acceptance Criteria
+사용자 여정(챗봇 UI, `cd frontend && npm run dev` 후 `http://localhost:3000`):
 
-```bash
-(cd backend && .venv/bin/python -m pytest -q)
-test -z "$(git ls-files '*.gguf' '*.safetensors' backend/data backend/logs scripts .ouroboros)"
-```
+- [ ] J1·J2·J4·J5·J6·J7이 PRD 표대로 된다. 화면 금액이 `1,234,567원` 형식이고 `{{`가 남지 않는다
+- [ ] J8("입출금 계좌 잔액 알려줘")이 잔액으로, J9(되묻기 뒤 "생활비 계좌 잔액 알려줘")가 되묻기 반복 없이 답한다
+- [ ] 거래내역이 줄마다 나뉘어 보인다(J3). `cs-router`가 없으면 J3은 R1 때문에 주제 없음 되묻기로 빠지는 것이 예상 동작이다
+- [ ] Ollama를 멈추고 잔액을 물으면 "지금은 답변을 드릴 수 없습니다. 상담원 연결을 도와드릴까요?"가 보인다(J12, BAL-007)
 
-## 검증 절차
+기록:
 
-1. 위 AC 커맨드를 실행한다. 리뷰 체크리스트의 `bash scripts/verify.sh`는 파일이 있을 때만 실행한다.
-2. 리뷰 결과를 `review.md`의 출력 형식(표)으로 정리해 summary에 담는다. 알려진 예외는 표 아래에 따로 적는다.
-3. 결과에 따라 `phases/agent-balance/index.json`의 해당 step을 업데이트한다:
-   - 모든 항목 ✅ → `"status": "completed"`, `"summary": "리뷰 결과 한 줄 요약"`
-   - CRITICAL 위반이나 치명 결함 발견 → `"status": "blocked"`, `"blocked_reason": "위반 내용과 수정 방안"` 후 즉시 중단
-   - 수정 3회 시도 후에도 AC 실패 → `"status": "error"`, `"error_message": "구체적 에러 내용"`
-
-## 금지사항
-
-- 리뷰 중에 코드를 고치지 마라. 이유: 리뷰 결과와 수정 이력이 섞이면 무엇이 결함이었는지 추적이 안 된다. 결함은 `blocked`로 보고하고 사람이 pending step을 추가해 고친다.
-- 기존 테스트를 깨뜨리지 마라
-- git commit을 하지 마라. 이유: 커밋은 execute.py가 AC 재검증 후 수행한다
+- [ ] 결과(점수, 실패 문항과 원인, 대체 횟수, 응답 시간)를 `docs/agent-balance/PRD.md` "자체 점검 셋"·"사용자 여정" 아래에 적었다. 새로 찾은 키워드 누락은 알려진 한계 (e)의 후보로 적는다
+- [ ] 9/10 미만이면 원인별로 수정 step을 `phases/agent-balance/index.json`에 pending으로 추가하고 review 전에 끝낸다
+- [ ] `docs(agent-balance): 자체 점검 결과` 형식으로 커밋했다

@@ -70,7 +70,7 @@ main `7466702`의 게이트웨이(`/api/chat` 처리 순서) 위에 이 브랜�
   3. `training/balance/prepare.py` — AI Hub 샘플 + 템플릿 합성 슬롯 샘플, 입력은 `build_messages`와 같은 형식(BAL-008), 콜센터식 정답 제외(BAL-009)
   4. `models/balance/Modelfile`(SYSTEM이 `SYSTEM_PROMPT`와 같은지 테스트로 고정) → 학습 → GGUF 변환 → `ollama create cs-balance`(BAL-006, `MAC_TRAINING.md`)
   5. 아래 "자체 점검 셋"과 사용자 여정 J1~J12를 실제 `/api/chat`으로 확인
-  - 실행 계획은 `phases/agent-balance/`(Harness, `python3 scripts/execute.py agent-balance`)에 있다. 대응: 0 → step 0 `main-merge`(사람), 1 → step 1 `intent-alias`, 2 → step 2 `resolve-typed`, 3 → step 3 `train-prepare` + step 5 `prepare-filter`·step 6 `prepare-filter-widen`·step 7 `rewrite`·step 8 `prepare-rewrite`·step 9 `synth-widen`(train-export valid 점검에서 추가, BAL-009·BAL-010), 4 → step 4 `modelfile` + step 10 `train-export`(사람), 5 → step 11 `self-check`(사람), 마지막 step 12 `review`. 사람 step이 아닌 것은 모두 모델 없이 TDD로 한다.
+  - 실행 계획은 `phases/agent-balance/`(Harness, `python3 scripts/execute.py agent-balance`)에 있다. 대응: 0 → step 0 `main-merge`(사람), 1 → step 1 `intent-alias`, 2 → step 2 `resolve-typed`, 3 → step 3 `train-prepare` + step 5 `prepare-filter`·step 6 `prepare-filter-widen`·step 7 `rewrite`·step 8 `prepare-rewrite`·step 9 `synth-widen`(train-export valid 점검에서 추가, BAL-009·BAL-010)·step 10 `rewrite-rules`(재작성 시범 판독에서 추가, BAL-010 보강), 4 → step 4 `modelfile` + step 11 `train-export`(사람), 5 → step 12 `self-check`(사람), 마지막 step 13 `review`. 사람 step이 아닌 것은 모두 모델 없이 TDD로 한다.
 - 끝났다
   - 프론트엔드의 슬롯 값 속 줄바꿈(`{{recent_transactions}}`) 표시 — main의 frontend가 `whitespace-pre-line`으로 처리한다(`docs/frontend/ARCHITECTURE.md` "화면 동작 규칙", main 기준)
 - 미룬다

@@ -13,6 +13,7 @@
    .venv/bin/python -m training.common.split
    .venv/bin/python -m training.balance.rewrite --limit 30  # 시범 30건(묶음 2번). saved·missing·cost_usd를 출력한다
    # data/processed/balance/rewrites.jsonl의 30건을 원문(source)과 나란히 읽고, 규칙 위반이 적으면 나머지를 돌린다
+   # 규칙(REWRITE_SYSTEM)이나 모델을 바꿨으면 캐시 키가 같으므로 기존 캐시를 옮기고 시범부터 다시 한다: mv data/processed/balance/rewrites.jsonl data/processed/balance/rewrites.v1.jsonl
    .venv/bin/python -m training.balance.rewrite --jobs 4    # 캐시에 없는 나머지 전부. 끊기면 같은 명령으로 이어서 돈다
    .venv/bin/python -m training.balance.prepare             # 재작성 캐시만 읽는다(결정적)
    ```
