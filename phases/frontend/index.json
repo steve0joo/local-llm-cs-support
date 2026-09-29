@@ -67,7 +67,17 @@
     {
       "step": 3,
       "name": "option-buttons",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T09:44:01+0900",
+      "summary": "components/OptionButtons.tsx — props(options·disabled·onSelect)만 받는 표시 컴포넌트, 선택지마다 type=button 버튼(UI_GUIDE 선택지 버튼 클래스, flex flex-wrap gap-2), 클릭 시 onSelect(option), 빈 배열이면 null, key는 index(계좌 선택지는 choice가 모두 'balance'라 중복) + OptionButtons.test.tsx 4케이스(user-event: label별 버튼·onSelect 객체 1회 호출·disabled 시 전부 비활성·미호출·빈 배열 버튼 없음)",
+      "cost_usd": 0.6618,
+      "num_turns": 11,
+      "completed_at": "2026-09-29T09:45:09+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/OptionButtons.test.tsx",
+        "frontend/src/components/OptionButtons.tsx"
+      ]
     },
     {
       "step": 4,
