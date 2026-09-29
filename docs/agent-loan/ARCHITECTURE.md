@@ -43,24 +43,22 @@ backend/
 1. loans = get_loans(customer_id)
 2. 대출 없음 → AgentReply(text="고객님 명의로 조회되는 대출이 없습니다.", slots={}, options=[]) (모델 호출 없음)
 3. 대상 대출: mock 고객은 대출이 최대 1건이다(계약 6). 여러 건 선택 되묻기는 만들지 않는다. 2건 이상이면 첫 번째를 쓴다.
-4. slots 생성: loan_label = product_type, principal_remaining = "12,000,000원" 형태
+4. slots 생성: loan_label = product_type, principal_remaining = "12,000,000원" 형태, **extendable_status**(2026-09-29 추가) = `loan["extendable"]`에서 코드가 그대로 만드는 연장 가능 여부 문구 — `true`→"연장 가능 대상으로 조회됩니다.", `false`→"현재 연장 가능으로 조회되지 않습니다." 모델이 이 슬롯을 어떻게 쓰든, 심지어 안 쓰든 이 값 자체는 항상 mock 조회값에서 나온다(모델이 만들지 않는다).
 5. messages = 시스템 프롬프트 + history + masked_text
             + "대출 정보: 종류=신용대출, 만기일=2027-03-31, 연장 가능=예"   (연장 불가면 "연장 가능=아니오(사유는 알 수 없음)")
-            + "사용할 수 있는 슬롯: {{loan_label}}, {{principal_remaining}}"
+            + "사용할 수 있는 슬롯: {{loan_label}}, {{principal_remaining}}, {{extendable_status}}"
    → llm.generate("cs-loan", messages)
    - 만기·연장·조회 중 무엇을 묻는지는 코드가 나누지 않는다. 슬롯이 항상 같으므로 모델이 질문에 맞춰 답한다.
    - 남은 원금 숫자는 프롬프트에 넣지 않는다(LN-001).
+   - **연장 가능 여부는 모델이 "가능합니다"/"불가합니다"를 직접 쓰지 않고 `{{extendable_status}}` 슬롯으로 표현하도록 `SYSTEM_PROMPT`가 지시한다(2026-09-29, LN-005 후속).** 이유: 화면에 보이는 연장 가능 여부 문구가 항상 슬롯 값(=mock 사실)으로 정해지므로, 모델이 딴 말을 하거나 표현을 틀려도 화면에 틀린 사실이 나올 수 없다. `{{loan_label}}`·`{{principal_remaining}}`과 같은 원리다.
    - "대출 정보"·"사용할 수 있는 슬롯" 줄은 마지막 user 메시지에 `masked_text` 뒤로 붙인다(별도 메시지로 나누지 않는다). 시스템 프롬프트의 원본은 `prompt.py`의 `SYSTEM_PROMPT`다(LN-006).
 6. 출력 검증(LN-004) — 아래 중 하나라도 걸리면 기본 문장으로 대체
    a. 허용 표기를 제거한 뒤 아라비아 숫자가 남아 있음(금액·퍼센트·다른 날짜·기간 포함). 허용 표기는 프롬프트에 준 만기일의 `YYYY-MM-DD`·`YYYY년 M월 D일`과 마스킹 토큰(계약 4, 예: `[금액_1]`)이다.
-   b. 사용하도록 준 슬롯(`{{loan_label}}`, `{{principal_remaining}}`) 밖의 `{{...}}`가 있음
+   b. 사용하도록 준 슬롯(`{{loan_label}}`, `{{principal_remaining}}`, `{{extendable_status}}`) 밖의 `{{...}}`가 있음
    c. 구체적인 서류명 키워드가 있음(증명서·등본·초본·재직·소득·신분증·인감·원천징수·사본 — 목록은 `validate.py` 상수). "서류"라는 일반 단어와 "필요한 서류는 상담원에게 확인해 주세요" 같은 안내는 허용한다.
-   d. `extendable=false`인데 같은 문장 안에 부정 표현(불가·않·어렵·없) 없이 "가능"이 있음(문장은 `.`·`!`·`?`·줄바꿈으로 나눈다)
-   기본 문장(코드가 조립, <…>는 조회값. 만기일은 `2027-03-31` 형태로 쓴다):
-     "{{loan_label}}의 만기일은 <만기일>이고, 남은 원금은 {{principal_remaining}}입니다."
-     + extendable=true  → " 연장 가능 대상으로 조회됩니다."
-       extendable=false → " 현재 연장 가능으로 조회되지 않습니다."
-     + " 연장 조건 등 자세한 사항은 상담원에게 확인해 주세요."
+   d. `extendable=false`인데 같은 문장 안에 부정 표현(불가·않·어렵·없) 없이 "가능"이 있음(문장은 `.`·`!`·`?`·줄바꿈으로 나눈다). **슬롯 도입 후에도 유지한다** — 모델이 `{{extendable_status}}`를 안 쓰고 직접 "가능합니다"라고 써서 실제 값과 모순되는 경우를 잡는 이중 검증이다(슬롯=사실 보장, d=말이 슬롯과 모순되지 않는지 확인).
+   기본 문장(코드가 조립, <…>는 조회값. 만기일은 `2027-03-31` 형태로 쓴다. `{{extendable_status}}`는 정상 경로와 같은 슬롯 값을 그대로 쓴다):
+     "{{loan_label}}의 만기일은 <만기일>이고, 남은 원금은 {{principal_remaining}}입니다. {{extendable_status}} 연장 조건 등 자세한 사항은 상담원에게 확인해 주세요."
 7. AgentReply(text, slots, options=[])
 ```
 
