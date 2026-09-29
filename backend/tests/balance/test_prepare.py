@@ -147,11 +147,20 @@ def test_build_sample_keeps_generic_or_mentioned_product_names(follow_up, output
     "성함과 생년월일 앞 여섯 자리를 알려주시기 바랍니다",
     "계좌 비밀번호 네 자리를 입력해 주십시오",
     "계좌 번호를 알려 주시면 확인해 드리겠습니다",
+    "먼저 성함과 생년월일을 제공해 주셔야 본인 확인 절차를 진행할 수 있습니다",
     # 행동 약속 (BAL-009)
     "문자로 상세 정보를 보내드리겠습니다",
     "필요하시면 영수증도 전송해 드리니 잠시만 기다려 주시기 바랍니다",
     "PDF 파일이나 우편으로 발급해 드리겠습니다",
     "신속히 확인하여 조치해 드리겠습니다",
+    "문자 발송을 바로 진행해 드리겠습니다",
+    "요청해 주시면 해당 내용을 전달해 드리겠습니다",
+    "입금 상세 내역을 추가로 제공해 드리겠습니다",
+    "변경을 원하시는 내용을 알려 주시면 즉시 처리해 드립니다",
+    "원하시는 신청 방법을 알려 주시면 즉시 진행하겠습니다",
+    "변경 내역을 서면으로 발송해 드릴 수 있으니 요청해 주세요",
+    "문자 메시지로도 정리해 드릴 수 있으니 문의해 주시기 바랍니다",
+    "최근 자동이체 여부를 조회해 드리겠습니다",
 ])
 def test_build_sample_excludes_call_center_outputs(output):
     qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
@@ -164,6 +173,7 @@ def test_build_sample_excludes_call_center_outputs(output):
     "담당 부서로 연결해 드리겠습니다",
     "고객센터로 문의해 주시기 바랍니다",
     "조회 방법을 안내해 드리겠습니다",
+    "해당 내역은 조회해 드릴 수 없으니 상담원에게 확인해 주세요",
 ])
 def test_build_sample_keeps_handoff_and_guide_outputs(output):
     qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
@@ -171,11 +181,51 @@ def test_build_sample_keeps_handoff_and_guide_outputs(output):
     assert prepare.build_sample(qa)["messages"][-1]["content"] == output
 
 
+@pytest.mark.parametrize("output", [
+    "시스템 확인 결과 해당 일자에는 거래가 없습니다",
+    "거래내역을 확인한 결과, 자동이체로 출금된 금액은 대출 상환입니다",
+    "확인한 바에 따르면 변경 사항이 정상적으로 적용되어 있습니다",
+    "입금이 정상적으로 확인되었습니다",
+])
+def test_build_sample_excludes_lookup_claims(output):
+    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
+          "follow_up": "어떻게 확인하나요?", "output": output}
+    assert prepare.build_sample(qa) is None
+
+
+@pytest.mark.parametrize("output", [
+    "조회 결과는 화면에 표시되며 캡처하실 수 있습니다",
+    "조회 결과를 앱에서 확인하실 수 있습니다",
+    "입금 여부는 앱에서 확인하실 수 있습니다",
+])
+def test_build_sample_keeps_lookup_guides(output):
+    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
+          "follow_up": "어떻게 확인하나요?", "output": output}
+    assert prepare.build_sample(qa)["messages"][-1]["content"] == output
+
+
+@pytest.mark.parametrize("output", [
+    "★★은행 모바일 앱에서 확인해 주세요",
+    "●월 ●일 기준으로 반영됩니다",
+    "OOO 고객님 확인 부탁드립니다",
+])
+def test_build_sample_excludes_deidentified_marks(output):
+    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
+          "follow_up": "어떻게 확인하나요?", "output": output}
+    assert prepare.build_sample(qa) is None
+
+
 def test_call_center_rule_applies_to_output_only():
     qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "문자로 상세 정보를 보내드리겠습니다",
           "follow_up": "계좌 번호를 알려드릴게요", "output": OK_OUTPUT}
     messages = prepare.build_sample(qa)["messages"]
     assert [m["content"] for m in messages[2:]] == ["문자로 상세 정보를 보내드리겠습니다", "계좌 번호를 알려드릴게요", OK_OUTPUT]
+
+
+def test_lookup_claim_and_deid_rules_apply_to_output_only():
+    qa = {"source_id": "S1", "question": "★★은행 OO 계좌 잔액 알려주세요", "answer": "확인 결과 입금이 정상적으로 확인되었습니다",
+          "follow_up": "●월 ●일에 들어온 거 맞나요?", "output": OK_OUTPUT}
+    assert prepare.build_sample(qa)["messages"][-1]["content"] == OK_OUTPUT
 
 
 def test_generic_product_names_constant():
