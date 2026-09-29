@@ -422,15 +422,17 @@ def build_dataset_v2(
     counts = {"수동": 0}
     written = 0
     with out_path.open("w", encoding="utf-8") as f:
-        if split == "train":
-            for item in iter_manual_samples(manual_path, split):
-                if not is_clean(item):
-                    continue
-                for _ in range(MANUAL_COPIES):
-                    messages = to_messages(item, item["extendable"], item.get("maturity_date", _SAMPLE_MATURITY))
-                    f.write(json.dumps({"messages": messages}, ensure_ascii=False) + "\n")
-                    counts["수동"] += 1
-                    written += 1
+        # 수동 시드의 val은 질문 단위로 떼어 둔 행("split": "val")이다. 복제하지 않고 1배로 넣어 val 손실이
+        # 만기·원금·연장 같은 슬롯 답변도 재게 한다(교체 샘플만으로는 거절 유형만 잰다).
+        copies = MANUAL_COPIES if split == "train" else 1
+        for item in iter_manual_samples(manual_path, split):
+            if not is_clean(item):
+                continue
+            for _ in range(copies):
+                messages = to_messages(item, item["extendable"], item.get("maturity_date", _SAMPLE_MATURITY))
+                f.write(json.dumps({"messages": messages}, ensure_ascii=False) + "\n")
+                counts["수동"] += 1
+                written += 1
         for item in iter_replacement_samples(raw_dir, split_path, split, caps):
             messages = to_messages(item, item["extendable"], item["maturity_date"])
             f.write(json.dumps({"messages": messages}, ensure_ascii=False) + "\n")
