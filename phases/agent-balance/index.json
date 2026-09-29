@@ -53,7 +53,19 @@
     {
       "step": 3,
       "name": "train-prepare",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T14:38:13+0900",
+      "summary": "training/balance/prepare.py 구현(TOPIC·OUT_DIR=data/processed/balance·SPLIT_FILES, load_qas·normalize_amounts·build_sample·synth_samples·build_dataset·main --split/--out-dir/--zip, app.masking.mask 직접 import·random 없음) + tests/balance/test_prepare.py 20개(tmp_path 합성 zip·split.json: 분할·라벨 필터·마스킹 원본 부재·제외 4종·허용/입력 상품명 유지·합성 의도/is_valid/모양·mock 값 부재·check_dataset·결정성·CLI). 합성 질문 잔액 20·거래내역 20, 응답 각 6 → 합성 샘플 train 192·val 24·test 24. 상품명 허용 목록 상수 GENERIC_PRODUCT_NAMES. ARCHITECTURE·MAC_TRAINING의 3차/미구현 표시 제거. deviation: 없음(인터페이스 절에 main 옵션·GENERIC_PRODUCT_NAMES 이름·● 금액 정규식 모양만 보강). AC 24 passed, backend 전체 287 passed",
+      "cost_usd": 2.3667,
+      "num_turns": 21,
+      "completed_at": "2026-09-29T14:44:23+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/MAC_TRAINING.md",
+        "backend/training/balance/prepare.py",
+        "docs/agent-balance/ARCHITECTURE.md"
+      ]
     },
     {
       "step": 4,
