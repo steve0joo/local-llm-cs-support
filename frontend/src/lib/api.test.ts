@@ -17,6 +17,12 @@ const RES: ChatResponse = {
   options: [],
 };
 
+function withoutKey(key: keyof ChatResponse): Record<string, unknown> {
+  const body: Record<string, unknown> = { ...RES };
+  delete body[key];
+  return body;
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -90,6 +96,44 @@ describe("sendChat", () => {
 
       await expect(sendChat(REQ)).rejects.toThrow();
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("응답 최소 형식 확인", () => {
+    it.each([
+      ["text가 null", { ...RES, text: null }],
+      ["text가 숫자", { ...RES, text: 123 }],
+      ["text 키 없음", withoutKey("text")],
+      ["options가 객체", { ...RES, options: {} }],
+      ["options가 문자열", { ...RES, options: "a" }],
+    ])("2xx라도 %s면 reject하고 다시 요청하지 않는다", async (_name, body) => {
+      fetchMock.mockResolvedValue(jsonResponse(body));
+
+      await expect(sendChat(REQ)).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ["options가 null", { ...RES, options: null }],
+      ["options 키 없음", withoutKey("options")],
+      [
+        "정상 응답",
+        {
+          type: "clarify",
+          agent: null,
+          topic: null,
+          text: "어느 쪽을 먼저 도와드릴까요?",
+          slots: {},
+          options: [
+            { label: "대출문의", choice: "loan" },
+            { label: "이자/연체", choice: "interest" },
+          ],
+        },
+      ],
+    ])("%s면 본문을 그대로 돌려준다", async (_name, body) => {
+      fetchMock.mockResolvedValue(jsonResponse(body));
+
+      await expect(sendChat(REQ)).resolves.toStrictEqual(body);
     });
   });
 });

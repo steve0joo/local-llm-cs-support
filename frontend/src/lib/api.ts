@@ -10,5 +10,11 @@ export async function sendChat(req: ChatRequest): Promise<ChatResponse> {
   if (!res.ok) {
     throw new Error(`/api/chat 요청 실패: ${res.status}`);
   }
-  return (await res.json()) as ChatResponse;
+  const body = (await res.json()) as ChatResponse;
+  // 렌더링을 깨뜨리는 두 가지만 확인한다(fillSlots의 text.matchAll, OptionButtons의 options.map).
+  // 항목 안쪽 검증은 게이트웨이 응답 모델의 몫이고, 본문은 고치지 않고 그대로 돌려준다.
+  if (typeof body.text !== "string" || (body.options != null && !Array.isArray(body.options))) {
+    throw new Error("/api/chat 응답 형식 오류");
+  }
+  return body;
 }
