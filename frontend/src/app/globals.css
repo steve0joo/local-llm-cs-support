@@ -1,6 +1,17 @@
 @import "tailwindcss";
 
 @theme {
+  --color-cream: #FCF1E6;
+  --color-surface: #FFFBF6;
+  --color-bubble: #F3E6D8;
+  --color-ink: #2A2118;
+  --color-ink-soft: #7A6A5C;
+  --color-accent-orange: #E07B2E;
+  --color-accent-blue: #3A6FD0;
+  --color-accent-yellow: #E5A527;
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, system-ui, sans-serif;
+
   --animate-fade-in: fade-in 0.2s ease-out;
 
   @keyframes fade-in {
@@ -15,6 +26,29 @@
 
 @layer base {
   body {
-    background-color: #f5f5f4;
+    background-color: var(--color-cream);
+  }
+}
+
+/* 엔진 덮어쓰기: 엔진의 @layer sw가 Tailwind 레이어보다 뒤에 선언되므로 레이어 밖에 둔다 (FE-008) */
+:root,
+.sw-root {
+  --sw-bg: var(--color-cream);
+  --sw-ink: var(--color-ink);
+  --sw-ink-soft: var(--color-ink-soft);
+  --sw-accent: var(--color-accent-orange);
+  --sw-font-display: var(--font-sans);
+  --sw-font-body: var(--font-sans);
+}
+
+.sw-copy__title,
+.sw-copy__body {
+  word-break: keep-all;
+}
+
+@media (min-width: 861px) {
+  .sw-scene__video,
+  .sw-scene__still {
+    object-fit: contain;
   }
 }
