@@ -192,5 +192,5 @@ AI Hub 원본(backend/data/raw)
 - 스캐폴드(`backend/pyproject.toml`, `app/__init__.py`, frontend `package.json` 등)가 아직 없어서 나는 import·실행 실패도 red로 인정한다. 이때 실행은 생략하거나 pyproject에 적을 설정을 명령줄로 넘겨 확인한다.
 
 ### 다음 라운드 체크리스트
-- [ ] 팀원C 스텁(통합 순서 1단계) 병합 후 에이전트 3개 영역(balance·loan·interest) 재드라이런
-- [ ] 실제 팀원 착수 검증
+- [ ] [PR #4](https://github.com/steve0joo/local-llm-cs-support/pull/4)(통합 순서 1단계) 머지 후 main 커밋 하나에서 에이전트 3개 영역(balance·loan·interest)을 같은 스냅샷으로 재드라이런(실행 시 SHA 기록)
+- [ ] 실제 팀원 착수 검증(사후 드라이런, 위 판정 규칙 적용) — https://github.com/steve0joo/local-llm-cs-support/issues/5
