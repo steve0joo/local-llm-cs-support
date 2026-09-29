@@ -143,13 +143,19 @@
     {
       "step": 8,
       "name": "manual-check",
-      "status": "pending",
+      "status": "completed",
       "type": "human"
     },
     {
       "step": 9,
       "name": "review",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T10:20:42+0900",
+      "summary": "review.md 7항목 전부 ✅ (코드 수정 없음) | 아키텍처 준수 ✅ docs/frontend/ARCHITECTURE 디렉토리 구조·named export·상대경로 import 일치, sendChat 호출은 page.tsx 한 곳, 표시 컴포넌트는 props만 | 기술 스택 준수 ✅ lock 기준 next 16.3.6·react 19.2.8·tailwind 4.3.3·vitest 5.0.2·vite 8.3.1·jsdom 29.1.1·RTL 16·@types/node 24, 상태·페칭 라이브러리 없음, next.config.ts에 proxyTimeout 120_000·agentRules false, 런타임 목·타임아웃·재시도·env 없음(FE-005·006) | 테스트 존재 ✅ 구현 파일 7개 모두 옆에 <이름>.test.ts(x), 7파일 65케이스 통과 | CRITICAL 규칙 ✅ src에 localhost:8000·11434·/mock/·dangerouslySetInnerHTML 없음, fetch는 lib/api.ts의 상대경로 /api/chat뿐이고 백엔드 주소는 rewrites에만, 슬롯 치환은 fillSlots 한 곳(MessageBubble 봇 말풍선만)·고객 말풍선 무치환, UI_GUIDE 금지 패턴(backdrop-blur·bg-gradient·bg-clip-text·purple/indigo/violet·글로우 그림자·Powered by AI) 없음 | 검증 통과 ✅ lint·tsc --noEmit·build·test·grep·AGENTS.md/CLAUDE.md 부재 AC 전부 통과, scripts/verify.sh exit 0(backend/tests 없어 frontend만) | 핵심 규칙 테스트 ✅ fillSlots 누락·빈 값·빈 이름({{}}·{{ }})·상속 속성(toString·__proto__)·값 재치환 금지, api choice 키 없음·500/404·네트워크 오류 reject 1회 호출, ChatWindow 최신 비오류 봇만 선택지 활성(오류 뒤 활성·일반 봇 뒤 비활성)·pending 시 입력/전송/선택지 전부 비활성·공백 입력 차단, page 1,234,567원 표시·{{ 없음·clarify 선택 요청 choice·고객 변경 시 로그 초기화·새 session_id | 커밋 위생 ✅ node_modules·.next·.env*·AGENTS.md·CLAUDE.md·가중치·gitlink·비밀키 없음, lock resolved 전부 registry.npmjs.org, step 커밋(c33886e..41fee4d)은 frontend/·phases/frontend/만 변경, phases/index.json 변경 없음, main 대비 그 밖의 변경은 phase 전 계획 커밋 da6b969의 자기 영역 docs/frontend/*뿐(공통 docs·docs/agent-*·backend·CLAUDE.md·.claude 변경 없음) | 참고(결함 아님): vitest가 vitest.config.ts를 CJS로 읽는다는 Vite configLoader 경고 출력",
+      "cost_usd": 1.2081,
+      "num_turns": 17,
+      "completed_at": "2026-09-29T10:22:48+0900",
+      "ac_verified": true
     }
   ],
   "created_at": "2026-09-29T09:39:08+0900"
