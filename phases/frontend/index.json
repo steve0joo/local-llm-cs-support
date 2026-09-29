@@ -97,7 +97,17 @@
     {
       "step": 5,
       "name": "customer-picker",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T09:46:49+0900",
+      "summary": "components/CustomerPicker.tsx — props(value·disabled·onChange)만 받는 표시 컴포넌트, useId로 연결한 '데모 고객' label(text-sm text-stone-500) + select(UI_GUIDE 데모 고객 선택 클래스), 항목은 types/chat.ts의 CUSTOMER_IDS로 그림(ID 재기재 없음), 변경 시 onChange(e.target.value as CustomerId), 초기화는 하지 않음(page.tsx 몫) + CustomerPicker.test.tsx 3케이스(user-event: 라벨·combobox·C001~C003 순서·value 선택, C002 선택 시 onChange('C002') 1회, disabled 시 비활성)",
+      "cost_usd": 0.6672,
+      "num_turns": 10,
+      "completed_at": "2026-09-29T09:47:53+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/CustomerPicker.test.tsx",
+        "frontend/src/components/CustomerPicker.tsx"
+      ]
     },
     {
       "step": 6,
