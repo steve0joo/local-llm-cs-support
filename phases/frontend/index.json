@@ -37,7 +37,17 @@
     {
       "step": 1,
       "name": "fill-slots",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T09:41:11+0900",
+      "summary": "lib/fillSlots.ts(SlotPart[] 반환, /\\{\\{([^{}]*)\\}\\}/g·trim·Object.hasOwn·빈 이름/빈 값→'확인할 수 없습니다' slot:false·재치환 없음·빈 조각 없음) + fillSlots.test.ts 26케이스(문서 예시 2건·빈 문자열·다중/반복·공백 이름·상속 속성·$ 패턴·비토큰 중괄호·조각 경계·줄바꿈·순수성)",
+      "cost_usd": 0.7863,
+      "num_turns": 12,
+      "completed_at": "2026-09-29T09:42:55+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/lib/fillSlots.test.ts",
+        "frontend/src/lib/fillSlots.ts"
+      ]
     },
     {
       "step": 2,
