@@ -95,14 +95,16 @@ frontend: text의 {{balance}}를 slots 값으로 치환해 화면에 표시
 | 코드 | 데이터셋 `consulting_topic` | 처리 |
 |------|---------------------------|------|
 | `balance` | 거래내역/잔액조회 | 잔액조회 에이전트 |
-| `loan` | 대출문의(만기/연장/조회 등) | 대출문의 에이전트 |
+| `loan` | 대출문의(만기/연장/조회등) | 대출문의 에이전트 |
 | `interest` | 이자/연체금액 | 이자/연체 에이전트 |
 | `auto_transfer` | 자동이체조회 | 미지원 안내 |
 | `transfer_error` | 중계요청/착오송금 | 미지원 안내 |
-| `deposit` | 만기, 연장/해지, 수신 | 미지원 안내 |
+| `deposit` | 만기,연장/해지,수신 | 미지원 안내 |
 | `limit` | 금융거래한도/비대면한도계좌 | 미지원 안내 |
 | `rate_discount` | 부수거래금리감면 | 미지원 안내 |
 | `fx` | 환전문의 | 미지원 안내 |
+
+라벨 문자열은 데이터셋 원문과 글자 단위로 같다(`조회등`·`만기,연장/해지,수신`에 공백 없음, 2026-09-28 확인). 코드에서는 `backend/app/router/topics.py`의 `TOPIC_LABELS`를 import하고 문자열을 다시 적지 않는다.
 
 `router.classify(masked_text: str) -> RouteResult` — `RouteResult.topics: list[str]`(확신 높은 순, 0개 이상). 모델은 주제 1개를 출력하고, 키워드 규칙이 지원 주제 2개 이상을 감지하면 그 주제들을 돌려준다(`docs/router/ADR.md` RT-002).
 

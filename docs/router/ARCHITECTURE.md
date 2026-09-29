@@ -14,6 +14,7 @@ backend/
 │   ├── llm/
 │   │   └── client.py           # generate(model, messages) + model_inputs.jsonl 기록
 │   ├── router/
+│   │   ├── topics.py           # 주제 표: 코드↔라벨 원문, 지원 주제, 되묻기 표시명, 키워드, 시스템 프롬프트
 │   │   └── classify.py         # classify(masked_text) -> RouteResult(topics)
 │   └── agents/
 │       ├── base.py             # AgentRequest, AgentReply, Agent (계약 3)
@@ -46,6 +47,18 @@ POST /api/chat
  5. session.history에 {"role": "user", "content": 에이전트에 넘긴 masked_text}, {"role": "assistant", "content": reply.text} 추가 (계약 3) → 응답 반환
 ```
 
+### 게이트웨이 구현 결정 (`app/gateway/`, `app/main.py`)
+- 파일: `session.py`(`Session`, 모듈 dict `sessions`, `get_session()`; 되묻기 대기 질문은 `MaskResult`를 그대로 보관), `dispatch.py`(`AGENTS`, 안내 문구 상수, `dispatch(session_id, customer_id, message, choice) -> dict`), `api.py`(pydantic `ChatRequest`·`ChatResponse`·`ChatOption`, `POST /api/chat`), `main.py`(`create_app()`이 `/api/chat`과 세 패키지의 `mock_router`를 prefix 없이 등록).
+- 안내 문구: 지원 주제 2개 이상 "어느 쪽을 먼저 도와드릴까요?", 주제 없음 "어떤 업무를 도와드릴까요?", 미지원 "해당 주제는 아직 지원하지 않습니다. 상담원 연결을 도와드릴까요?"
+- 되묻기 선택지는 `topics.SUPPORTED` 순서, 라벨은 `topics.DISPLAY_NAMES`.
+- `topic` 값: answer = 에이전트 코드, unsupported = 모델이 낸 첫 코드(인수 기준 1 판정 근거), clarify = null. `agent`는 answer에서만 채운다.
+- `choice`가 지원 에이전트가 아니면 422가 아니라 unsupported 응답이다. pending이 없는 `choice`(계좌 선택 등)는 현재 메시지를 그대로 에이전트에 넘긴다.
+- history에는 answer 턴만 쌓는다. clarify·unsupported 문장은 게이트웨이가 만든 것이라 모델 문맥이 아니다. 에이전트에는 이번 턴 이전까지의 history 복사본을 넘긴다.
+- `dispatch()`는 dict를 돌려주고 스키마 클래스는 `api.py`에만 둔다. `classify`는 `router.classify()`로 불러 테스트가 `app.router.classify` 한 곳만 바꾼다.
+- 모델이 없어도 서버는 뜬다: `classify()`가 Ollama 호출 실패를 키워드 폴백으로 처리하고, 에이전트는 스텁이 답한다.
+- `choice` 없는 새 메시지가 오면 `session.pending`을 비운다. 되묻기 뒤 버튼 대신 타이핑한 경우 이전 되묻기는 무효이며, 그 뒤 계좌 선택 `choice`에 옛 질문이 딸려가지 않는다.
+- 에이전트의 모델 호출 실패(`httpx.HTTPError`: Ollama 없음·모델 미등록·타임아웃)는 게이트웨이가 잡아 answer 타입으로 "지금은 답변을 드릴 수 없습니다. 상담원 연결을 도와드릴까요?"를 돌려준다(500 아님). 이 문장은 history에 넣지 않는다. 그 밖의 예외(코드 버그)는 그대로 올려 500이 되게 한다.
+
 ## 마스킹 규칙 (초안 — 테스트로 확정)
 | 종류 | 토큰 | 예시 입력 |
 |------|------|----------|
@@ -68,13 +81,23 @@ POST /api/chat
 
 ## 라우터 모델
 - 입력: 마스킹된 고객 문장. 출력: 주제 코드(계약 2) 하나.
-- `classify()`는 모델 출력에 복합 키워드 규칙(RT-002)을 더해 `topics`를 만든다.
-- 학습 데이터: `training/common` 분할의 train에서 9개 주제 전부. 고객 발화는 `qa_data[].input.question`(없으면 상담 원문 첫 고객 발화)을 쓰고, 라벨은 `consulting_topic`이다. 필드명은 데이터 확인 전 가정이다(공통 ARCHITECTURE 학습 파이프라인).
-- 클래스 불균형(대출문의·이자/연체가 약 52%)은 주제별 상한 샘플링으로 맞춘다.
-- `classify()`는 Ollama 출력을 파싱한다. 계약 2에 없는 값이면 빈 topics를 돌려준다.
+- 학습 데이터: `training/common` 분할의 train에서 9개 주제 전부. 고객 발화는 `qa_data[].input.question`, 라벨은 `consulting_topic`이다. 필드명은 2026-09-28 실제 데이터로 확인했다. 라벨 필터·`●` 금액 정규화·주제별 상한 샘플링(대출문의·이자/연체가 약 52%)은 RT-005.
+
+### `classify()` 처리 순서 (`app/router/classify.py`)
+```
+1. 키워드 규칙(RT-002)으로 지원 주제를 센다
+     2개 이상 → 모델을 부르지 않고 그 주제들을 topics로 (되묻기)
+2. llm.generate("cs-router", [system, user], temperature=0)
+     system = topics.SYSTEM_PROMPT, user = 마스킹 문장 그대로
+     호출 실패(Ollama 없음·모델 없음·타임아웃) → 1에서 센 지원 주제 0~1개로 폴백
+3. 출력을 파싱한다: 공백·따옴표·대소문자만 정리하고 계약 2 코드와 정확히 일치할 때만 채택
+     없는 값 → 빈 topics
+```
+- 주제에 관한 표는 전부 `app/router/topics.py`에 둔다: 코드↔라벨 원문(`TOPIC_LABELS`), 지원 주제(`SUPPORTED`), 되묻기 표시명(`DISPLAY_NAMES`), 키워드(`KEYWORDS`), 시스템 프롬프트(`SYSTEM_PROMPT`). 게이트웨이와 학습 스크립트(`training/router/prepare.py`)가 여기서 import한다.
+- `SYSTEM_PROMPT`는 학습 데이터와 추론이 글자 단위로 같아야 한다. 프롬프트 문구를 바꾸면 라우터를 다시 학습한다.
 
 ## 제공하는 인터페이스
 - `app.masking.mask(text) -> MaskResult` — 학습 스크립트도 이 함수를 import한다
-- `app.llm.generate(model, messages, **options) -> str`
+- `app.llm.generate(model, messages, **options) -> str` — 요청에 항상 `think: false`를 넣는다(RT-006)
 - `app.agents.base` — 계약 3
 - `data/processed/split.json` — `{source_id: "train" | "val" | "test"}`
