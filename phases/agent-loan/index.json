@@ -29,7 +29,8 @@
     {
       "step": 3,
       "name": "train-prepare",
-      "status": "pending"
+      "status": "completed",
+      "summary": "training/loan/prepare.py 신규. _extract_turns(raw)가 필드 어댑터(source.source_id, qa_data[0].{qa_id,qa_topic,input.question/answer/follow_up_question,output}) — 주제 필터는 qa_topic 사용(잠정, 팀 합의 전). iter_conversations(raw_dir,split_path,split)가 TL_은행.zip·VL_은행.zip을 qa_id로 중복 제거하며 순회. is_clean(item)은 output 기준 input(question+answer+follow_up_question 전체)에 없는 숫자(_NUM_PATTERN)·DOCUMENT_KEYWORDS·상품명(_PRODUCT_PATTERN, 허용 목록 신용대출/주택담보대출/전세자금대출)을 제외. infer_extendable(output,rng)은 문장 단위 긍정/연장불가 근거로 True/False/None(모호,제외)을 정하고 근거 없으면 rng(soure_id 시드)로 무작위 배정 — 목적은 사실 전달이 아니라 지어내지 않는 습관의 가벼운 보강(2026-09-29 재정의). NO_EXTEND_COPIES=2로 연장불가 근거 샘플만 train에서 2배 복제(만기일만 다름, val/test는 복제 없음). to_messages가 masking.mask()로 5턴(system+2턴+정보줄 붙인 user+목표 assistant) 구성, 슬롯 목록에 extendable_status 포함(step 2와 일치). manual_path(선택)로 직접 쓴 JSONL 샘플을 자동 추출분과 합쳐 같은 파이프라인을 통과시키며, 파일이 없어도 정상 동작. 기본 출력 backend/data/processed/loan_train.jsonl(gitignore). CLI: python -m training.loan.prepare --raw --split --out --which {train,val,test} [--limit] [--manual]. tests/loan/test_prepare.py 29 passed(합성 픽스처만 사용), tests/loan 전체 110 passed. 익명화 기호(●●●·★★·OO)는 미처리(계약 4 합의 대상). masking·training/common(split.py)은 그대로 import만 하고 수정하지 않음. 실제 데이터(팀원C의 split.py로 만든 split.json, 저장소 밖 심볼릭 링크로 연결한 원본)로 실행 확인: train 추출 13,010 -> 정제 통과 10,154(78%, 2026-09-28의 question만 본 개략치 6,225는 폐기) -> 모호 제외 71 -> 연장불가 근거 85(2배 복제) -> 최종 10,168행. val 738->552->10제외->542행. test 743->559->2제외->557행(둘 다 복제 없음)."
     },
     {
       "step": 4,
