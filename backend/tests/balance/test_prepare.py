@@ -6,7 +6,7 @@ import pytest
 
 from app.agents.balance.intent import classify_intent
 from app.agents.balance.mock_api import get_accounts
-from app.agents.balance.prompt import SLOT_NAMES, SYSTEM_PROMPT
+from app.agents.balance.prompt import SLOT_NAMES, SYSTEM_PROMPT, build_messages
 from app.agents.balance.resolve import ASK_TEXT, account_label
 from app.agents.balance.validate import is_valid
 from app.masking import mask
@@ -81,13 +81,30 @@ def raw(tmp_path):
     return split_path, [tl, vl], _write_rewrites(tmp_path / "rewrites.jsonl", [tl, vl])
 
 
+# 분할별 합성 샘플 수: 슬롯 샘플, 가상 계좌번호 질문(의도마다), general "상담원 안내"(범주 1은 질문 5개)
+SYNTH_COUNTS = {
+    "train": {"slot": 192, "masked_balance": 18, "masked_transactions": 18, "general": 33},
+    "val": {"slot": 24, "masked_balance": 6, "masked_transactions": 6, "general": 15},
+    "test": {"slot": 24, "masked_balance": 6, "masked_transactions": 6, "general": 15},
+}
+
+
 def _synth_counts():
-    counts = Counter()
-    for questions, answers in ((prepare.BALANCE_QUESTIONS, prepare.BALANCE_ANSWERS),
-                               (prepare.TRANSACTION_QUESTIONS, prepare.TRANSACTION_ANSWERS)):
-        for i in range(len(questions)):
-            counts["test" if i % 10 == 0 else "val" if i % 10 == 1 else "train"] += len(answers)
-    return counts
+    return Counter({split: sum(kinds.values()) for split, kinds in SYNTH_COUNTS.items()})
+
+
+def _synth_kind(sample):
+    """슬롯 줄이 없으면 general, 첫 질문에 [계좌번호_1]이 있으면 가상 계좌번호 질문, 그 밖은 슬롯 샘플."""
+    last_user = sample["messages"][-2]["content"]
+    if "사용할 수 있는 슬롯" not in last_user:
+        return "general"
+    if "[계좌번호_1]" not in sample["messages"][1]["content"]:
+        return "slot"
+    return "masked_balance" if "{{balance}}" in last_user else "masked_transactions"
+
+
+def _split_of(i):
+    return "test" if i % 10 == 0 else "val" if i % 10 == 1 else "train"
 
 
 def test_uses_gateway_mask_and_default_paths():
@@ -381,8 +398,65 @@ def test_synth_samples_follow_question_index_rules():
     assert used_labels == set(labels)
 
 
+MASKED_QUESTIONS = (("balance", "MASKED_BALANCE_QUESTIONS", "BALANCE_ANSWERS"),
+                    ("transactions", "MASKED_TRANSACTION_QUESTIONS", "TRANSACTION_ANSWERS"))
+
+
+def _masked(template, i):
+    """템플릿 인덱스 i에 mock 계좌(C001~C003 순서)의 계좌번호를 차례로 넣고 런타임과 같은 mask()를 거친다."""
+    return mask(template.format(account_no=ACCOUNTS[i % len(ACCOUNTS)]["account_no"])).masked_text
+
+
+@pytest.mark.parametrize("intent, questions_name, _", MASKED_QUESTIONS)
+def test_masked_account_questions_become_token_and_own_intent(intent, questions_name, _):
+    templates = getattr(prepare, questions_name)
+    assert len(templates) >= 5
+    for template in templates:
+        assert "{account_no}" in template
+        for account in ACCOUNTS:
+            question = mask(template.format(account_no=account["account_no"])).masked_text
+            assert "[계좌번호_1]" in question and account["account_no"] not in question
+            assert classify_intent(question) == intent
+
+
+@pytest.mark.parametrize("intent, questions_name, answers_name", MASKED_QUESTIONS)
+def test_synth_masked_account_questions_follow_index_rules(intent, questions_name, answers_name):
+    samples = prepare.synth_samples()
+    answers = getattr(prepare, answers_name)
+    for i, template in enumerate(getattr(prepare, questions_name)):
+        expected = build_messages([], _masked(template, i), intent)
+        found = [s["messages"][-1]["content"] for s in samples[_split_of(i)] if s["messages"][:-1] == expected]
+        assert sorted(found) == sorted(answers)
+
+
+def test_general_synth_questions_are_general_and_answers_pass_safety_filter():
+    assert len(prepare.GENERAL_SYNTH) == 5
+    for questions, answers in prepare.GENERAL_SYNTH:
+        assert len(questions) >= 4 and len(answers) >= 3
+        assert [q for q in questions if classify_intent(q) != "general"] == []
+        for question in questions:
+            # _rejected: is_valid(답, (), ())·상품명·콜센터식 정답·조회 결과 단정·비식별 표시·MAX_CHARS
+            assert [a for a in answers if prepare._rejected(a, (question,))] == []
+
+
+def test_synth_general_samples_follow_index_rules():
+    samples = prepare.synth_samples()
+    for questions, answers in prepare.GENERAL_SYNTH:
+        for i, question in enumerate(questions):
+            expected = build_messages([], question, "general")
+            found = [s["messages"][-1]["content"] for s in samples[_split_of(i)] if s["messages"][:-1] == expected]
+            assert sorted(found) == sorted(answers)
+
+
+def test_synth_sample_counts_per_kind_and_split_are_deterministic():
+    samples = prepare.synth_samples()
+    assert {split: Counter(map(_synth_kind, rows)) for split, rows in samples.items()} == SYNTH_COUNTS
+    assert prepare.synth_samples() == samples
+
+
 def test_synth_samples_have_no_mock_account_numbers_or_balances():
     text = json.dumps(prepare.synth_samples(), ensure_ascii=False)
+    assert "[계좌번호_1]" in text      # 가상 계좌번호 질문 샘플까지 덮는다
     for account in ACCOUNTS:
         for value in (account["account_no"], account["account_no"].replace("-", ""),
                       str(account["balance"]), f"{account['balance']:,}"):

@@ -3,7 +3,8 @@
 AI Hub 잔액조회 QA의 정답은 재작성 캐시(rewrite.py가 쓴 REWRITE_PATH)의 다시 쓴 답만 쓴다(BAL-010). 캐시에 없는 QA는 뺀다.
 QA 하나에서 첫 턴·이어진 턴 샘플을 추론과 같은 입력(prompt.build_messages)으로 만들고,
 목표 답마다 안전망 필터(출력 검증·상품명·콜센터식 정답·조회 결과 단정·비식별 표시·길이)에 걸리면 그 샘플을 뺀다.
-잔액·거래내역 슬롯 응답은 원천에 없으므로 템플릿 합성 샘플을 더한다. 무작위와 네트워크를 쓰지 않는다.
+잔액·거래내역 슬롯 응답은 원천에 없으므로 템플릿 합성 샘플을 더한다. 가상 계좌번호 질문과 general "상담원 안내"
+합성 샘플도 더한다(BAL-010). 무작위와 네트워크를 쓰지 않는다.
 
 실행: cd backend && .venv/bin/python -m training.balance.prepare
 출력: data/processed/balance/{train,valid,test}.jsonl — gitignore, 커밋 금지
@@ -118,6 +119,92 @@ TRANSACTION_ANSWERS = (
     "고객님의 {{account_label}} 계좌에서 확인된 최근 거래내역입니다.\n{{recent_transactions}}\n다른 도움이 필요하시면 말씀해 주세요.",
     "{{account_label}} 계좌의 최근 거래내역을 보여 드립니다.\n{{recent_transactions}}",
 )
+# 가상 계좌번호 질문(BAL-010): {account_no}에 mock 계좌번호를 넣고 mask()로 런타임과 같은 [계좌번호_1]로 바꾼다.
+# 응답은 같은 의도의 슬롯 응답 템플릿이다
+MASKED_BALANCE_QUESTIONS = (
+    "{account_no} 계좌 잔액 알려줘",
+    "제 계좌 {account_no} 잔액 얼마예요?",
+    "{account_no} 잔고 확인해 주세요",
+    "{account_no} 통장에 얼마 남았어요?",
+    "계좌번호 {account_no} 잔액 조회해 주세요",
+)
+MASKED_TRANSACTION_QUESTIONS = (
+    "{account_no} 계좌 거래내역 보여줘",
+    "{account_no} 최근 입금 내역 알려주세요",
+    "제 계좌 {account_no} 출금 내역 보여주세요",
+    "{account_no} 통장 거래내역 조회해 주세요",
+    "계좌번호 {account_no} 최근 내역 확인해 주세요",
+)
+# general "상담원 안내"(BAL-010, 자체 점검 Q6~Q8): 범주별 (질문들, 응답들).
+# 모델이 사실을 모르는 질문에 지어내지 않고 채팅 조회 방법이나 상담원 확인을 안내한다
+GENERAL_SYNTH = (
+    (   # 조회 방법
+        (
+            "잔액 조회는 어디서 해요?",
+            "거래내역은 어떻게 확인하나요?",
+            "입금 내역 확인하는 방법이 궁금해요",
+            "통장 잔고는 어디서 볼 수 있나요?",
+            "출금 내역 조회 방법 좀 안내해 주세요",
+        ),
+        (
+            "이 채팅에서 '잔액 알려줘' 또는 '최근 거래내역 보여줘'처럼 말씀해 주시면 등록된 계좌의 잔액과 거래내역을 바로 보여 드립니다.",
+            "잔액과 최근 거래내역은 이 채팅에서 바로 확인하실 수 있습니다. '잔액 알려줘'나 '거래내역 보여줘'라고 입력해 주세요.",
+            "조회하실 계좌의 잔액이나 거래내역을 이 채팅에서 요청해 주시면 보여 드립니다. 다른 조회 방법은 상담원에게 확인해 주시기 바랍니다.",
+        ),
+    ),
+    (   # 조회 오류·원인
+        (
+            "잔액 조회가 안 되는데 어떻게 해야 하나요?",
+            "앱에서 거래내역이 안 뜨는데 어떻게 하죠?",
+            "입금했는데 반영이 안 됐어요. 어떻게 확인하나요?",
+            "조회 오류가 나는데 해결 방법이 있을까요?",
+        ),
+        (
+            "불편을 드려 죄송합니다. 조회가 되지 않는 원인은 제가 확인할 수 없어서, 정확한 확인을 위해 상담원에게 문의해 주시기 바랍니다.",
+            "이용에 불편을 드려 죄송합니다. 앱을 최신 버전으로 업데이트한 뒤 다시 시도해 보시고, 그래도 안 되면 상담원에게 확인해 주시기 바랍니다.",
+            "원인을 정확히 말씀드리기 어려워 죄송합니다. 자세한 확인은 고객센터 상담원에게 문의해 주시기 바랍니다.",
+        ),
+    ),
+    (   # 수수료·금리·한도
+        (
+            "이체 수수료는 어떻게 되나요?",
+            "예금 금리는 어디서 확인하나요?",
+            "이체 한도 변경 방법이 궁금해요",
+            "해외 송금 수수료 기준이 어떻게 되나요?",
+        ),
+        (
+            "수수료와 금리, 한도는 상품과 조건에 따라 달라서 제가 정확히 안내해 드리기 어렵습니다. 상담원에게 확인해 주시기 바랍니다.",
+            "죄송하지만 해당 내용은 제가 정확한 정보를 알지 못합니다. 정확한 기준은 상담원에게 문의해 주시기 바랍니다.",
+            "이 채팅에서는 잔액과 거래내역 조회만 도와드릴 수 있습니다. 수수료나 금리, 한도는 상담원에게 확인해 주세요.",
+        ),
+    ),
+    (   # 발급·변경 절차
+        (
+            "잔액증명 발급 방법이 궁금해요",
+            "통장 재발급 절차가 어떻게 되나요?",
+            "거래내역서는 어디서 떼나요?",
+            "자동이체 해지는 어떻게 하나요?",
+        ),
+        (
+            "발급이나 변경 절차와 준비하실 것은 제가 정확히 안내해 드리기 어렵습니다. 가까운 영업점이나 상담원에게 확인해 주시기 바랍니다.",
+            "해당 업무는 이 채팅에서 처리할 수 없습니다. 자세한 절차는 상담원에게 문의해 주시기 바랍니다.",
+            "죄송하지만 절차를 정확히 안내해 드리기 어렵습니다. 고객센터 상담원에게 확인해 주세요.",
+        ),
+    ),
+    (   # 모르는 입금·송금
+        (
+            "모르는 입금이 들어왔는데 어떻게 해야 하나요?",
+            "잘못 송금했을 때는 어떻게 하나요?",
+            "누가 보낸 돈인지 확인하는 방법이 있나요?",
+            "착오 송금 반환 절차가 궁금해요",
+        ),
+        (
+            "입금하신 분의 정보는 제가 확인해 드릴 수 없습니다. 착오 송금이 의심되시면 상담원에게 문의해 주시기 바랍니다.",
+            "송금과 관련된 확인은 이 채팅에서 도와드리기 어렵습니다. 송금한 은행이나 상담원에게 문의해 주시기 바랍니다.",
+            "많이 놀라셨겠습니다. 정확한 확인과 반환 절차는 상담원에게 문의해 주시기 바랍니다.",
+        ),
+    ),
+)
 
 
 def load_qas(zip_path: Path) -> Iterator[dict]:
@@ -207,18 +294,23 @@ def build_samples(qa: dict, rewrite: dict | None) -> list[dict]:
     return samples
 
 
+def _synth_split(i: int) -> str:
+    """목록(범주) 안 질문 인덱스로 분할을 정한다."""
+    return "test" if i % 10 == 0 else "val" if i % 10 == 1 else "train"
+
+
 def synth_samples() -> dict[str, list[dict]]:
-    """질문 × 응답 전체 조합. 짝수 질문은 첫 턴 모양, 홀수 질문은 되묻기 뒤 라벨 클릭 턴 모양."""
-    labels = itertools.cycle(
-        [account_label(a) for customer_id in ("C001", "C002", "C003") for a in get_accounts(customer_id)]
-    )
+    """질문 × 응답 전체 조합. 슬롯 질문은 짝수면 첫 턴 모양, 홀수면 되묻기 뒤 라벨 클릭 턴 모양이다.
+    가상 계좌번호 질문과 general "상담원 안내" 질문은 첫 턴 모양이다."""
+    accounts = [a for customer_id in ("C001", "C002", "C003") for a in get_accounts(customer_id)]
+    labels = itertools.cycle([account_label(a) for a in accounts])
     samples: dict[str, list[dict]] = {split: [] for split in SPLIT_FILES}
     for intent, questions, answers in (
         ("balance", BALANCE_QUESTIONS, BALANCE_ANSWERS),
         ("transactions", TRANSACTION_QUESTIONS, TRANSACTION_ANSWERS),
     ):
         for i, question in enumerate(questions):
-            split = "test" if i % 10 == 0 else "val" if i % 10 == 1 else "train"
+            split = _synth_split(i)
             for answer in answers:
                 if i % 2 == 0:
                     messages = build_messages([], question, intent)
@@ -226,6 +318,17 @@ def synth_samples() -> dict[str, list[dict]]:
                     history = [{"role": "user", "content": question}, {"role": "assistant", "content": ASK_TEXT}]
                     messages = build_messages(history, next(labels), intent)
                 samples[split].append(_sample(messages, answer))
+    for intent, templates, answers in (
+        ("balance", MASKED_BALANCE_QUESTIONS, BALANCE_ANSWERS),
+        ("transactions", MASKED_TRANSACTION_QUESTIONS, TRANSACTION_ANSWERS),
+    ):
+        for i, template in enumerate(templates):
+            # 원래 계좌번호는 mask()로 [계좌번호_1]이 되어 샘플에 남지 않는다(계약 4)
+            question = mask(template.format(account_no=accounts[i % len(accounts)]["account_no"])).masked_text
+            samples[_synth_split(i)] += [_sample(build_messages([], question, intent), a) for a in answers]
+    for questions, answers in GENERAL_SYNTH:
+        for i, question in enumerate(questions):
+            samples[_synth_split(i)] += [_sample(build_messages([], question, "general"), a) for a in answers]
     return samples
 
 
