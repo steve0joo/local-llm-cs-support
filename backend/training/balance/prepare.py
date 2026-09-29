@@ -9,6 +9,7 @@ AI Hub 잔액조회 QA를 추론과 같은 입력(prompt.build_messages)으로 �
 """
 
 import argparse
+import hashlib
 import itertools
 import json
 import re
@@ -26,6 +27,9 @@ from training.common.split import OUT_PATH as SPLIT_PATH, TL_ZIP, VL_ZIP
 TOPIC = "거래내역/잔액조회"
 OUT_DIR = SPLIT_PATH.parent / "balance"         # backend/data/processed/balance
 SPLIT_FILES = {"train": "train.jsonl", "val": "valid.jsonl", "test": "test.jsonl"}   # MLX LM은 valid.jsonl 이름을 쓴다
+REWRITE_PATH = OUT_DIR / "rewrites.jsonl"       # LLM 재작성 캐시(BAL-010, rewrite.py가 쓴다) — gitignore
+MAX_CHARS = 200                                 # 다시 쓴 답·합성 응답 길이 상한(공백 포함)
+_FIELDS = ("question", "answer", "follow_up", "output")
 
 # 정답에 있어도 되는 일반 명칭 상품(ADR-005). 그 밖의 상품명은 입력에 있을 때만 허용한다
 GENERIC_PRODUCT_NAMES = frozenset({
@@ -141,6 +145,28 @@ def normalize_amounts(text: str) -> str:
     return _HIDDEN_AMOUNT.sub(lambda _: f"[금액_{next(counter)}]", text)
 
 
+def mask_fields(qa: dict) -> dict:
+    return {key: mask(normalize_amounts(qa[key])).masked_text for key in _FIELDS}
+
+
+def qa_key(qa: dict) -> str:
+    """재작성 캐시 키. 필드 경계가 섞이지 않게 구분자(\\x1f)로 잇는다."""
+    text = "\x1f".join(qa[key] for key in ("source_id", *_FIELDS))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
+
+
+def load_rewrites(path: Path) -> dict[str, dict]:
+    """같은 키가 여러 줄이면 마지막 줄을 쓴다."""
+    if not path.exists():
+        return {}
+    rewrites = {}
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            row = json.loads(line)
+            rewrites[row["key"]] = {"answer": row["answer"], "output": row["output"]}
+    return rewrites
+
+
 def _unknown_product(output: str, inputs: tuple[str, ...]) -> bool:
     """정답에 입력에 없는 상품명이 있으면 지어낸 것으로 본다(ADR-005)."""
     return any(
@@ -159,9 +185,8 @@ def _sample(messages: list[dict], target: str) -> dict:
 
 
 def build_sample(qa: dict) -> dict | None:
-    question, answer, follow_up, output = (
-        mask(normalize_amounts(qa[key])).masked_text for key in ("question", "answer", "follow_up", "output")
-    )
+    fields = mask_fields(qa)
+    question, answer, follow_up, output = (fields[key] for key in _FIELDS)
     if (not is_valid(output, (), ()) or _unknown_product(output, (question, answer, follow_up))
             or _call_center_answer(output) or _CLAIMS_LOOKUP.search(output) or _DEID_MARK.search(output)):
         return None

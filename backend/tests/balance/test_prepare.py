@@ -97,6 +97,63 @@ def test_normalize_amounts_turns_hidden_amounts_into_numbered_tokens():
     assert prepare.normalize_amounts("잔액 알려줘") == "잔액 알려줘"
 
 
+RAW_QA = {"source_id": "S1", "question": "제 계좌 110-9876-5432 잔액이 ●●●원 맞나요?",
+          "answer": "주민번호 900101-1234567 확인했습니다.", "follow_up": "010-2222-3333으로 연락 주세요",
+          "output": OK_OUTPUT}
+
+
+def test_rewrite_cache_constants():
+    assert prepare.REWRITE_PATH == prepare.OUT_DIR / "rewrites.jsonl"
+    assert prepare.MAX_CHARS == 200
+
+
+def test_mask_fields_normalizes_amounts_and_masks_each_field():
+    fields = prepare.mask_fields(RAW_QA)
+    assert fields == {
+        "question": "제 계좌 [계좌번호_1] 잔액이 [금액_1] 맞나요?",
+        "answer": mask("주민번호 900101-1234567 확인했습니다.").masked_text,
+        "follow_up": mask("010-2222-3333으로 연락 주세요").masked_text,
+        "output": OK_OUTPUT,
+    }
+    text = json.dumps(fields, ensure_ascii=False)
+    for original in ("110-9876-5432", "900101-1234567", "010-2222-3333", "●"):
+        assert original not in text
+
+
+def test_qa_key_is_stable_32_hex():
+    key = prepare.qa_key(RAW_QA)
+    assert key == prepare.qa_key(dict(RAW_QA))
+    assert len(key) == 32 and all(c in "0123456789abcdef" for c in key)
+
+
+@pytest.mark.parametrize("field", ["source_id", "question", "answer", "follow_up", "output"])
+def test_qa_key_changes_when_any_field_changes(field):
+    assert prepare.qa_key({**RAW_QA, field: RAW_QA[field] + "요"}) != prepare.qa_key(RAW_QA)
+
+
+def test_qa_key_keeps_field_boundaries():
+    assert (prepare.qa_key({**RAW_QA, "question": "잔액", "answer": "안내"})
+            != prepare.qa_key({**RAW_QA, "question": "잔", "answer": "액안내"}))
+
+
+def test_load_rewrites_returns_empty_for_missing_file(tmp_path):
+    assert prepare.load_rewrites(tmp_path / "none.jsonl") == {}
+
+
+def test_load_rewrites_keeps_last_line_per_key(tmp_path):
+    path = tmp_path / "rewrites.jsonl"
+    rows = [
+        {"key": "k1", "source": {"question": "q"}, "answer": "첫 답", "output": "첫 출력"},
+        {"key": "k2", "source": {"question": "q"}, "answer": "다른 답", "output": "다른 출력"},
+        {"key": "k1", "source": {"question": "q"}, "answer": "새 답", "output": "새 출력"},
+    ]
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    assert prepare.load_rewrites(path) == {
+        "k1": {"answer": "새 답", "output": "새 출력"},
+        "k2": {"answer": "다른 답", "output": "다른 출력"},
+    }
+
+
 def test_build_sample_uses_general_prompt_and_output_as_target():
     qa = {"source_id": "S1", "question": "잔액이 ●●●원 맞나요?", "answer": "네, 확인해 드리겠습니다.",
           "follow_up": "어떻게 확인하나요?", "output": OK_OUTPUT}
