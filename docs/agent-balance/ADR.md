@@ -24,8 +24,14 @@
 **트레이드오프**: 키워드 규칙이라 "잔액 알려주는 방법" 같은 표현은 조회로 판단된다. 자체 점검 셋으로 단어 목록을 늘린다.
 
 ### BAL-005: 순수 함수는 plain dict까지, handle()은 cherry-pick 발판 위에서 (2026-09-29 변경)
-**결정**: mock API·계좌 결정·의도 판단·프롬프트 구성·출력 검증은 모델 없이 도는 순수 함수로 만든다. 계좌 결정 함수는 `AgentReply`가 아니라 plain dict(`{"account": ...}` 또는 `{"text": ..., "options": [...]}`)를 돌려주고, `AgentReply` 포장은 `BalanceAgent.handle()` 안에서만 한다. `handle()`과 `__init__.py` export는 팀원C의 스캐폴드·`llm`·`agents/base.py` 커밋(`a43c70a`·`e290476`·`6ed6cce`)을 `git cherry-pick -x`로 수정 없이 들여온 임시 발판 위에서 만든다. 발판은 팀원C의 feat-router가 main에 들어오면 그대로 대체된다.
+**결정**: mock API·계좌 결정·의도 판단·프롬프트 구성·출력 검증은 모델 없이 도는 순수 함수로 만든다. 계좌 결정 함수는 `AgentReply`가 아니라 plain dict(`{"account": ...}` 또는 `{"text": ..., "options": [...]}`)를 돌려주고, `AgentReply` 포장은 `BalanceAgent.handle()` 안에서만 한다. `handle()`과 `__init__.py` export는 팀원C의 스캐폴드·`llm`·`agents/base.py` 커밋(`a43c70a`·`e290476`·`6ed6cce`)을 `git cherry-pick -x`로 수정 없이 들여온 임시 발판 위에서 만든다. BAL-006 전처리 발판인 `app.masking.mask()`와 `training/common/split.py`도 원본 커밋(`6c61e00`·`925c7da`)을 같은 방식으로 가져온다. 발판은 팀원C의 feat-router가 main에 들어오면 그대로 대체된다.
 **변경 사유(2026-09-29)**: 스텁이 main에 오기를 기다리면 `handle()` 흐름 테스트가 계속 밀려서, 임시 타입을 만들지 않고 팀원C 원본 커밋을 그대로 쓰는 방식으로 앞당겼다.
 **이유**: 계약 3 타입은 팀원C 소유다. 로컬에 임시 타입을 만들면 스텁 병합 때 충돌하고 계약이 두 벌이 된다. 원본 커밋을 수정 없이 들여오면 계약은 한 벌이다.
 **예외**: 발판 파일은 수정하지 않는다. 예외는 `app/agents/balance/__init__.py`(스텁 → 실제 export)와 `tests/router/test_base.py`(스텁 전용 검사에서 balance 제외) 둘뿐이다(ARCHITECTURE "알려진 한계").
-**트레이드오프**: 발판 커밋 3개가 이 브랜치에 중복으로 들어온다. balance PR은 feat-router 스캐폴드가 main에 들어간 뒤 올리고, 병합 충돌은 위 예외 두 파일에서만 난다고 본다. PM 고정 질문 인수는 여전히 모델이 온 뒤로 밀린다.
+**트레이드오프**: 발판 커밋 5개가 이 브랜치에 중복으로 들어온다. balance PR은 feat-router 스캐폴드가 main에 들어간 뒤 올리고, 병합 충돌은 위 예외 두 파일에서만 난다고 본다. PM 고정 질문 인수는 여전히 모델이 온 뒤로 밀린다.
+
+### BAL-006: 잔액조회 데이터·학습·평가는 Mac에서 진행
+**결정**: 잔액조회 영역만 Mac M4 Pro 24GB에서 데이터 전처리와 모델 학습·평가를 한다. Hugging Face의 팀 공통 Qwen Instruct 베이스를 로컬 MLX 형식으로 양자화하고, MLX LM의 LoRA 학습을 사용한다. 추론·최종 품질 점검은 Ollama의 `cs-balance`로 수행한다. 나머지 영역의 Windows 학습 계획과 공통 `training/requirements.txt`는 유지한다.
+**이유**: 이 영역 담당자의 현재 장비에서 학습을 진행할 수 있고, MLX LM은 Apple Silicon에서 양자화 베이스의 LoRA 학습을 지원한다. 원본 AI Hub 데이터와 학습 가중치는 Hugging Face에 올리지 않는다.
+**트레이드오프**: MLX LM 자체 GGUF export는 Qwen 계열을 지원하지 않는다. 어댑터 병합·비양자화 결과의 llama.cpp GGUF 변환 호환성을 작은 실험으로 먼저 검증하고, 실패하면 모델 준비를 완료 처리하지 않는다. Mac의 24GB 통합 메모리와 최종 Windows 추론 기준을 모두 확인해야 한다. 명령과 검증 순서는 `backend/training/balance/MAC_TRAINING.md`에 둔다.
+**마스킹 게이트**: 학습 데이터도 게이트웨이와 같은 `app.masking.mask()`를 반드시 사용한다(계약 4). import에 실패하면 전처리를 중단하며, 자체 정규식이나 fallback 마스킹으로 학습 데이터를 생성하지 않는다. main의 마스킹 또는 공통 분할 규칙이 바뀌면 balance 학습 데이터를 재생성한다.

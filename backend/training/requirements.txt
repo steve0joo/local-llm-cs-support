@@ -1,3 +1,4 @@
+# 라우터·대출·이자 Windows 학습용. 잔액조회 Mac 학습은 balance/requirements-mac.txt를 쓴다.
 # RTX 4060 Laptop(8GB) + CUDA 12.8 드라이버에서 함께 동작이 확인된 조합이라 버전을 고정한다.
 # 설치(런타임 venv에 추가): uv pip install --python backend/.venv/bin/python --index-strategy unsafe-best-match -r backend/training/requirements.txt
 --extra-index-url https://download.pytorch.org/whl/cu128

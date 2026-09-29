@@ -13,7 +13,7 @@ backend/
 │   ├── mock_api.py        # mock_router + get_accounts(), get_transactions()
 │   └── mock_data.json     # C001~C003 계좌·거래내역
 ├── tests/balance/         # test_<모듈>.py
-├── training/balance/      # prepare.py(추출·마스킹·정제), train.py(QLoRA), export.md(GGUF 변환 절차)
+├── training/balance/      # prepare.py(예정), train.py·requirements-mac.txt·MAC_TRAINING.md
 └── models/balance/Modelfile
 ```
 
@@ -161,7 +161,8 @@ backend/
   - 후속(아직 안 함): loan·interest도 스텁을 실제 구현으로 바꿀 때 같은 문제가 생기므로 팀원C에게 알린다.
 
 ## 학습 데이터
-- 원천: `split.json`의 train 중 `consulting_topic == "거래내역/잔액조회"`인 라벨링 데이터 `qa_data[]` (필드명은 데이터 확인 전 가정 — 공통 ARCHITECTURE 학습 파이프라인)
+- 원천: 로컬 은행 라벨링 ZIP의 JSON에서 `consulting.consulting_topic == "거래내역/잔액조회"`인 `qa_data[]`를 추출하고 `source.source_id`로 공통 `split.json`을 적용한다. 실제 확인된 건수는 Training 4,017건, Validation 503건이다. 제공된 원천 분할 사이 `source_id` 중복 2개는 공통 분할에서 정리해야 한다.
 - 한 항목 = 대화 1개: user(`input.question`) → assistant(`input.answer`) → user(`input.follow_up_question`) → **assistant 목표(`output`)**
-- 전처리 순서: `masking.mask()`로 치환 → `output`에 `input`에 없는 수치·상품명이 있으면 제외 → 베이스 모델 채팅 템플릿 적용
+- 전처리 순서: 게이트웨이와 같은 `app.masking.mask()`로 치환 → `output`에 `input`에 없는 수치·상품명이 있으면 제외 → 베이스 모델 채팅 템플릿 적용. `app.masking` import 실패 시 전처리를 중단한다. 임시 정규식·fallback 마스킹은 허용하지 않는다(계약 4).
 - 검증: val 분할에서 샘플을 뽑아 사람이 읽어 확인한다. test 분할은 최종 점검에만 쓴다.
+- 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔지만 `prepare.py`와 실제 가공 데이터는 아직 없으므로 전처리·학습 완료로 표시하지 않는다. main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.

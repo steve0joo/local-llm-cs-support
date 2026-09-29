@@ -9,7 +9,7 @@
 ## 담당 범위
 1. mock 계좌 API와 데이터(`C001`~`C003`, 계약 6)
 2. `agent.handle()` — 조회, 계좌 선택 되묻기, 프롬프트 구성, 출력 검증
-3. `cs-balance` 모델 — 전처리, QLoRA 학습, GGUF 변환, Modelfile
+3. `cs-balance` 모델 — Mac에서 전처리, Hugging Face Qwen 베이스 + MLX LM QLoRA 학습·평가, GGUF 변환 검증, Ollama Modelfile(BAL-006)
 
 ## 사용자 스토리
 1. 계좌 1개 고객(`C001`)이 "잔액 알려줘"를 보내면 한 번에 "입출금 ****5678 계좌의 현재 잔액은 1,234,567원입니다" 형태로 받는다.
@@ -47,6 +47,8 @@
   - `training/balance/prepare.py` 등 학습 데이터 전처리·학습, Modelfile, `cs-balance` 모델
   - PM 고정 질문 9/10 인수 — 모델(`cs-balance`)이 있어야 판정할 수 있다
   - 프론트엔드에서 슬롯 값 속 줄바꿈(`{{recent_transactions}}`) 표시 — frontend 영역 후속 메모
+
+Mac 학습 환경·실행 절차와 현재 선행 조건은 `backend/training/balance/MAC_TRAINING.md`에 기록한다. 이 절차가 생겨도 실제 데이터 전처리·학습·모델 평가는 아직 완료되지 않았다.
 
 ## 제외
 - 이체·송금 등 실제 거래, 계좌 개설, 기간 지정 거래내역 검색, 잔액 카드/표 UI
