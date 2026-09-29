@@ -52,7 +52,17 @@
     {
       "step": 2,
       "name": "api-client",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T09:42:59+0900",
+      "summary": "lib/api.ts sendChat(req) — 상대경로 /api/chat에 POST·Content-Type application/json·JSON.stringify(req)(choice 없으면 키 없음), !res.ok면 throw, 타임아웃·재시도·런타임 목 없음 + api.test.ts 7케이스(vi.stubGlobal fetch 목: 요청 형태·choice 유무·2xx 반환·500/404 reject·네트워크 오류 reject, 실패 시 fetch 1회)",
+      "cost_usd": 0.6007,
+      "num_turns": 10,
+      "completed_at": "2026-09-29T09:43:58+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/lib/api.test.ts",
+        "frontend/src/lib/api.ts"
+      ]
     },
     {
       "step": 3,
