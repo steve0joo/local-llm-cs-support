@@ -439,3 +439,159 @@ def test_main_with_manual_adds_train_only_records(tmp_path, monkeypatch):
     assert (out / "val.jsonl").read_text(encoding="utf-8") == ""
     stats = json.loads((out / "stats.json").read_text(encoding="utf-8"))
     assert stats["with_manual"] is True and stats["by_origin"] == {"manual": 3}
+
+
+# --- 평가용 질문(test_questions.jsonl): 답 필터 없이 test 분할의 질문을 모두 쓴다 ------------------
+
+
+def test_test_questions_use_all_test_split_questions_regardless_of_answer():
+    from training.interest.prepare import build_test_questions
+
+    rows = [
+        qa("고객센터로 문의해 주세요.", source_id="T", qa_id="T_1", follow_up="연체된 거 있나요?"),  # 답이 필터에 걸려도 질문은 쓴다
+        qa("이자는 5,000원입니다.", source_id="T", qa_id="T_2"),
+        qa("다음 납부일에 납부해 주세요.", source_id="A", qa_id="A_1"),  # train 분할은 넣지 않는다
+        qa("안내해 드립니다.", source_id="T", qa_id="T_3", qa_topic="거래내역/잔액조회"),
+        qa("안내해 드립니다.", source_id="T", qa_id="T_4", follow_up="  "),
+    ]
+    cases = build_test_questions(rows, identity, split_map={"T": "test", "A": "train"})
+    assert [c["id"] for c in cases] == ["T_1", "T_2"]
+    first = cases[0]
+    assert first["messages"][-1]["role"] == "user" and first["messages"][-1]["content"].startswith("연체된 거 있나요?\n이자 정보: ")
+    assert first["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
+    assert first["item"]["overdue_days"] > 0 and first["scenario"] == "overdue"  # 연체를 묻는 질문은 연체 고객으로
+    assert cases[1]["item"]["overdue_days"] == 0
+    assert all("5,000" not in m["content"] for c in cases for m in c["messages"])  # 답은 쓰지 않는다
+
+
+# --- AI Hub 답 수정: 표현 문제로 빠진 train 샘플을 사람이 고쳐 되살린다 ---------------------------
+
+
+def test_answer_problems_uses_training_checks():
+    from training.interest.prepare import answer_problems
+
+    item = {"loan_id": "L000", "product_type": "신용대출", "repayment_method": "만기일시", "interest_type": "변동",
+            "payment_method": "자동이체", "next_due_date": "2026-10-15", "interest_due": 58000,
+            "overdue_amount": 0, "overdue_days": 0}
+    assert answer_problems("다음 납부일에 맞춰 납부해 주세요.", item, "이자 언제 내요?") == []
+    assert "promise" in answer_problems("확인 후 연락드리겠습니다.", item, "이자 언제 내요?")
+    assert "invalid" in answer_problems("고객센터로 문의해 주세요.", item, "이자 언제 내요?")
+    assert "digit" in answer_problems("밤 11시까지 입금해 주세요.", item, "이자 언제 내요?")
+
+
+def test_fix_queue_has_only_fixable_train_samples():
+    from training.interest.prepare import FIXABLE, build_fix_queue
+
+    rows = [
+        qa("고객센터로 문의해 주세요.", source_id="A", qa_id="A_1"),  # invalid(지어낸 채널) → 고칠 수 있음
+        qa("확인 후 연락드리겠습니다.", source_id="A", qa_id="A_2"),  # promise
+        qa("이자는 5,000원입니다.", source_id="A", qa_id="A_3"),  # 금액 숫자: 표현만 고쳐서는 안 됨
+        qa("주민등록번호를 알려 주세요.", source_id="A", qa_id="A_4"),  # 개인정보 요구: 되살리지 않음
+        qa("다음 납부일에 맞춰 납부해 주세요.", source_id="A", qa_id="A_5"),  # 이미 통과
+        qa("고객센터로 문의해 주세요.", source_id="V", qa_id="V_1"),  # val은 고치지 않는다
+    ]
+    queue = build_fix_queue(rows, identity, split_map={"A": "train", "V": "val"})
+    assert {r["id"]: r["needs_fix"] for r in queue} == {"A_1": "invalid", "A_2": "promise"}
+    assert {"invalid", "promise", "claim", "call_context"} <= FIXABLE and "pii_request" not in FIXABLE
+    assert queue[0]["messages"][-1]["role"] == "assistant"  # 고칠 원래 답을 보여 준다
+    # 이미 판정한 것은 대기열에서 빠진다
+    assert [r["id"] for r in build_fix_queue(rows, identity, {"A": "train", "V": "val"}, reviews={"A_1": {"ok": False}})] == ["A_2"]
+
+
+def test_fixed_answer_enters_train_and_rejected_stays_excluded():
+    rows = [
+        qa("고객센터로 문의해 주세요.", source_id="A", qa_id="A_1"),
+        qa("확인 후 연락드리겠습니다.", source_id="B", qa_id="B_1"),
+    ]
+    reviews = {
+        "A_1": {"ok": True, "output": "납부 관련 자세한 사항은 상담원에게 확인해 주세요.", "note": "채널 삭제"},
+        "B_1": {"ok": False, "note": "주제 밖"},
+    }
+    splits, candidates, stats = build_dataset(rows, identity, split_map={"A": "train", "B": "train"}, reviews=reviews)
+    [fixed] = splits["train"]
+    assert fixed["id"] == "A_1" and fixed["reviewed"] is True and fixed["needs_fix"] == "invalid"
+    assert fixed["messages"][-1]["content"] == "납부 관련 자세한 사항은 상담원에게 확인해 주세요."
+    assert stats["fixed"] == 1 and stats["excluded"] == {"promise": 1}
+
+
+def test_fix_must_pass_training_checks():
+    rows = [qa("고객센터로 문의해 주세요.", source_id="A", qa_id="A_1")]
+    with pytest.raises(ValueError, match="A_1"):
+        build_dataset(rows, identity, split_map={"A": "train"}, reviews={"A_1": {"ok": True, "output": "확인 후 연락드리겠습니다."}})
+
+
+def test_fix_without_output_is_not_used():
+    # 표현 문제로 빠진 답은 승인만으로는 쓸 수 없다. 고친 답이 있어야 한다.
+    rows = [qa("고객센터로 문의해 주세요.", source_id="A", qa_id="A_1")]
+    splits, _, stats = build_dataset(rows, identity, split_map={"A": "train"}, reviews={"A_1": {"ok": True}})
+    assert splits["train"] == [] and stats["excluded"] == {"invalid": 1}
+
+
+def test_main_writes_test_questions_and_fix_queue(tmp_path, monkeypatch):
+    import training.interest.prepare as prepare
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    doc = {
+        "source": {"source_id": "S9"},
+        "consulting": {"consulting_topic": TOPIC},
+        "qa_data": [{"qa_id": "S9_001", "qa_topic": TOPIC,
+                     "input": {"question": "이자 얼마예요?", "answer": "확인해 드리겠습니다.", "follow_up_question": "네"},
+                     "output": "고객센터로 문의해 주세요."}],
+    }
+    (raw / "a.json").write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(prepare, "RAW_DIR", raw)
+    monkeypatch.setattr(prepare, "SPLIT_FILE", tmp_path / "split.json")
+    (tmp_path / "split.json").write_text(json.dumps({"S9": "train"}), encoding="utf-8")
+    monkeypatch.setattr(prepare, "REVIEWS_FILE", tmp_path / "none2.json")
+    out = tmp_path / "07"
+
+    prepare.main(["--include-unreviewed", "--allow-fallback-mask", "--out-dir", str(out)])
+
+    assert (out / "test_questions.jsonl").exists()
+    queue = [json.loads(line) for line in (out / "fix_queue.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r["id"] for r in queue] == ["S9_001"]
+    stats = json.loads((out / "stats.json").read_text(encoding="utf-8"))
+    assert stats["test_questions"] == 0 and stats["fix_queue"] == 1 and stats["fixed"] == 0
+
+
+def test_exclude_aihub_train_keeps_val_and_test():
+    # 검수 전 AI Hub 답(필터가 놓친 수수료·약속 등)을 학습하지 않고, 평가 분할에는 남긴다.
+    rows = [
+        qa("다음 납부일에 맞춰 납부해 주세요.", source_id="A", qa_id="A_1"),
+        qa("다음 납부일에 맞춰 납부해 주세요.", source_id="V", qa_id="V_1"),
+        qa("다음 납부일에 맞춰 납부해 주세요.", source_id="T", qa_id="T_1"),
+    ]
+    synth = [{"id": "s1", "origin": "synth", "group_id": "tpl", "category": "rate", "scenario": "normal",
+              "reviewed": True, "review_note": "", "messages": [{"role": "assistant", "content": "x"}]}]
+    splits, _, stats = build_dataset(rows, identity, split_map={"A": "train", "V": "val", "T": "test"}, synth=synth,
+                                     include_unreviewed=True, exclude_aihub_train=True)
+    assert [r["id"] for r in splits["train"]] == ["s1"]
+    assert [r["id"] for r in splits["val"]] == ["V_1"] and [r["id"] for r in splits["test"]] == ["T_1"]
+    assert stats["aihub_train_excluded"] == 1
+
+
+def test_main_exclude_aihub_train_flag(tmp_path, monkeypatch):
+    import training.interest.prepare as prepare
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    doc = {
+        "source": {"source_id": "S9"},
+        "consulting": {"consulting_topic": TOPIC},
+        "qa_data": [{"qa_id": "S9_001", "qa_topic": TOPIC,
+                     "input": {"question": "이자 얼마예요?", "answer": "확인해 드리겠습니다.", "follow_up_question": "네"},
+                     "output": "다음 납부일에 맞춰 납부해 주세요."}],
+    }
+    (raw / "a.json").write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(prepare, "RAW_DIR", raw)
+    monkeypatch.setattr(prepare, "SPLIT_FILE", tmp_path / "split.json")
+    (tmp_path / "split.json").write_text(json.dumps({"S9": "train"}), encoding="utf-8")
+    monkeypatch.setattr(prepare, "REVIEWS_FILE", tmp_path / "none2.json")
+    out = tmp_path / "07"
+
+    prepare.main(["--include-unreviewed", "--allow-fallback-mask", "--exclude-aihub-train", "--out-dir", str(out)])
+
+    assert (out / "train.jsonl").read_text(encoding="utf-8") == ""
+    stats = json.loads((out / "stats.json").read_text(encoding="utf-8"))
+    assert stats["exclude_aihub_train"] is True and stats["aihub_train_excluded"] == 1

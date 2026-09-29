@@ -161,3 +161,41 @@ def test_summarize_log_history():
     assert s["eval_loss_rising"] is True  # 과적합 징후
     assert s["grad_norm"] == {"max": 2.5, "last": 2.5, "nan": False}
     assert s["learning_rate"] == {"first": 1e-4, "max": 1e-4, "last": 2e-5}
+
+
+def test_preview_row_skips_aihub(tmp_path):
+    # --dry-run 출력이 AI Hub 원문을 화면·로그에 남기지 않게 합성·수동 샘플을 보여 준다(데이터 제3자 제공 금지).
+    import json
+
+    from training.interest.train import preview_row
+
+    def rec(origin, text):
+        return {"origin": origin, "messages": [{"role": "user", "content": "q"}, {"role": "assistant", "content": text}]}
+
+    (tmp_path / "train.jsonl").write_text(
+        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in [rec("aihub", "원문"), rec("synth", "합성 답")]),
+        encoding="utf-8")
+    row = preview_row(tmp_path)
+    assert row["completion"][0]["content"] == "합성 답"
+
+    (tmp_path / "train.jsonl").write_text(json.dumps(rec("aihub", "원문"), ensure_ascii=False) + "\n", encoding="utf-8")
+    import pytest
+
+    with pytest.raises(ValueError):
+        preview_row(tmp_path)  # AI Hub만 있으면 출력하지 않는다
+
+
+def test_wandb_reporting_is_opt_in(tmp_path, monkeypatch):
+    # 학습 곡선(loss·grad_norm·학습률, 숫자만)을 개인 wandb 프로젝트에 올린다. 기본은 끔.
+    from training.interest.train import OUTPUT_DIR, TrainSettings, report_settings
+
+    monkeypatch.delenv("WANDB_PROJECT", raising=False)
+    monkeypatch.delenv("WANDB_DIR", raising=False)
+    assert report_settings(TrainSettings(), tmp_path / "v04-x") == {"report_to": "none"}
+    got = report_settings(TrainSettings(wandb=True), tmp_path / "v04-x")
+    assert got == {"report_to": "wandb", "run_name": "train-v04-x"}
+    import os
+
+    assert os.environ["WANDB_PROJECT"] == "cs-interest"
+    assert os.environ["WANDB_DIR"] == str(OUTPUT_DIR)  # 로컬 기록은 gitignore 폴더(outputs/wandb/)
+    assert parse_args(["--wandb"]).wandb is True and parse_args([]).wandb is False

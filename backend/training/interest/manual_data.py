@@ -108,10 +108,15 @@ def _problems(text: str, question: str, item: dict) -> list[str]:
 
 
 def expand(rows: list[dict], mock: dict) -> list[dict]:
+    from training.interest.ask import HOLD_QUESTIONS  # 평가 전용 질문은 학습에 넣지 않는다
+
+    held = {q for _, q, _ in HOLD_QUESTIONS}
     records = []
     for r in rows:
         if not r["train"]:
             continue
+        if r["question"] in held:
+            raise ValueError(f"q{r['no']:02d}: hold30 평가 전용 질문이라 학습에 넣을 수 없다 — {r['question']}")
         base = mock[r["customer"]][0]
         for i, product in enumerate(PRODUCT_TYPES):
             item = enrich({**base, "product_type": product}, r["customer"])  # 서비스와 같이 자동이체 잔액 비교 결과 포함
@@ -144,7 +149,7 @@ def expand(rows: list[dict], mock: dict) -> list[dict]:
 def main() -> None:
     rows = []
     for name, source in (("answers_fix.md", "fix"), ("answers_ok.md", "ok"), ("weak_fix.md", "fix"), ("weak_ok.md", "ok"),
-                         ("debit_fix.md", "fix"), ("debit_ok.md", "ok")):
+                         ("debit_fix.md", "fix"), ("debit_ok.md", "ok"), ("reinforce_v05.md", "fix")):
         if (MANUAL_DIR / name).exists():
             rows += parse_answers_md((MANUAL_DIR / name).read_text(encoding="utf-8"), source)
     rows.sort(key=lambda r: r["no"])

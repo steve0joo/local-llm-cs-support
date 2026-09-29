@@ -114,3 +114,14 @@ def test_expand_adds_autodebit_status_like_service():
     records = expand(rows, mock)
     assert all("자동이체 계좌 잔액=연체 금액보다 적음" in r["messages"][-2]["content"] for r in records)
     assert all(r["item"]["debit_balance"] == 150000 for r in records)
+
+
+def test_expand_refuses_hold30_questions():
+    # 평가 전용 질문이 학습에 들어가면 그 세트로는 더 이상 공정하게 평가할 수 없다.
+    from training.interest.ask import HOLD_QUESTIONS
+
+    customer, question, _ = next(q for q in HOLD_QUESTIONS if q[0] == "C002")
+    rows = [{"no": 71, "customer": customer, "question": question, "train": True,
+             "answer": "{{loan_label}}의 다음 납부일은 {due}이고, 납부 예정 이자는 {{interest_due}}입니다."}]
+    with pytest.raises(ValueError, match="평가 전용"):
+        expand(rows, MOCK)

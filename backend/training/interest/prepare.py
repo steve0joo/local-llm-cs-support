@@ -201,8 +201,47 @@ def make_item(qa_id: str, overdue: bool, product_type: str | None = None, terms:
     }
 
 
-def build_sample(qa: dict, mask_fn) -> tuple[dict | None, str | None]:
-    """(샘플, None) 또는 (None, 제외 사유)."""
+# 표현만 고치면 되는 제외 사유. 사람이 고친 답(reviews.json의 output)이 있으면 train에 되살린다.
+# 금액·숫자·금리·비식별 기호(값을 지어낼 위험)와 개인정보 요구·다른 상품(질문 자체가 범위 밖)은 되살리지 않는다.
+FIXABLE = {"document", "menu", "summary", "claim", "promise", "call_context", "tone", "invalid"}
+_HARD_SOFT = {"product", "pii_request"}  # 아래 표현 검사 중 되살리지 않는 사유
+
+
+def _wording_checks(output: str, product) -> list[tuple[str, bool]]:
+    """금액 변환 뒤의 표현 검사(순서대로 첫 사유를 제외 사유로 센다)."""
+    return [
+        ("bank", bool(_BANK.search(output))),
+        ("document", any(word in output for word in _DOCUMENT)),
+        ("menu", any(word in output for word in _MENU)),
+        ("product", product is False),
+        ("summary", bool(_SUMMARY.search(output))),
+        ("pii_request", bool(_PII_REQUEST.search(output))),
+        ("claim", bool(_CLAIM.search(output))),
+        ("promise", bool(_PROMISE.search(output))),
+        ("call_context", bool(_CALL_CONTEXT.search(output))),
+        ("tone", not tone_ok(output)),
+    ]
+
+
+def answer_problems(output: str, item: dict, question: str) -> list[str]:
+    """사람이 고친 답 검사. 학습 데이터 제외 규칙과 추론 출력 검증을 모두 적용한다(INT-004)."""
+    facts = output.replace(item["next_due_date"], "")  # 이자 정보에 있는 날짜·연체 일수는 사실이라 허용한다
+    if item["overdue_days"]:
+        facts = re.sub(rf"(?<!\d){item['overdue_days']}일", "", facts)
+    problems = [name for name, pattern in (("rate", _RATE), ("deid", _DEID)) if pattern.search(output)]
+    problems += ["digit"] if _DIGIT.search(facts) else []
+    problems += [name for name, bad in _wording_checks(output, _mentioned_product(output)) if bad]
+    required = required_slots(question, item["overdue_days"] > 0)
+    if not is_valid(output, allowed_slots=set(build_slots(item)), required_slots=required):
+        problems.append("invalid")
+    return problems
+
+
+def build_sample(qa: dict, mask_fn, keep_fixable: bool = False) -> tuple[dict | None, str | None]:
+    """(샘플, None) 또는 (None, 제외 사유).
+
+    keep_fixable=True면 FIXABLE 사유로 빠질 샘플도 (샘플, 사유)로 돌려준다. 샘플의 needs_fix에 사유가 붙는다.
+    """
     if qa["qa_topic"] != TOPIC:
         return None, "topic"
     output = _strip_org(qa["output"].strip())
@@ -218,33 +257,19 @@ def build_sample(qa: dict, mask_fn) -> tuple[dict | None, str | None]:
         return None, "deid"
     if _DIGIT.search(output):
         return None, "digit"
-    if _BANK.search(output):
-        return None, "bank"
-    if any(word in output for word in _DOCUMENT):
-        return None, "document"
-    if any(word in output for word in _MENU):
-        return None, "menu"
     product = _mentioned_product(output)
-    if product is False:
-        return None, "product"
-    if _SUMMARY.search(output):
-        return None, "summary"
-    if _PII_REQUEST.search(output):
-        return None, "pii_request"
-    if _CLAIM.search(output):
-        return None, "claim"
-    if _PROMISE.search(output):
-        return None, "promise"
-    if _CALL_CONTEXT.search(output):
-        return None, "call_context"
-    if not tone_ok(output):
-        return None, "tone"
+    flagged = [name for name, bad in _wording_checks(output, product) if bad]
+    reason = flagged[0] if flagged else None
+    if reason and not (keep_fixable and reason in FIXABLE and not _HARD_SOFT & set(flagged)):
+        return None, reason
 
     overdue = "overdue_amount" in used or bool(_OVERDUE_STATE.search(output))
-    item = make_item(qa["qa_id"], overdue, product, mentioned_terms(output))
+    item = make_item(qa["qa_id"], overdue, product or None, mentioned_terms(output))
     required = required_slots(qa["follow_up"], overdue)
-    if not is_valid(output, allowed_slots=set(build_slots(item)), required_slots=required):
-        return None, "invalid"
+    if reason is None and not is_valid(output, allowed_slots=set(build_slots(item)), required_slots=required):
+        reason = "invalid"
+        if not keep_fixable:
+            return None, reason
 
     history = [
         {"role": "user", "content": mask_fn(normalize_input(qa["question"]))},
@@ -264,7 +289,8 @@ def build_sample(qa: dict, mask_fn) -> tuple[dict | None, str | None]:
         "review_note": "",
         "item": item,
         "messages": messages,
-    }, None
+        **({"needs_fix": reason} if reason else {}),
+    }, reason
 
 
 def assign_split(source_id: str, split_map: dict[str, str] | None = None) -> str | None:
@@ -285,9 +311,9 @@ def apply_review(record: dict, review: dict | None) -> dict | None:
     if "output" in review:
         item = record["item"]
         question = record["messages"][-2]["content"].split("\n")[0]
-        required = required_slots(question, item["overdue_days"] > 0)
-        if not is_valid(review["output"], allowed_slots=set(build_slots(item)), required_slots=required):
-            raise ValueError(f"{record['id']}: 고친 정답이 출력 검증을 통과하지 못한다")
+        problems = answer_problems(review["output"], item, question)
+        if problems:
+            raise ValueError(f"{record['id']}: 고친 정답이 학습 데이터 검사를 통과하지 못한다({', '.join(problems)})")
         record["messages"] = [*record["messages"][:-1], {"role": "assistant", "content": review["output"]}]
     return record
 
@@ -299,13 +325,20 @@ def build_dataset(
     synth: list[dict] = (),
     reviews: dict | None = None,
     include_unreviewed: bool = False,
+    exclude_aihub_train: bool = False,
+    split_augmented: bool = False,
 ) -> tuple[dict[str, list], list[dict], dict]:
-    """(분할별 학습 레코드, 검수 대상 전체, 통계). 합성은 train에만 넣는다."""
+    """(분할별 학습 레코드, 검수 대상 전체, 통계).
+
+    exclude_aihub_train=True면 AI Hub 샘플을 train에서 뺀다(val·test에는 남긴다).
+    split_augmented=True면 합성·수동 레코드도 group_id 기준 8:1:1로 나눈다.
+    """
     reviews = reviews or {}
     excluded: Counter = Counter()
     candidates: list[tuple[str, dict]] = []
+    fixed = 0
     for qa in rows:
-        sample, reason = build_sample(qa, mask_fn)
+        sample, reason = build_sample(qa, mask_fn, keep_fixable=True)
         if sample is None:
             excluded[reason] += 1
             continue
@@ -313,12 +346,31 @@ def build_dataset(
         if split is None:
             excluded["unsplit"] += 1
             continue
+        if reason:  # 표현 문제로 빠질 샘플: train에서 사람이 고친 답이 있을 때만 쓴다
+            review = reviews.get(sample["id"]) or {}
+            if split == "train" and review.get("ok") and "output" in review:
+                fixed += 1
+                candidates.append((split, sample))
+            else:
+                excluded[reason] += 1
+            continue
         candidates.append((split, sample))
-    candidates += [("train", r) for r in synth]
+    for record in synth:
+        if split_augmented:
+            group = record.get("group_id", record["source_id"])
+            # 출처별 salt로 합성 템플릿이 특정 split 하나에 몰리지 않게 한다.
+            key = group if split_map is not None else f"{record['origin']}:v05:20:{group}"
+            split = assign_split(key, split_map)
+        else:
+            split = "train"
+        candidates.append((split, record))
 
     splits: dict[str, list] = {"train": [], "val": [], "test": []}
-    rejected = skipped = 0
+    rejected = skipped = aihub_train_excluded = 0
     for split, record in candidates:
+        if exclude_aihub_train and split == "train" and record["origin"] == "aihub":
+            aihub_train_excluded += 1
+            continue
         record = apply_review(record, reviews.get(record["id"]))
         if record is None:
             rejected += 1
@@ -333,13 +385,62 @@ def build_dataset(
         "excluded": dict(excluded),
         "candidates": dict(Counter(r["origin"] for _, r in candidates)),
         "rejected": rejected,
+        "fixed": fixed,
+        "aihub_train_excluded": aihub_train_excluded,
         "skipped_unreviewed": skipped,
         "used": {name: len(v) for name, v in splits.items()},
         "by_origin": dict(Counter(r["origin"] for r in used)),
         "by_category": dict(Counter(r["category"] for r in used)),
         "by_scenario": dict(Counter(r["scenario"] for r in used)),
+        "split_augmented": split_augmented,
     }
     return splits, [r for _, r in candidates], stats
+
+
+def build_fix_queue(rows: list[dict], mask_fn, split_map=None, reviews: dict | None = None) -> list[dict]:
+    """사람이 고칠 AI Hub train 샘플(FIXABLE 사유로 빠진 것 중 아직 판정하지 않은 것). review.py --fix가 읽는다."""
+    reviews = reviews or {}
+    queue = []
+    for qa in rows:
+        sample, reason = build_sample(qa, mask_fn, keep_fixable=True)
+        if sample is None or not reason or sample["id"] in reviews:
+            continue
+        if assign_split(qa["source_id"], split_map) == "train":
+            queue.append(sample)
+    return queue
+
+
+_OVERDUE_ASKED = re.compile(r"연체|밀린|미납")
+
+
+def build_test_questions(rows: list[dict], mask_fn, split_map=None) -> list[dict]:
+    """평가용 질문(답 없음). test 분할의 이자/연체 질문을 답 필터 없이 모두 쓴다.
+
+    평가는 모델 답을 규칙으로 채점하고 AI Hub 답은 쓰지 않으므로, 답이 학습 필터에 걸려도 질문은 쓸 수 있다.
+    이자 정보는 qa_id 시드 가상 조회값이고, 질문이 연체를 물으면 연체 고객으로 둔다.
+    """
+    cases = []
+    for qa in rows:
+        follow_up = (qa.get("follow_up") or "").strip()
+        if qa["qa_topic"] != TOPIC or not follow_up or assign_split(qa["source_id"], split_map) != "test":
+            continue
+        overdue = bool(_OVERDUE_ASKED.search(follow_up))
+        item = make_item(qa["qa_id"], overdue)
+        history = [
+            {"role": "user", "content": mask_fn(normalize_input(qa["question"]))},
+            {"role": "assistant", "content": normalize_input(qa["answer"])},
+        ]
+        cases.append({
+            "id": qa["qa_id"],
+            "origin": "aihub",
+            "source_id": qa["source_id"],
+            "qa_id": qa["qa_id"],
+            "category": categorize(qa["question"] + " " + follow_up),
+            "scenario": "overdue" if overdue else "normal",
+            "item": item,
+            "messages": build_messages(mask_fn(normalize_input(follow_up)), history, item),
+        })
+    return cases
 
 
 # --- 마스킹: 팀원C의 app.masking이 머지되면 그것을 쓴다 -------------------------
@@ -388,6 +489,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--with-manual", action="store_true", help="사람이 고친 수동 샘플(training/interest/manual/qNN.json) 포함")
     p.add_argument("--include-unreviewed", action="store_true", help="검수 전 레코드도 학습에 포함(파이프라인 시험용)")
     p.add_argument("--out-dir", type=Path, default=OUT_DIR, help="출력 폴더(기본 data/processed/interest)")
+    p.add_argument("--exclude-aihub-train", action="store_true", help="AI Hub 샘플을 train에서 뺀다(val·test는 유지)")
+    p.add_argument("--split-augmented", action="store_true", help="합성·수동 데이터도 group_id 기준 8:1:1로 분할한다")
     p.add_argument("--allow-fallback-mask", action="store_true", help="공통 app.masking이 없을 때 임시 마스킹 허용(실험용)")
     args = p.parse_args(argv)
     out_dir = args.out_dir
@@ -406,23 +509,32 @@ def main(argv: list[str] | None = None) -> None:
         mock = json.loads((BACKEND / "app/agents/interest/mock_data.json").read_text(encoding="utf-8"))
         synth = synth + manual_data.expand(manual_data.load_manual(manual_data.MANUAL_DIR), mock)
 
+    rows = load_qas(RAW_DIR)
     splits, candidates, stats = build_dataset(
-        load_qas(RAW_DIR), mask_fn, split_map, synth=synth, reviews=reviews, include_unreviewed=args.include_unreviewed
+        rows, mask_fn, split_map, synth=synth, reviews=reviews, include_unreviewed=args.include_unreviewed,
+        exclude_aihub_train=args.exclude_aihub_train, split_augmented=args.split_augmented,
     )
+    test_questions = build_test_questions(rows, mask_fn, split_map)
+    fix_queue = build_fix_queue(rows, mask_fn, split_map, reviews)
     stats |= {
         "mask": mask_source,
         "split": "split.json" if split_map is not None else "fallback-hash",
         "with_synth": args.with_synth,
         "with_manual": args.with_manual,
         "include_unreviewed": args.include_unreviewed,
+        "exclude_aihub_train": args.exclude_aihub_train,
+        "split_augmented": args.split_augmented,
         "reviews": len(reviews),
+        "test_questions": len(test_questions),
+        "fix_queue": len(fix_queue),
         "out_dir": str(out_dir),
     }
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name, rows in [*splits.items(), ("candidates", candidates)]:
+    outputs = [*splits.items(), ("candidates", candidates), ("test_questions", test_questions), ("fix_queue", fix_queue)]
+    for name, records in outputs:
         with (out_dir / f"{name}.jsonl").open("w", encoding="utf-8") as f:
-            for row in rows:
+            for row in records:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
     (out_dir / "stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(stats, ensure_ascii=False, indent=2))

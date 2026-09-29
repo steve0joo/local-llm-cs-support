@@ -5,17 +5,21 @@ candidates.jsonl의 AI Hub 샘플을 한 건씩 보여 주고 승인·반려·�
 
 실행: cd backend && python -m training.interest.review [--data-dir data/raw/04_interest_finetune]
       이후 prepare.py를 다시 실행하면 판정이 학습 데이터에 반영된다.
+
+--fix: fix_queue.jsonl(표현 문제로 빠진 AI Hub train 샘플)을 고친다. 승인만은 안 되고, 고친 답을 쓰거나 반려한다.
+      --reasons invalid,promise처럼 사유별로 나눠 할 수 있다.
+      고친 답은 학습 데이터 제외 규칙과 추론 출력 검증을 모두 통과해야 저장된다(prepare.answer_problems).
 """
 
 import argparse
 import json
 from pathlib import Path
 
-from app.agents.interest.prompt import build_slots
-from app.agents.interest.validate import is_valid, required_slots
-from training.interest.prepare import OUT_DIR, REVIEWS_FILE
+from app.agents.interest.validate import phrase_problems
+from training.interest.prepare import OUT_DIR, REVIEWS_FILE, answer_problems
 
 HELP = "[a] 승인  [r] 반려  [e] 답 고쳐서 승인  [s] 건너뜀  [q] 종료"
+HELP_FIX = "[e] 답 고쳐서 사용  [r] 반려  [s] 건너뜀  [q] 종료"
 
 
 def review_queue(candidates: list[dict], reviews: dict) -> list[dict]:
@@ -29,7 +33,14 @@ def render(record: dict, position: tuple[int, int]) -> str:
     for m in turns[:-2]:
         lines.append(f"{'고객' if m['role'] == 'user' else '상담'} (이전): {m['content']}")
     question, *context = turns[-2]["content"].split("\n")
-    lines += [f"고객 질문: {question}", *context, "", f"▶ 학습할 답: {turns[-1]['content']}", "-" * 60]
+    lines += [f"고객 질문: {question}", *context, ""]
+    if record.get("needs_fix"):
+        detail = phrase_problems(turns[-1]["content"])
+        lines.append(f"고칠 이유: {record['needs_fix']}" + (f" ({', '.join(detail)})" if detail else ""))
+        lines.append(f"▶ 원래 답: {turns[-1]['content']}")
+    else:
+        lines.append(f"▶ 학습할 답: {turns[-1]['content']}")
+    lines.append("-" * 60)
     return "\n".join(lines)
 
 
@@ -39,11 +50,10 @@ def decide(record: dict, action: str, text: str | None = None, note: str = "") -
     if action == "r":
         return {"ok": False, "note": note}
     if action == "e":
-        item = record["item"]
         question = record["messages"][-2]["content"].split("\n")[0]
-        required = required_slots(question, item["overdue_days"] > 0)
-        if not text or not is_valid(text, allowed_slots=set(build_slots(item)), required_slots=required):
-            raise ValueError("고친 답이 출력 검증을 통과하지 못한다(금액·금리 숫자, 허용 밖 슬롯, 필수 슬롯 누락 등)")
+        problems = answer_problems(text or "", record["item"], question) if text else ["빈 답"]
+        if problems:
+            raise ValueError(f"고친 답이 검증을 통과하지 못한다: {', '.join(problems)}")
         return {"ok": True, "note": note, "output": text}
     raise ValueError(f"알 수 없는 선택: {action}")
 
@@ -60,10 +70,12 @@ def save_reviews(path: Path, reviews: dict) -> None:
     tmp.replace(path)  # 쓰는 도중 멈춰도 기존 판정이 깨지지 않게
 
 
-def run(candidates: list[dict], path: Path, ask=input, show=print) -> None:
+def run(candidates: list[dict], path: Path, ask=None, show=print, fix: bool = False) -> None:
+    ask = ask or input  # 실행 시점의 input(테스트에서 바꿀 수 있게)
     reviews = load_reviews(path)
-    queue = review_queue(candidates, reviews)
-    show(f"검수 대기 {len(queue)}건 (이미 판정 {len(reviews)}건)\n{HELP}")
+    queue = [r for r in candidates if r["id"] not in reviews] if fix else review_queue(candidates, reviews)
+    help_text = HELP_FIX if fix else HELP
+    show(f"{'수정' if fix else '검수'} 대기 {len(queue)}건 (이미 판정 {len(reviews)}건)\n{help_text}")
     for i, record in enumerate(queue, 1):
         show(render(record, (i, len(queue))))
         while True:
@@ -73,6 +85,9 @@ def run(candidates: list[dict], path: Path, ask=input, show=print) -> None:
                 return
             if action == "s":
                 break
+            if fix and action == "a":
+                show(f"표현 문제로 빠진 답이라 승인만으로는 쓸 수 없다. 고친 답을 쓰거나(e) 반려(r)한다.\n{help_text}")
+                continue
             try:
                 if action == "r":
                     entry = decide(record, "r", note=ask("반려 이유> ").strip())
@@ -83,7 +98,7 @@ def run(candidates: list[dict], path: Path, ask=input, show=print) -> None:
                 else:
                     entry = decide(record, action)
             except ValueError as e:
-                show(f"다시 입력: {e}\n{HELP}")
+                show(f"다시 입력: {e}\n{help_text}")
                 continue
             reviews[record["id"]] = entry
             save_reviews(path, reviews)
@@ -95,9 +110,15 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="AI Hub 학습 후보 사람 검수")
     p.add_argument("--data-dir", type=Path, default=OUT_DIR, help="candidates.jsonl이 있는 폴더")
     p.add_argument("--reviews", type=Path, default=REVIEWS_FILE)
+    p.add_argument("--fix", action="store_true", help="fix_queue.jsonl의 AI Hub 답을 고친다")
+    p.add_argument("--reasons", help="--fix에서 이 사유만(쉼표로 구분, 예: invalid,promise,claim,call_context)")
     args = p.parse_args(argv)
-    lines = (args.data_dir / "candidates.jsonl").read_text(encoding="utf-8").splitlines()
-    run([json.loads(line) for line in lines if line.strip()], args.reviews)
+    lines = (args.data_dir / ("fix_queue.jsonl" if args.fix else "candidates.jsonl")).read_text(encoding="utf-8").splitlines()
+    records = [json.loads(line) for line in lines if line.strip()]
+    if args.fix and args.reasons:
+        wanted = {r.strip() for r in args.reasons.split(",")}
+        records = [r for r in records if r.get("needs_fix") in wanted]
+    run(records, args.reviews, fix=args.fix)
 
 
 if __name__ == "__main__":

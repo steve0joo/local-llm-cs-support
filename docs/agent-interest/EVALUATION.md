@@ -142,10 +142,14 @@ QLoRA 학습 → [1] 학습 로그 확인 → [2] Golden Set → [3] Base vs QLo
 | 항목 | 상태 |
 |---|---|
 | Base vs QLoRA 같은 셋 생성·비교 (`evaluate.py`, `--compare`) | ✅ 있음 |
-| 검증 통과율, 슬롯 사용, 금지 표현, 길이 | ✅ 있음 |
+| 검증 통과율, 슬롯 사용, 금지 표현(출력 검증과 같은 기준), 길이 | ✅ 있음 |
 | 공식 Qwen 채팅 템플릿으로 학습·평가 일치 | ✅ 있음 |
-| Golden Set 30~50문항 + 문항별 기대 조건 | ⏳ 현재 데모 13문항, 확장 필요 |
-| 유형별 기대 조건 자동 검사, 규칙 준수율 | ⏳ 추가 예정 |
-| 학습 로그 요약(train/eval loss, grad_norm, lr) 저장 | ⏳ 추가 예정(`log_history` 저장) |
-| 로컬 LLM Judge | ⏳ Judge 모델 선정 후 |
-| 사람 블라인드 평가 시트 | ⏳ 추가 예정 |
+| Golden Set 30~50문항 + 문항별 기대 조건 | ✅ 42문항(C002~C007) |
+| 유형별 기대 조건 자동 검사, 규칙 준수율 | ✅ 있음 |
+| 회귀 셋: AI Hub test 분할 질문 전체 | ✅ `--test-questions` 119문항 |
+| 학습 로그 요약(train/eval loss, grad_norm, lr) 저장 | ✅ `log_history.json`, `settings.json`, wandb(`train --wandb`) |
+| 사람 판정 세트 | ✅ hold30(평가 전용, 학습 차단). ask30·weak30·debit10은 학습에 들어가 v04부터 판정에 쓰지 않음 |
+| 사람 블라인드 평가 시트 | ✅ `--blind` (v03·v04 판정은 할 일) |
+| 로컬 LLM Judge | ⏳ Judge 모델 선정 후(보류) |
+
+남은 일은 `TODO.md`에 모아 둔다.

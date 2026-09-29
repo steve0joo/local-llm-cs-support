@@ -13,6 +13,7 @@
   training/interest/.venv/bin/python -m training.interest.evaluate --name tuned --adapter training/interest/outputs/<run>/adapter
   training/interest/.venv/bin/python -m training.interest.evaluate --compare base tuned
   training/interest/.venv/bin/python -m training.interest.evaluate --blind base tuned   # 사람 블라인드 평가 시트
+  --test-questions: test.jsonl(답 필터를 통과한 것만) 대신 test_questions.jsonl(test 분할 질문 전체, 약 119건)로 평가
 출력: training/interest/outputs/eval/ (gitignore). --adapter로 평가하면 <run>/eval/에도 사본. 같은 이름은 덮어쓰지 않음
 """
 
@@ -158,6 +159,17 @@ def load_split_cases(data_dir: Path, split: str) -> list[dict]:
                 "reference": r["messages"][-1]["content"],
             }
         )
+    return cases
+
+
+def load_question_cases(data_dir: Path) -> list[dict]:
+    """prepare.py의 test_questions.jsonl: AI Hub test 분할 질문 전체(답 필터 없음, 참고 답 없음)."""
+    cases = []
+    for line in (Path(data_dir) / "test_questions.jsonl").read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            r = json.loads(line)
+            cases.append({"set": "test_q", "id": r["id"], "question": r["messages"][-1]["content"].split("\n")[0],
+                          "expect": None, "item": r["item"], "messages": r["messages"]})
     return cases
 
 
@@ -320,6 +332,26 @@ def write_blind(name_a: str, name_b: str) -> Path:
     return path
 
 
+def eval_wandb_metrics(summary: dict) -> dict:
+    """wandb용 숫자 요약: '<분할>/<지표>' → 값. 질문·답 원문은 넣지 않는다."""
+    return {f"{split}/{key}": value for split, metrics in summary.items() if split != "all"
+            for key, value in metrics.items() if isinstance(value, (int, float)) and not isinstance(value, bool)}
+
+
+def log_eval_to_wandb(summary: dict, name: str, adapter: Path | None) -> str:
+    import wandb  # 개인 개발 환경에만 설치
+
+    run = wandb.init(project="cs-interest", name=f"eval-{name}", group="eval", job_type="eval",
+                     dir=str(OUTPUT_DIR),  # 로컬 실행 기록을 gitignore 폴더(outputs/wandb/)에 남긴다
+                     config={"model": adapter.parent.name if adapter else "base"})
+    metrics = eval_wandb_metrics(summary)
+    run.summary.update(metrics)
+    run.log(metrics)
+    url = run.url
+    run.finish()
+    return url
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="cs-interest 답변 평가")
     p.add_argument("--name", help="결과 이름(예: base, tuned)")
@@ -329,6 +361,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--compare", nargs="+", metavar="NAME", help="저장된 결과 비교")
     p.add_argument("--blind", nargs=2, metavar=("A", "B"), help="사람 블라인드 평가 시트 생성")
     p.add_argument("--overwrite", action="store_true", help="같은 이름 결과를 덮어쓴다")
+    p.add_argument("--test-questions", action="store_true",
+                   help="test.jsonl 대신 test_questions.jsonl(test 분할 질문 전체)로 회귀 평가")
+    p.add_argument("--wandb", action="store_true", help="분할별 숫자 요약을 wandb(cs-interest)에 올린다(개인 개발용)")
     args = p.parse_args(argv)
 
     if args.compare:
@@ -339,7 +374,8 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     mock = json.loads(MOCK_FILE.read_text(encoding="utf-8"))
-    cases = build_golden_cases(mock) + load_split_cases(args.data_dir, "test")
+    test_cases = load_question_cases(args.data_dir) if args.test_questions else load_split_cases(args.data_dir, "test")
+    cases = build_golden_cases(mock) + test_cases
     for target in [EVAL_DIR] + ([args.adapter.parent / "eval"] if args.adapter else []):
         if (target / f"{args.name}.jsonl").exists() and not args.overwrite:  # 생성 전에 먼저 막는다
             raise FileExistsError(f"{target / args.name}.jsonl이 이미 있다. 다른 --name이나 --overwrite를 쓴다.")
@@ -347,6 +383,8 @@ def main(argv: list[str] | None = None) -> None:
     summary = summarize(rows)
     save_results(rows, summary, args.name, EVAL_DIR, args.adapter, overwrite=True)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if args.wandb:
+        print("wandb:", log_eval_to_wandb(summary, args.name, args.adapter))
 
 
 if __name__ == "__main__":

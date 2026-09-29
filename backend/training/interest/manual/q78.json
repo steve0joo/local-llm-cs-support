@@ -1,0 +1,11 @@
+{
+  "no": 78,
+  "customer": "C004",
+  "question": "자동이체가 실패한 뒤 입금하면 언제 정상 처리되나요?",
+  "check": "반영 시점·정상 처리 보장 금지, 연체 사실 안내",
+  "v03_answer": "",
+  "note": "",
+  "source": "fix",
+  "answer": "현재 {{loan_label}}은 {days}일 연체되어 연체 금액 {{overdue_amount}}이 남아 있습니다. 입금 후 자동이체 재처리와 반영 시점은 상담원에게 확인해 주세요.",
+  "train": true
+}

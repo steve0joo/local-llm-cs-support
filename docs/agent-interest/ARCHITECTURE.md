@@ -121,8 +121,10 @@ backend/
   - 최종 output이 `validate.is_valid`를 통과하지 못함(INT-004). 필수 슬롯은 `required_slots(follow_up_question, 연체 여부)`
 - input 정규화: `★★은행`→`은행`, 비식별 금액(`●●●원`)→`[금액_n]`, 그 밖의 비식별 기호→`○○`. 그 뒤 user 턴에 `masking.mask()` 적용.
 - 분할: `data/processed/split.json`(팀원C)이 있으면 따르고, 없으면 `source_id` 해시 8:1:1. 마스킹: `app.masking`이 없으면 계약 4 토큰을 쓰는 임시 함수. 둘 다 머지되면 자동으로 공통 쪽을 쓴다.
-- 합성 샘플(`synth.py`): 유형별 템플릿 21개로 400건. 모든 정답이 추론 검증을 통과하는지 `test_synth.py`가 확인한다. 검수한 템플릿 ID를 `REVIEWED`에 넣는다(자동이체 연체 이유·자동이체 잔액 문의·연체 영향 규정 질문 3개는 검수 전). 자동이체 조회값에는 서비스처럼 잔액 비교 결과와 `{{debit_balance}}` 슬롯이 붙는다.
+- 합성 샘플(`synth.py`): 유형별 템플릿 21개로 400건. 모든 정답이 추론 검증을 통과하는지 `test_synth.py`가 확인한다. 검수한 템플릿 ID를 `REVIEWED`에 넣는다(21개 모두 검수 완료, `test_synth.py`가 확인). 자동이체 조회값에는 서비스처럼 잔액 비교 결과와 `{{debit_balance}}` 슬롯이 붙는다.
 - 수동 샘플(`manual_data.py`, `manual/`): 사람이 확인한 모범 답 69문항(q01~q70, q30 제외)을 대출 종류만 바꿔 3배(207건). 추론 검증·학습 데이터 검사를 모두 통과해야 저장된다.
+- AI Hub 답 수정: 표현 문제(`prepare.FIXABLE`)로 빠진 train 샘플은 `fix_queue.jsonl`로 뽑고, 사람이 `review.py --fix`로 고친다. 고친 답은 `prepare.answer_problems`(학습 제외 규칙 + 출력 검증, 이자 정보의 날짜·연체 일수는 허용)를 통과해야 쓰인다.
+- 평가용 질문: `test_questions.jsonl`은 test 분할의 이자/연체 질문 전체다(답 필터 없음, `evaluate --test-questions`).
 - AI Hub 샘플에는 자동이체 잔액 줄을 붙이지 않는다. 원문 답이 잔액을 말하지 않아 임의 값을 붙이면 답과 어긋날 수 있다.
 - 현재 결과(`data/raw/06_interest_finetune`, 임시 분할·마스킹): train 664(합성 400·수동 207·AI Hub 57) / val 8 / test 10. 출력 검증 강화로 AI Hub 76건이 추가로 빠졌다(`_manifest.json`).
 
@@ -132,4 +134,4 @@ backend/
 - 시스템 프롬프트 위치: 지금은 `prompt.py`가 messages의 system으로 넣는다. 계약 5("영역별 Modelfile, 같은 GGUF에 SYSTEM만 다름")가 main에 반영되면 Modelfile SYSTEM으로 옮길지 정한다. 학습 데이터와 추론의 시스템 프롬프트는 같은 문자열이어야 한다.
 - `cd backend && pytest tests/interest`가 `app`을 import하려면 backend를 경로에 넣는 pytest 설정(`pythonpath`)이 필요하다. 공통 설정이 main에 오기 전에는 `python -m pytest --import-mode=importlib tests/interest`로 실행한다.
 - 출력 검증 방식: 대출문의(LN-004)는 허용 목록(준 날짜 외 숫자 금지)이다. 이 영역은 금지 목록이라 지어낸 시각·기간("밤 11시까지", "3영업일")을 통과시킨다. 허용 목록(다음 납부일 표기·연체 일수만 허용)으로 바꿀지 정한다.
-- 학습 데이터 품질: AI Hub 후보 284건 중 슬롯 사용 4건, 연체 8건, "고객님께서"로 시작하는 요약체 28건이 남아 있다. 슬롯 사용·연체·거절은 합성 샘플로 보강한다(팀 합의 필요). 요약체는 검수 때 고치거나 반려한다.
+- 학습 데이터 품질: AI Hub 답은 필터를 통과해도 수수료·약속 같은 표현이 남아 있어(06 train 57건 중 23건) v04는 AI Hub를 train에서 뺐다(07). 표현 문제로 빠진 답 227건은 `review.py --fix`로 사람이 고칠 수 있다(보류). 할 일 전체는 `TODO.md`.

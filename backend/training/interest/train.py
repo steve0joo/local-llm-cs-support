@@ -17,6 +17,7 @@
 import argparse
 import hashlib
 import json
+import os
 import math
 import re
 import subprocess
@@ -52,6 +53,19 @@ class TrainSettings:
     seed: int = 42
     target_modules: list[str] = field(default_factory=lambda: list(LORA_TARGET_MODULES))
     dry_run: bool = False
+    wandb: bool = False  # 학습 곡선을 개인 wandb 프로젝트에 올린다(숫자만, 개인 개발용)
+
+
+WANDB_PROJECT = "cs-interest"
+
+
+def report_settings(s: "TrainSettings", run_dir: Path) -> dict:
+    """SFTConfig의 기록 대상. wandb는 개인 개발 환경에만 설치하므로 켰을 때만 쓴다."""
+    if not s.wandb:
+        return {"report_to": "none"}
+    os.environ["WANDB_PROJECT"] = WANDB_PROJECT
+    os.environ["WANDB_DIR"] = str(OUTPUT_DIR)  # 로컬 기록은 gitignore 폴더(outputs/wandb/)
+    return {"report_to": "wandb", "run_name": f"train-{Path(run_dir).name}"}
 
 
 def summarize_log(log_history: list[dict]) -> dict:
@@ -145,13 +159,21 @@ def load_tokenizer(base_model: str):
 def preview(s: "TrainSettings") -> None:
     """학습 샘플 1건의 템플릿 적용 결과와 학습 대상(completion) 구간을 출력한다."""
     tokenizer = load_tokenizer(s.base_model)
-    row = load_split(s.data_dir, "train")[0]
+    row = preview_row(s.data_dir)
     prompt = tokenizer.apply_chat_template(row["prompt"], tokenize=False, add_generation_prompt=True)
     full = tokenizer.apply_chat_template(row["prompt"] + row["completion"], tokenize=False)
     assert full.startswith(prompt), "프롬프트가 전체 대화의 앞부분과 다르다"
     print("=== prompt (loss 제외) 끝부분 ===\n" + prompt[-300:])
     print("=== completion (학습 대상) ===\n" + full[len(prompt):])
     print(f"<think> 포함: {'<think>' in full} | eos: {tokenizer.eos_token} | pad: {tokenizer.pad_token}")
+
+
+def preview_row(data_dir: Path) -> dict:
+    """미리보기용 train 샘플. AI Hub 원문은 출력하지 않도록 합성·수동 샘플 중 첫 번째를 쓴다."""
+    for line in (Path(data_dir) / "train.jsonl").read_text(encoding="utf-8").splitlines():
+        if line.strip() and (sample := json.loads(line)).get("origin") != "aihub":
+            return to_prompt_completion(sample)
+    raise ValueError("AI Hub가 아닌 train 샘플이 없어 미리보기를 출력하지 않는다")
 
 
 def to_prompt_completion(sample: dict) -> dict:
@@ -182,6 +204,7 @@ def parse_args(argv: list[str] | None = None) -> TrainSettings:
     p.add_argument("--learning-rate", type=float, default=d.learning_rate)
     p.add_argument("--lora-r", type=int, default=d.lora_r)
     p.add_argument("--max-length", type=int, default=d.max_length)
+    p.add_argument("--wandb", action="store_true", help="학습 곡선을 wandb(cs-interest)에 기록")
     p.add_argument("--dry-run", action="store_true", help="템플릿 적용 결과만 출력하고 끝낸다")
     a = p.parse_args(argv)
     return TrainSettings(
@@ -196,6 +219,7 @@ def parse_args(argv: list[str] | None = None) -> TrainSettings:
         lora_alpha=a.lora_r * 2,
         max_length=a.max_length,
         dry_run=a.dry_run,
+        wandb=a.wandb,
     )
 
 
@@ -244,8 +268,8 @@ def train(s: TrainSettings) -> Path:
         metric_for_best_model="eval_loss",
         save_total_limit=2,
         logging_steps=5,
-        report_to="none",
         seed=s.seed,
+        **report_settings(s, run_dir),
     )
     trainer = SFTTrainer(
         model=model,

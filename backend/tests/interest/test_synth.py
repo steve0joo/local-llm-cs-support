@@ -159,3 +159,8 @@ def test_no_invented_phrases():
 def test_rule_questions_answered_without_assertion():
     rule = [r for r in RECORDS if r["source_id"] == "tpl-overdue_action-rule"]
     assert rule and all("상담원" in answer(r) and "단정" in answer(r) for r in rule)
+
+
+def test_all_templates_reviewed():
+    # 검수 전 템플릿이 학습에 섞이면 --include-unreviewed 없이는 빠지고, 있으면 검수 안 된 문장을 배운다.
+    assert REVIEWED == {t.id for t in TEMPLATES}

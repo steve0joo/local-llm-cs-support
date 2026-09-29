@@ -18,7 +18,7 @@
 | 라이브러리 | Transformers + PEFT + TRL `SFTTrainer` (Unsloth 라이브러리는 쓰지 않음) |
 | 가상환경 | `backend/training/interest/.venv` (학습 전용, 서비스 `.venv`와 분리) |
 | 채팅 템플릿 | Qwen 공식 템플릿(`training/interest/chat_template.jinja`) |
-| 실험 기록 | wandb (개인 개발용, 숫자만 기록. requirements에는 넣지 않음) |
+| 실험 기록 | wandb 개인 프로젝트 `cs-interest`: 학습 곡선(`train --wandb`), 평가 요약(`evaluate --wandb`), probe40. 숫자만 기록, requirements에는 넣지 않음 |
 | 변환·서빙 | llama.cpp로 GGUF 변환 → Ollama `cs-interest` (`training/interest/export.md`) |
 
 - 공식 템플릿을 쓰는 이유: Unsloth 체크포인트의 템플릿은 학습할 때만 빈 `<think>` 블록을 넣는다(unslothai/unsloth#3383). 이 템플릿으로 학습한 v01은 답에 `<tool_call>` 같은 쓰레기 토큰을 냈다.
@@ -38,6 +38,7 @@
 | AI Hub 71926 이자/연체 QA | `prepare.py` | 원본 1,104건 중 금액·금리 수치·서류·개인정보 요구·약속·지어낸 채널 등 규칙에 걸리는 답을 모두 뺀다. 금액은 슬롯으로 바꾼다 |
 | 합성 샘플 | `synth.py` | 사람이 검수한 템플릿에 가상 조회값을 넣어 400건. 외부 사실 없이 조회값과 안내 문구만 쓴다 |
 | 수동 모범 답 | `manual_data.py`, `manual/` | 모델을 시험해서 틀린 답을 사람이 고친 것. 대출 종류만 바꿔 3배로 늘린다 |
+| AI Hub 고친 답 | `prepare.py` → `fix_queue.jsonl`, `review.py --fix` | 표현 문제(지어낸 채널·약속·처리 주장·통화 대기·톤·요약체·메뉴·서류)로 빠진 train 답을 **사람이 로컬에서** 고친다. 학습 제외 규칙과 출력 검증을 모두 통과해야 저장되고, prepare를 다시 돌리면 train에 들어간다. 금액·숫자·금리·개인정보 요구로 빠진 답은 되살리지 않는다 |
 
 - 모든 샘플은 서비스와 같은 입력 형식(`prompt.build_messages`)을 쓴다. 입력은 시스템 프롬프트, 질문, 이자 정보 줄, 사용할 수 있는 슬롯 줄 순서다.
 - 합성·수동 샘플은 train에만 넣는다. val과 test는 AI Hub만 쓴다.
@@ -64,9 +65,10 @@
 |---|---|---|
 | 학습 안정성 | train/eval loss, grad_norm | eval loss가 오르지 않고 NaN이 없어야 함 |
 | Golden Set 42문항 | 데모·평가 고객(C002~C007) 고정 질문, 학습에 없는 질문 | 규칙 준수율 = 검증 통과·금지 표현 없음·질문에 맞는 내용·상담 톤 **모두** 충족 |
-| AI Hub test | 학습에 안 쓴 AI Hub 분할 | 기존 상담 능력 유지(회귀) |
+| AI Hub test 질문 119 | test 분할 질문 전체(`test_questions.jsonl`, `--test-questions`). 답 필터를 거치지 않는다: 채점은 모델 답만 보기 때문 | 기존 상담 능력 유지(회귀). v03도 같은 문항으로 다시 평가해 비교 |
 | probe40 | 40문항 자동 채점, wandb에 숫자만 기록 | 버전 간 추세 |
-| ask30 · weak30 · debit10 | 사람이 한 문항씩 읽고 판정하는 시트 | 자동 채점이 놓치는 결과 보장·규정 단정·지어낸 절차 찾기 |
+| ask30 · weak30 · debit10 | 사람이 한 문항씩 읽고 판정하는 시트. 판정 뒤 모범 답으로 학습에 넣었다(q01~q70) | 자동 채점이 놓치는 결과 보장·규정 단정·지어낸 절차 찾기 |
+| **hold30** (101~130번) | 평가 전용 사람 판정 세트. **학습 금지**(`manual_data`가 막음), 기존 질문과 겹치지 않음(테스트로 고정) | v04부터 사람 판정은 이 세트로 한다. 학습에 들어간 세트로 평가하면 외운 답을 보게 된다 |
 
 - 베이스 모델과 같은 질문으로 비교한다(`--compare`). 결과는 `outputs/eval/`에 남긴다.
 - **자동 채점만 믿지 않는다:** v03은 probe40 자동 채점이 100%였다. 그런데 사람이 읽어 보니 "입금하면 연체가 해소됩니다" 같은 결과 보장과 규정 단정이 나왔다. 사람 판정에서 나온 유형은 출력 검증(`validate.phrase_problems`)과 채점 기준에 패턴으로 추가한다.
@@ -96,40 +98,49 @@ v03에 남은 약점은 다섯 가지다: 결과 보장("해소됩니다"), 규�
 
 ## 5. 다음 계획
 
-### v04 (데이터 준비 완료, 학습 전)
+> 전체 할 일과 완료 여부는 `TODO.md`에 있다.
 
-데이터는 `data/raw/06_interest_finetune`이다. train 664건(합성 400, 수동 207, AI Hub 57), val 8건, test 10건.
+### v04 (학습·자동 평가 완료 2026-09-29, hold30 사람 판정 대기)
+
+데이터는 `data/raw/07_interest_finetune`이다. train 607건(합성 400 + 수동 207, **모두 사람 검수**), val 8건, test 10건, 평가 질문 119건.
+06(train 664 = 합성 400 + 수동 207 + AI Hub 57)에서 AI Hub를 train에서 뺐다(`prepare.py --exclude-aihub-train`).
+AI Hub 57건은 검수 전이고, 그중 23건에 필터가 놓친 수수료·조기 상환·안내 약속·설정 단정 표현이 있었다. AI Hub 답 수정(227건)은 보류하고 나중에 08 → v05로 비교한다.
 
 v03 대비 바뀐 점:
 - 수동 모범 답 69문항 207건을 넣었다: v03 테스트 30, 약점 보강 30, 자동이체 10.
 - 자동이체 계좌 잔액 비교를 넣었다. 코드가 잔액과 연체 금액(연체가 없으면 납부 예정 이자)을 비교해 결과 문장만 이자 정보 줄에 넣고, 잔액은 `{{debit_balance}}` 슬롯으로 넘긴다.
 - 합성 템플릿을 21개로 늘렸다: 자동이체 연체 이유, 잔액 문의, 연체 영향 규정 질문.
-- 출력 검증을 강화했다: 결과 보장·규정 단정·채널·절차·약속·반복. 이 때문에 AI Hub 샘플이 더 걸러졌다.
+- 출력 검증을 강화했다: 결과 보장·규정 단정·채널·절차·약속·반복.
+- AI Hub 답을 학습하지 않는다(위 이유). 실제 고객 질문에 대한 회귀는 평가 질문 119건으로 확인한다.
 
-학습 전에 확인할 것:
-- [ ] 새 합성 템플릿 3개와 q61~q70 모범 답 사람 검수
-- [ ] C007 다음 납부일(2026-09-30)을 시연 날짜에 맞추고 06 폴더 재생성
-- [ ] 학습 가상환경을 공통 버전(Python 3.11, trl 0.24, transformers 5.5, peft 0.19.1)에 맞출지 결정
+학습 전 확인:
+- [x] 새 합성 템플릿 3개 사람 검수 (2026-09-29 완료)
+- [x] q61~q70 모범 답 사람 검수 (2026-09-29 완료, 수정 없음)
+- [ ] C007 다음 납부일(2026-09-30)을 시연 날짜에 맞추기 — 학습 영향이 작아 v04는 그대로 진행
+- [ ] 학습 가상환경을 공통 버전에 맞출지 결정 — v03과 조건을 같게 하려고 v04는 기존 환경으로 진행
 
-실행과 평가:
+실행과 평가(wandb는 개인 프로젝트 `cs-interest`, 숫자만):
 ```bash
 cd backend
-PY=training/interest/.venv/bin/python; D06=data/raw/06_interest_finetune
-$PY -m training.interest.train --data-dir $D06 --dry-run
-$PY -m training.interest.train --data-dir $D06 --tag 06
-R=$(ls -d training/interest/outputs/runs/v*-06 | tail -1)
-$PY -m training.interest.evaluate --name tuned-06 --data-dir $D06 --adapter $R/adapter
-$PY -m training.interest.probe --name probe-v04 --adapter $R/adapter --wandb
-$PY -m training.interest.ask --name v04 --set weak30 --adapter $R/adapter   # ask30·debit10도 같은 방식
+PY=training/interest/.venv/bin/python; D07=data/raw/07_interest_finetune; V03=training/interest/outputs/runs/v03-20260928-1749-04/adapter
+$PY -m training.interest.train --data-dir $D07 --dry-run
+$PY -m training.interest.train --data-dir $D07 --tag 07 --wandb      # 학습 곡선 → wandb train-v04-…
+R=$(ls -d training/interest/outputs/runs/v*-07 | tail -1)
+$PY -m training.interest.evaluate --name v03-q --data-dir $D07 --adapter $V03 --test-questions --wandb   # Golden 42 + 평가 질문 119
+$PY -m training.interest.evaluate --name v04-q --data-dir $D07 --adapter $R/adapter --test-questions --wandb
+$PY -m training.interest.evaluate --compare v03-q v04-q
+$PY -m training.interest.probe --name v04 --adapter $R/adapter --wandb
+$PY -m training.interest.ask --name v03-hold --set hold30 --adapter $V03
+$PY -m training.interest.ask --name v04-hold --set hold30 --adapter $R/adapter   # 평가 전용 세트로 v03·v04 사람 판정
 ```
 
 채택 기준은 네 가지다:
 - Golden 규칙 준수율이 v03(86%) 이상이다.
 - 금지 표현이 0%다.
-- weak30·debit10 사람 판정에서 문제 답이 v03보다 줄었다.
+- hold30 사람 판정에서 문제 답이 v03보다 줄었다(같은 질문으로 v03도 판정).
 - eval loss가 오르지 않았다.
 
-val과 test가 줄었으므로(17→8, 24→10) AI Hub test 수치는 v03과 바로 비교하지 않는다.
+답 필터를 거친 test.jsonl은 10건뿐이라, 회귀 평가는 질문 전용 test 119건(`--test-questions`)으로 하고 v03도 같은 문항으로 다시 평가한다. val(8건)은 체크포인트 선택에만 쓰고 eval loss 값을 v03과 비교하지 않는다.
 
 ### v04 이후
 
@@ -138,12 +149,13 @@ val과 test가 줄었으므로(17→8, 24→10) AI Hub test 수치는 v03과 바
 | 1 | 채택한 모델을 GGUF로 변환하고 Ollama에 등록, 응답 시간 측정 | 목표 응답 시간은 공통 ADR 기준 |
 | 2 | 블라인드 사람 평가(`evaluate.py --blind`) | 베이스·v03·v04를 섞어 판정 |
 | 3 | 팀원C에게 TL(학습용) 데이터와 공통 분할(`split.json`) 받기 | 지금은 VL만 쓰고 있어 AI Hub 샘플이 적음 |
-| 4 | AI Hub 샘플 사람 검수(`review.py`) | 현재는 자동 점검만 통과한 상태 |
+| 4 | AI Hub 답 수정(`review.py --fix`, 227건) → 08 데이터 → v05 | 사유별로 나눠 진행(`--reasons invalid,promise,claim,call_context`부터). 통과한 샘플 검수(`review.py`)도 함께 |
 | 5 | main 병합 뒤 잔액 조회를 잔액조회 영역 `get_accounts`로 교체 | `balance_source.py` 한 곳만 바뀜 |
 
 ## 6. 지키는 규칙
 
 - AI Hub 원본·가공 데이터, 학습 결과(어댑터·GGUF)는 git에 커밋하지 않고 외부 서비스에 올리지 않는다. wandb에도 질문·답 원문 없이 숫자만 올린다.
+- AI Hub 답 수정은 사람이 로컬 터미널(`review.py`)에서 한다. 원문을 LLM(외부 서비스 포함)에 넣어 고쳐 쓰지 않는다. 판정은 `data/processed/interest/reviews.json`(gitignore)에 저장된다.
 - 수동 모범 답(`training/interest/manual/`)은 직접 쓴 데이터라 커밋할 수 있다.
 - 학습 정답은 추론 검증을 통과해야 한다(INT-004). 검증을 바꾸면 데이터 폴더를 다시 만든다.
 - 학습 결과는 덮어쓰지 않는다. 데이터 폴더와 run 폴더는 번호를 새로 붙인다.

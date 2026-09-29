@@ -127,7 +127,7 @@ JSONL 한 줄 = 대화 1개. `train.py`는 `messages`만 쓰고, 나머지 필�
 ## 8. 할 일
 
 1. ~~`prepare.py` 제외 규칙 보강 + 레코드 필드 추가~~ (완료: AI Hub 후보 224건, 개인정보 요구 제외 포함)
-2. ~~`synth.py`와 유형별 템플릿 작성, 모든 정답 `is_valid` 통과 테스트~~ (완료: 템플릿 18개 검수 완료, 400건. 2026-09-29 자동이체·규정 질문 템플릿 3개 추가, 검수 전 → 21개)
+2. ~~`synth.py`와 유형별 템플릿 작성, 모든 정답 `is_valid` 통과 테스트~~ (완료: 템플릿 18개 검수 완료, 400건. 2026-09-29 자동이체·규정 질문 템플릿 3개 추가·검수 완료 → 21개)
 3. 합성 샘플은 **사용하는 것으로 진행**한다(2026-09-28 팀원B 결정). 팀에는 결과와 함께 공유한다(근거: 외부 사실 없음, mock 형식과 안내 문구만 사용)
 4. 검수 → `reviewed=true`만 모아 분할
 5. 1단계(100건)로 전 과정 시험 → 2단계 학습
@@ -145,7 +145,11 @@ $PY -m training.interest.evaluate --name tuned-04 --data-dir $D04 --adapter $R/a
 $PY -m training.interest.evaluate --compare base-04 tuned-04       # 베이스와 비교 → EVALUATION.md 기준으로 채택 판단
 ```
 
-### 예정: 06 데이터 v04 학습·평가 (미실행)
+### v04: 07 데이터(06에서 AI Hub train 제외)로 학습 (진행 중, 방법과 명령은 FINETUNE.md 5절)
+06의 AI Hub train 57건(검수 전) 중 23건에 필터가 놓친 수수료·약속 표현이 있어 `--exclude-aihub-train`으로 뺀 `data/raw/07_interest_finetune`(train 607 = 합성 400 + 수동 207)을 쓴다.
+
+### 참고: 06 데이터 (v04에는 쓰지 않음)
+
 v03 약점(결과 보장·규정 단정·지어낸 절차/채널·약속)과 자동이체 잔액 질문을 보강한 데이터다.
 데이터: `data/raw/06_interest_finetune`(train 664 = 합성 400 + 수동 207 + AI Hub 57 / val 8 / test 10, 설명은 `_manifest.json`).
 
@@ -155,15 +159,13 @@ v03 약점(결과 보장·규정 단정·지어낸 절차/채널·약속)과 자
 - 수동 샘플: q61~q70(자동이체 계좌 변경·잔액) 추가 → 69문항 207건.
 - 평가 채점(`evaluate.score`)의 금지 표현에 같은 기준 추가 → v03 이전 결과와 비교할 때는 같은 채점 코드로 다시 채점한다.
 
-주의: val·test가 줄어(17→8, 24→10) AI Hub test 수치는 v03과 바로 비교하지 않는다. 비교는 Golden Set·probe40·ask 세트로 한다.
+주의: 답 필터를 거친 test.jsonl은 10건뿐이다. 회귀 평가는 test 분할 질문 전체(`test_questions.jsonl` 119건, `evaluate --test-questions`)로 하고 v03도 같은 문항으로 다시 평가한다. 사람 판정은 평가 전용 hold30으로 한다.
 
+### AI Hub 답 수정 (보류, 나중에 08 데이터 → v05)
+`fix_queue.jsonl`(227건)은 표현 문제로 빠진 train 답이다. 사람이 로컬에서 고치고, 고친 답이 학습 제외 규칙과 출력 검증을 통과하면 `reviews.json`에 저장된다. 다음 prepare 실행 때 train에 들어간다(`stats.json`의 `fixed`).
 ```bash
 cd backend
-PY=training/interest/.venv/bin/python; D06=data/raw/06_interest_finetune
-$PY -m training.interest.train --data-dir $D06 --dry-run
-$PY -m training.interest.train --data-dir $D06 --tag 06            # → outputs/runs/v04-...-06/
-R=$(ls -d training/interest/outputs/runs/v*-06 | tail -1)
-$PY -m training.interest.evaluate --name tuned-06 --data-dir $D06 --adapter $R/adapter
-$PY -m training.interest.probe --name probe-v04 --adapter $R/adapter --wandb
-$PY -m training.interest.ask --name v04 --set weak30 --adapter $R/adapter   # ask30·debit10도 같은 방식
+.venv/bin/python -m training.interest.review --fix --data-dir data/raw/06_interest_finetune --reasons invalid,promise,claim,call_context   # 94건
+.venv/bin/python -m training.interest.review --fix --data-dir data/raw/06_interest_finetune --reasons tone,summary,menu,document          # 133건
+.venv/bin/python -m training.interest.prepare --with-synth --with-manual --include-unreviewed --allow-fallback-mask --out-dir data/raw/08_interest_finetune
 ```

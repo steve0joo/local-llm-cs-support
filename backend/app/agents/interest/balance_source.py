@@ -8,16 +8,7 @@
 비교는 코드가 하고 모델에는 결과 문장만 준다. 잔액 금액은 슬롯({{debit_balance}})으로만 흐른다(CLAUDE.md: mock 금액은 프롬프트 금지).
 """
 
-import copy
-import json
-from pathlib import Path
-
-_DATA = json.loads((Path(__file__).parent / "balance_mock.json").read_text(encoding="utf-8"))
-
-
-def get_accounts(customer_id: str) -> list[dict]:
-    """잔액조회 mock의 get_accounts와 같은 형식: [{account_id, account_no, alias, balance}]."""
-    return copy.deepcopy(_DATA["accounts"].get(customer_id, []))
+from app.agents.balance.mock_api import get_accounts
 
 
 def debit_check(item: dict, balance: int | None) -> str | None:

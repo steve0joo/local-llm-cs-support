@@ -1,0 +1,11 @@
+{
+  "no": 82,
+  "customer": "C005",
+  "question": "고정금리인데 실제 이자 금액도 항상 같은가요?",
+  "check": "고정금리 방식만 안내, 이자 금액 고정 단정 금지",
+  "v03_answer": "",
+  "note": "",
+  "source": "fix",
+  "answer": "현재 {{loan_label}}은 {rate_type}금리 방식이며 납부 예정 이자는 {{interest_due}}입니다. 실제 이자 금액이 계속 같은지는 약정 조건과 납부 일정에 따라 달라 상담원에게 확인해 주세요.",
+  "train": true
+}

@@ -244,3 +244,58 @@ def test_score_reports_invented_phrases(text, hit):
     case = next(c for c in build_golden_cases(mock) if c["customer"] == "C003")
     s = score(case, text)
     assert hit in s["forbidden"] and s["valid"] is False
+
+
+def test_load_question_cases_from_test_questions(tmp_path):
+    # AI Hub test 분할의 질문 전체(답 없음). 채점은 규칙만 보므로 참고 답이 없어도 된다.
+    from training.interest.evaluate import load_question_cases
+
+    item = {"loan_id": "L000", "product_type": "신용대출", "repayment_method": "만기일시", "interest_type": "변동",
+            "payment_method": "자동이체", "next_due_date": "2026-10-15", "interest_due": 58000,
+            "overdue_amount": 0, "overdue_days": 0}
+    row = {"id": "T_1", "item": item, "messages": [{"role": "system", "content": "s"},
+                                                  {"role": "user", "content": "이자 언제 내요?\n이자 정보: …"}]}
+    (tmp_path / "test_questions.jsonl").write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+    [case] = load_question_cases(tmp_path)
+    assert case["set"] == "test_q" and case["question"] == "이자 언제 내요?" and case["expect"] is None
+    assert case["messages"] == row["messages"] and "reference" not in case
+
+
+def test_eval_wandb_metrics_are_numbers_by_set():
+    # wandb에는 분할별 숫자 요약만 올린다(질문·답 원문 없음, AI Hub 데이터 제3자 제공 금지).
+    from training.interest.evaluate import eval_wandb_metrics
+
+    summary = {"golden": {"n": 42, "valid": 1.0, "slot": 0.9, "forbidden": 0.0, "avg_length": 80.5, "tone": 1.0,
+                          "expect": 0.9, "rule": 0.88},
+               "test_q": {"n": 119, "valid": 0.95, "slot": 0.5, "forbidden": 0.02, "avg_length": 70.0, "tone": 0.97,
+                          "expect": None, "rule": None},
+               "all": {"n": 161}}
+    got = eval_wandb_metrics(summary)
+    assert got["golden/rule"] == 0.88 and got["test_q/valid"] == 0.95 and got["test_q/n"] == 119
+    assert "test_q/rule" not in got and not any(k.startswith("all/") for k in got)
+    assert all(isinstance(v, (int, float)) for v in got.values())
+
+
+def test_eval_wandb_logs_to_gitignored_dir(monkeypatch):
+    import sys
+    import types
+
+    from training.interest import evaluate
+
+    calls = {}
+
+    class Run:
+        url = "https://wandb.ai/x"
+        summary = {}
+
+        def log(self, data):
+            calls["log"] = data
+
+        def finish(self):
+            calls["finished"] = True
+
+    monkeypatch.setitem(sys.modules, "wandb", types.SimpleNamespace(init=lambda **kw: calls.update(init=kw) or Run()))
+    evaluate.log_eval_to_wandb({"golden": {"n": 1, "rule": 1.0}}, "v04-q", None)
+    assert calls["init"]["dir"] == str(evaluate.OUTPUT_DIR) and calls["init"]["project"] == "cs-interest"
+    assert calls["init"]["name"] == "eval-v04-q" and calls["init"]["group"] == "eval"
+    assert calls["log"] == {"golden/n": 1, "golden/rule": 1.0} and calls["finished"]

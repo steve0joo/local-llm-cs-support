@@ -42,7 +42,7 @@ INTEREST_TYPES = ["고정", "변동"]  # 금리는 수치 없이 방식만(INT-0
 PAYMENT_METHODS = ["자동이체", "가상계좌 입금"]
 BOTH = ("normal", "overdue")
 
-# 사람이 검수를 마친 템플릿 ID (2026-09-28 팀원B 검수: 18개 전체 확인)
+# 사람이 검수를 마친 템플릿 ID (2026-09-28 팀원B 검수: 18개 전체 확인, 2026-09-29 추가 3개 확인)
 REVIEWED: set[str] = {
     "tpl-interest_amount-01",
     "tpl-due_date-01",
@@ -62,6 +62,9 @@ REVIEWED: set[str] = {
     "tpl-loan_terms-interest_type",
     "tpl-loan_terms-payment",
     "tpl-followup-01",
+    "tpl-overdue_action-rule",
+    "tpl-reason-autodebit",
+    "tpl-loan_terms-debit_balance",
 }
 
 

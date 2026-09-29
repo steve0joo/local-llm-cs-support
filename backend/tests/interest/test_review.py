@@ -76,3 +76,73 @@ def test_run_retries_invalid_edit(tmp_path):
     run([record("a1")], path, ask=lambda _prompt: next(inputs), show=messages.append)
     assert load_reviews(path)["a1"]["output"] == "다음 납부일에 납부해 주세요."
     assert any("검증" in m for m in messages)
+
+
+# --- AI Hub 답 수정(--fix): 표현 문제로 빠진 train 샘플을 고쳐서만 되살린다 ------------------------
+
+
+def fix_record(rid, reason="invalid", answer="고객센터로 문의해 주세요."):
+    return {**record(rid, answer=answer), "needs_fix": reason}
+
+
+def test_edit_uses_training_checks_not_only_inference():
+    # 학습 데이터 제외 규칙(약속·처리 주장 등)도 적용한다. 이자 정보의 날짜는 사실이라 허용한다.
+    with pytest.raises(ValueError, match="promise"):
+        decide(record("a1"), "e", text="확인 후 연락드리겠습니다.")
+    with pytest.raises(ValueError, match="digit"):
+        decide(record("a1"), "e", text="밤 11시까지 입금해 주세요.")
+    assert decide(record("a1"), "e", text="다음 납부일은 2026-10-15입니다.")["output"] == "다음 납부일은 2026-10-15입니다."
+
+
+def test_render_fix_shows_reason_and_problems():
+    text = render(fix_record("a1"), position=(1, 2))
+    assert "고칠 이유: invalid" in text and "지어낸 채널" in text
+
+
+def test_run_fix_requires_edit_or_reject(tmp_path):
+    path = tmp_path / "reviews.json"
+    messages = []
+    inputs = iter(["a", "e", "납부 관련 자세한 사항은 상담원에게 확인해 주세요.", "채널 삭제", "r", "주제 밖"])
+    run([fix_record("a1"), fix_record("a2", reason="promise", answer="확인 후 연락드리겠습니다.")], path,
+        ask=lambda _prompt: next(inputs), show=messages.append, fix=True)
+    reviews = load_reviews(path)
+    assert reviews["a1"] == {"ok": True, "note": "채널 삭제", "output": "납부 관련 자세한 사항은 상담원에게 확인해 주세요."}
+    assert reviews["a2"] == {"ok": False, "note": "주제 밖"}
+    assert any("고친 답" in m for m in messages)  # 승인만은 안 된다는 안내
+
+
+def test_main_fix_reads_fix_queue(tmp_path):
+    from training.interest.review import main
+
+    (tmp_path / "fix_queue.jsonl").write_text(json.dumps(fix_record("a1"), ensure_ascii=False) + "\n", encoding="utf-8")
+    (tmp_path / "candidates.jsonl").write_text("", encoding="utf-8")
+    path = tmp_path / "reviews.json"
+    import builtins
+
+    answers = iter(["r", "주제 밖"])
+    original = builtins.input
+    builtins.input = lambda _prompt="": next(answers)
+    try:
+        main(["--fix", "--data-dir", str(tmp_path), "--reviews", str(path)])
+    finally:
+        builtins.input = original
+    assert load_reviews(path) == {"a1": {"ok": False, "note": "주제 밖"}}
+
+
+def test_main_fix_can_filter_reasons(tmp_path):
+    # 고칠 양이 많아 사유별로 나눠 한다(예: 지어낸 표현·약속부터).
+    from training.interest.review import main
+
+    rows = [fix_record("a1", "document"), fix_record("a2", "promise", "확인 후 연락드리겠습니다."), fix_record("a3", "invalid")]
+    (tmp_path / "fix_queue.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    path = tmp_path / "reviews.json"
+    import builtins
+
+    answers = iter(["r", "x", "r", "y"])
+    original = builtins.input
+    builtins.input = lambda _prompt="": next(answers)
+    try:
+        main(["--fix", "--reasons", "invalid,promise", "--data-dir", str(tmp_path), "--reviews", str(path)])
+    finally:
+        builtins.input = original
+    assert set(load_reviews(path)) == {"a2", "a3"}
