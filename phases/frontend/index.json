@@ -1,0 +1,22 @@
+{
+  "project": "local-llm-cs-support",
+  "phase": "frontend",
+  "guardrail_docs": [
+    "docs/ARCHITECTURE.md",
+    "docs/ADR.md",
+    "docs/frontend/ARCHITECTURE.md",
+    "docs/frontend/ADR.md"
+  ],
+  "steps": [
+    { "step": 0, "name": "project-setup", "status": "pending" },
+    { "step": 1, "name": "fill-slots", "status": "pending" },
+    { "step": 2, "name": "api-client", "status": "pending" },
+    { "step": 3, "name": "option-buttons", "status": "pending" },
+    { "step": 4, "name": "message-bubble", "status": "pending" },
+    { "step": 5, "name": "customer-picker", "status": "pending" },
+    { "step": 6, "name": "chat-window", "status": "pending" },
+    { "step": 7, "name": "chat-page", "status": "pending" },
+    { "step": 8, "name": "manual-check", "status": "pending", "type": "human" },
+    { "step": 9, "name": "review", "status": "pending" }
+  ]
+}
