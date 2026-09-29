@@ -126,8 +126,44 @@ JSONL 한 줄 = 대화 1개. `train.py`는 `messages`만 쓰고, 나머지 필�
 
 ## 8. 할 일
 
-1. ~~`prepare.py` 제외 규칙 보강 + 레코드 필드 추가~~ (완료: AI Hub 후보 284건)
-2. ~~`synth.py`와 유형별 템플릿 작성, 모든 정답 `is_valid` 통과 테스트~~ (완료: 템플릿 15개, 400건)
-3. 합성 샘플 사용을 팀 안건으로 제안 (근거: 외부 사실 없음, mock 형식과 안내 문구만 사용)
+1. ~~`prepare.py` 제외 규칙 보강 + 레코드 필드 추가~~ (완료: AI Hub 후보 224건, 개인정보 요구 제외 포함)
+2. ~~`synth.py`와 유형별 템플릿 작성, 모든 정답 `is_valid` 통과 테스트~~ (완료: 템플릿 18개 검수 완료, 400건. 2026-09-29 자동이체·규정 질문 템플릿 3개 추가, 검수 전 → 21개)
+3. 합성 샘플은 **사용하는 것으로 진행**한다(2026-09-28 팀원B 결정). 팀에는 결과와 함께 공유한다(근거: 외부 사실 없음, mock 형식과 안내 문구만 사용)
 4. 검수 → `reviewed=true`만 모아 분할
 5. 1단계(100건)로 전 과정 시험 → 2단계 학습
+
+### 04 데이터 학습·평가 (완료: v03, 결과는 REPORT_v03.md)
+베이스 기준 평가(`base-golden`, `base-04`)까지 끝낸 상태에서 이어서 한다. 데이터: `data/raw/04_interest_finetune`(train 568 = AI Hub 168 검수 전 + 합성 400 검수 완료).
+
+```bash
+cd backend
+PY=training/interest/.venv/bin/python; D04=data/raw/04_interest_finetune
+$PY -m training.interest.train --data-dir $D04 --dry-run          # C. 답 앞에 <think> 없음·eos <|im_end|> 확인
+$PY -m training.interest.train --data-dir $D04 --tag 04            # D. 학습(1e-4·2 epoch) → outputs/runs/v03-...-04/
+R=$(ls -d training/interest/outputs/runs/v*-04 | tail -1)
+$PY -m training.interest.evaluate --name tuned-04 --data-dir $D04 --adapter $R/adapter   # E. 평가(결과 사본이 $R/eval/에도 남음)
+$PY -m training.interest.evaluate --compare base-04 tuned-04       # 베이스와 비교 → EVALUATION.md 기준으로 채택 판단
+```
+
+### 예정: 06 데이터 v04 학습·평가 (미실행)
+v03 약점(결과 보장·규정 단정·지어낸 절차/채널·약속)과 자동이체 잔액 질문을 보강한 데이터다.
+데이터: `data/raw/06_interest_finetune`(train 664 = 합성 400 + 수동 207 + AI Hub 57 / val 8 / test 10, 설명은 `_manifest.json`).
+
+학습 전 반영한 것(2026-09-29):
+- 출력 검증 강화(`validate.phrase_problems`). INT-004에 따라 학습 데이터도 같은 기준으로 다시 만들었다 → AI Hub 76건 추가 제외.
+- 합성 샘플: 자동이체 조회값에 잔액 비교 결과·`{{debit_balance}}` 슬롯, 템플릿 3개 추가.
+- 수동 샘플: q61~q70(자동이체 계좌 변경·잔액) 추가 → 69문항 207건.
+- 평가 채점(`evaluate.score`)의 금지 표현에 같은 기준 추가 → v03 이전 결과와 비교할 때는 같은 채점 코드로 다시 채점한다.
+
+주의: val·test가 줄어(17→8, 24→10) AI Hub test 수치는 v03과 바로 비교하지 않는다. 비교는 Golden Set·probe40·ask 세트로 한다.
+
+```bash
+cd backend
+PY=training/interest/.venv/bin/python; D06=data/raw/06_interest_finetune
+$PY -m training.interest.train --data-dir $D06 --dry-run
+$PY -m training.interest.train --data-dir $D06 --tag 06            # → outputs/runs/v04-...-06/
+R=$(ls -d training/interest/outputs/runs/v*-06 | tail -1)
+$PY -m training.interest.evaluate --name tuned-06 --data-dir $D06 --adapter $R/adapter
+$PY -m training.interest.probe --name probe-v04 --adapter $R/adapter --wandb
+$PY -m training.interest.ask --name v04 --set weak30 --adapter $R/adapter   # ask30·debit10도 같은 방식
+```
