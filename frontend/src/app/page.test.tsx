@@ -6,6 +6,7 @@ import type { ChatResponse } from "../types/chat";
 import Page from "./page";
 
 vi.mock("../lib/api", () => ({ sendChat: vi.fn() }));
+vi.mock("../components/ScrollWorld", () => ({ ScrollWorld: () => null }));
 
 const sendChatMock = vi.mocked(sendChat);
 
@@ -146,5 +147,105 @@ describe("Page", () => {
     expect(request(1).customer_id).toBe("C002");
     expect(request(1).session_id).toEqual(expect.any(String));
     expect(request(1).session_id).not.toBe(request(0).session_id);
+  });
+
+  it("#chat 섹션에 카피·데모 고객 선택·새 대화·입력창이 있다", () => {
+    render(<Page />);
+    const section = document.getElementById("chat") as HTMLElement;
+    expect(section).toBeInTheDocument();
+
+    expect(section).toContainElement(screen.getByRole("heading", { level: 2, name: "데모 고객으로 물어보세요." }));
+    expect(section).toContainElement(screen.getByText(/실제 개인정보는 입력하지 마세요\./));
+    expect(section).toContainElement(screen.getByRole("combobox", { name: "데모 고객" }));
+    expect(section).toContainElement(screen.getByRole("button", { name: "새 대화" }));
+    expect(section).toContainElement(screen.getByRole("textbox", { name: "메시지" }));
+  });
+
+  it("페이지의 h1은 Local LLM — 은행 상담 AI 하나다", () => {
+    render(<Page />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Local LLM — 은행 상담 AI");
+  });
+
+  it("예시 칩을 누르면 choice 없이 한 번 보낸다", async () => {
+    const u = userEvent.setup();
+    sendChatMock.mockResolvedValue(BALANCE);
+    render(<Page />);
+
+    await u.click(screen.getByRole("button", { name: "잔액 얼마 남았어요?" }));
+    await screen.findByText("1,234,567원");
+
+    expect(sendChatMock).toHaveBeenCalledTimes(1);
+    expect(request(0)).toEqual({ session_id: expect.any(String), customer_id: "C001", message: "잔액 얼마 남았어요?" });
+    expect(request(0)).not.toHaveProperty("choice");
+  });
+
+  it("예시 칩을 더블클릭해도 한 번만 보낸다", async () => {
+    const u = userEvent.setup();
+    sendChatMock.mockResolvedValue(BALANCE);
+    render(<Page />);
+
+    await u.dblClick(screen.getByRole("button", { name: "잔액 얼마 남았어요?" }));
+    await screen.findByText("1,234,567원");
+
+    expect(sendChatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("Enter를 연달아 두 번 눌러도 한 번만 보낸다", async () => {
+    const u = userEvent.setup();
+    sendChatMock.mockResolvedValue(BALANCE);
+    render(<Page />);
+
+    await u.type(screen.getByRole("textbox", { name: "메시지" }), "잔액 알려줘{Enter}{Enter}");
+    await screen.findByText("1,234,567원");
+
+    expect(sendChatMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("새 대화를 누르면 고객은 그대로 대화가 비고 칩이 다시 보이며, 다음 요청은 새 session_id로 나간다", async () => {
+    const u = userEvent.setup();
+    sendChatMock.mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(BALANCE);
+    render(<Page />);
+    const picker = screen.getByRole("combobox", { name: "데모 고객" });
+
+    await u.selectOptions(picker, "C002");
+    await send(u, "잔액 알려줘");
+    await screen.findByText("잠시 후 다시 시도해 주세요");
+
+    await u.click(screen.getByRole("button", { name: "새 대화" }));
+
+    expect(screen.getByRole("log").textContent).toBe(GUIDE);
+    expect(screen.getByRole("button", { name: "잔액 얼마 남았어요?" })).toBeInTheDocument();
+    expect(picker).toHaveValue("C002");
+
+    await send(u, "잔액 알려줘");
+    await screen.findByText("1,234,567원");
+
+    expect(sendChatMock).toHaveBeenCalledTimes(2);
+    expect(request(0).customer_id).toBe("C002");
+    expect(request(1).customer_id).toBe("C002");
+    expect(request(1).session_id).toEqual(expect.any(String));
+    expect(request(1).session_id).not.toBe(request(0).session_id);
+  });
+
+  it("요청 중에는 새 대화 버튼이 비활성이다", async () => {
+    const u = userEvent.setup();
+    let resolve!: (res: ChatResponse) => void;
+    sendChatMock.mockReturnValueOnce(
+      new Promise<ChatResponse>((r) => {
+        resolve = r;
+      }),
+    );
+    render(<Page />);
+    const newChat = screen.getByRole("button", { name: "새 대화" });
+    expect(newChat).toBeEnabled();
+
+    await send(u, "잔액 알려줘");
+
+    expect(newChat).toBeDisabled();
+
+    await act(async () => resolve(BALANCE));
+
+    expect(newChat).toBeEnabled();
   });
 });
