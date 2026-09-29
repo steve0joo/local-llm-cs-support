@@ -1,6 +1,6 @@
 """잔액조회 학습 데이터 생성 (docs/agent-balance/ARCHITECTURE.md "`prepare.py` 인터페이스", BAL-008).
 
-AI Hub 잔액조회 QA를 추론과 같은 입력(prompt.build_messages)으로 바꾸고, 출력 검증에 걸릴 정답은 뺀다.
+AI Hub 잔액조회 QA를 추론과 같은 입력(prompt.build_messages)으로 바꾸고, 출력 검증에 걸릴 정답과 콜센터식 정답(BAL-009)은 뺀다.
 잔액·거래내역 슬롯 응답은 원천에 없으므로 템플릿 합성 샘플을 더한다. 무작위를 쓰지 않는다.
 
 실행: cd backend && .venv/bin/python -m training.balance.prepare
@@ -34,6 +34,11 @@ GENERIC_PRODUCT_NAMES = frozenset({
 # 비식별 금액 "●●●원" (RT-005). mask()의 금액 규칙에서 숫자 자리를 ●로 바꾼 모양이다
 _HIDDEN_AMOUNT = re.compile(r"●[●,]*(?:\s*[억만천백십])*(?:\s*●[●,]*(?:\s*[억만천백십])*)*\s*원")
 _PRODUCT = re.compile(r"[가-힣A-Za-z]+(?:통장|적금|예금|카드|대출)")
+# 콜센터식 정답(BAL-009): 개인정보 항목 뒤 같은 문장 25자 안의 요구, 챗봇이 할 수 없는 행동의 약속
+_ASKS_PERSONAL_INFO = re.compile(
+    r"(?:성함|생년월일|계좌 ?번호|비밀번호|주민(?:등록)?번호|카드 ?번호)[^.?!\n]{0,25}(?:알려|말씀해|입력해|눌러)"
+)
+_PROMISES_ACTION = re.compile(r"(?:보내|전송해|발급해|조치해|정정해|처리해) ?드리(?:겠|니)")
 
 # 합성 질문: classify_intent가 자기 의도로 판단해야 한다(test_prepare.py)
 BALANCE_QUESTIONS = (
@@ -133,6 +138,11 @@ def _unknown_product(output: str, inputs: tuple[str, ...]) -> bool:
     )
 
 
+def _call_center_answer(output: str) -> bool:
+    """정답만 본다. 학습은 --mask-prompt라 입력 쪽 문장은 loss에 들지 않는다(BAL-009)."""
+    return bool(_ASKS_PERSONAL_INFO.search(output) or _PROMISES_ACTION.search(output))
+
+
 def _sample(messages: list[dict], target: str) -> dict:
     return {"messages": messages + [{"role": "assistant", "content": target}]}
 
@@ -141,7 +151,8 @@ def build_sample(qa: dict) -> dict | None:
     question, answer, follow_up, output = (
         mask(normalize_amounts(qa[key])).masked_text for key in ("question", "answer", "follow_up", "output")
     )
-    if not is_valid(output, (), ()) or _unknown_product(output, (question, answer, follow_up)):
+    if (not is_valid(output, (), ()) or _unknown_product(output, (question, answer, follow_up))
+            or _call_center_answer(output)):
         return None
     history = [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
     return _sample(build_messages(history, follow_up, "general"), output)

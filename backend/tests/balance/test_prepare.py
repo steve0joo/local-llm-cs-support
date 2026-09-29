@@ -142,6 +142,42 @@ def test_build_sample_keeps_generic_or_mentioned_product_names(follow_up, output
     assert prepare.build_sample(qa)["messages"][-1]["content"] == output
 
 
+@pytest.mark.parametrize("output", [
+    # 개인정보 요구 (BAL-009)
+    "성함과 생년월일 앞 여섯 자리를 알려주시기 바랍니다",
+    "계좌 비밀번호 네 자리를 입력해 주십시오",
+    "계좌 번호를 알려 주시면 확인해 드리겠습니다",
+    # 행동 약속 (BAL-009)
+    "문자로 상세 정보를 보내드리겠습니다",
+    "필요하시면 영수증도 전송해 드리니 잠시만 기다려 주시기 바랍니다",
+    "PDF 파일이나 우편으로 발급해 드리겠습니다",
+    "신속히 확인하여 조치해 드리겠습니다",
+])
+def test_build_sample_excludes_call_center_outputs(output):
+    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
+          "follow_up": "어떻게 확인하나요?", "output": output}
+    assert prepare.build_sample(qa) is None
+
+
+@pytest.mark.parametrize("output", [
+    "카드사 상담원과 연결해 드리겠습니다",
+    "담당 부서로 연결해 드리겠습니다",
+    "고객센터로 문의해 주시기 바랍니다",
+    "조회 방법을 안내해 드리겠습니다",
+])
+def test_build_sample_keeps_handoff_and_guide_outputs(output):
+    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
+          "follow_up": "어떻게 확인하나요?", "output": output}
+    assert prepare.build_sample(qa)["messages"][-1]["content"] == output
+
+
+def test_call_center_rule_applies_to_output_only():
+    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "문자로 상세 정보를 보내드리겠습니다",
+          "follow_up": "계좌 번호를 알려드릴게요", "output": OK_OUTPUT}
+    messages = prepare.build_sample(qa)["messages"]
+    assert [m["content"] for m in messages[2:]] == ["문자로 상세 정보를 보내드리겠습니다", "계좌 번호를 알려드릴게요", OK_OUTPUT]
+
+
 def test_generic_product_names_constant():
     assert prepare.GENERIC_PRODUCT_NAMES == {
         "입출금통장", "정기예금", "정기적금", "신용카드", "체크카드", "신용대출", "주택담보대출", "전세자금대출",
