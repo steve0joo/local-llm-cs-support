@@ -163,7 +163,17 @@
     {
       "step": 10,
       "name": "rewrite-rules",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T22:41:14+0900",
+      "summary": "rewrite.REWRITE_SYSTEM 규칙 5(나중에 해 줄 일 약속 금지 + 예문 2)·7(원문 사실도 옮기지 않기, 수수료·한도 유무·기간·휴일 처리·자동 해제·규정 변경 금지, 조회 결과를 일반 설명으로 바꾸지 않기 + 예문 6)·10(일반 안내 범위 정의 + 괄호 예시 4, 7은 일반 안내 아님)을 ARCHITECTURE 문구 그대로 바꾸고 규칙 11(items끼리 내용 섞지 않기)을 10과 '출력:' 줄 사이에 추가. 규칙 1~4·6·8·9·출력 줄·MAX_CHARS/DOCUMENT_KEYWORDS 상수 채움·MODEL·CHUNK·OUTPUT_SCHEMA·함수는 그대로. test_rewrite.py에 parametrize 테스트 1개(14케이스: 규칙 5 예문 2·7 예문 6·10 예시 4·11 문장 2) 추가, 먼저 13 failed red 확인(10의 '앱을 최신 버전으로…'는 기존 문구에 있어 통과). claude CLI·rewrite 실행 안 함, prepare.py·app/·training/common·캐시 미수정. deviation: 없음(문서 미수정). AC 119 passed, backend 전체 390 passed",
+      "cost_usd": 1.0109,
+      "num_turns": 11,
+      "completed_at": "2026-09-29T22:42:29+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_rewrite.py",
+        "backend/training/balance/rewrite.py"
+      ]
     },
     {
       "step": 11,
