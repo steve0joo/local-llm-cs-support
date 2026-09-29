@@ -1,0 +1,66 @@
+{
+  "accounts": {
+    "C001": [
+      {
+        "account_id": "A001",
+        "account_no": "110-1234-5678",
+        "alias": "입출금",
+        "balance": 1234567
+      }
+    ],
+    "C002": [
+      {
+        "account_id": "A002",
+        "account_no": "110-2345-6789",
+        "alias": "입출금",
+        "balance": 850000
+      },
+      {
+        "account_id": "A003",
+        "account_no": "110-3456-7890",
+        "alias": "생활비",
+        "balance": 2400000
+      }
+    ],
+    "C003": [
+      {
+        "account_id": "A004",
+        "account_no": "110-4567-8901",
+        "alias": "입출금",
+        "balance": 320000
+      }
+    ],
+    "C004": [
+      {
+        "account_id": "A005",
+        "account_no": "110-5678-9012",
+        "alias": "입출금",
+        "balance": 12300
+      }
+    ],
+    "C005": [
+      {
+        "account_id": "A008",
+        "account_no": "110-8901-2345",
+        "alias": "입출금",
+        "balance": 640000
+      }
+    ],
+    "C006": [
+      {
+        "account_id": "A006",
+        "account_no": "110-6789-0123",
+        "alias": "입출금",
+        "balance": 150000
+      }
+    ],
+    "C007": [
+      {
+        "account_id": "A007",
+        "account_no": "110-7890-1234",
+        "alias": "입출금",
+        "balance": 500000
+      }
+    ]
+  }
+}

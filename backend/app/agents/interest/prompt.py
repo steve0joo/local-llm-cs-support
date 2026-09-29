@@ -24,6 +24,8 @@ def build_slots(item: dict) -> dict[str, str]:
     }
     if _is_overdue(item):
         slots["overdue_amount"] = format_won(item["overdue_amount"])
+    if item.get("debit_balance") is not None:  # balance_source.enrich가 붙인 자동이체 계좌 잔액
+        slots["debit_balance"] = format_won(item["debit_balance"])
     return slots
 
 
@@ -40,6 +42,8 @@ def info_line(item: dict) -> str:
         parts += ["연체 여부=연체 중", f"연체 일수={item['overdue_days']}"]
     else:
         parts.append("연체 여부=연체 없음")
+    if item.get("debit_status"):  # 잔액 비교는 코드가 하고 결과 문장만 넣는다(금액은 넣지 않음)
+        parts.append(f"자동이체 계좌 잔액={item['debit_status']}")
     return "이자 정보: " + ", ".join(parts)
 
 
@@ -62,5 +66,8 @@ def fallback_text(item: dict) -> str:
         "납부 예정 이자는 {{interest_due}}입니다."
     )
     if _is_overdue(item):
-        text += f" 현재 {item['overdue_days']}일 연체 중이며 연체 금액은 {{{{overdue_amount}}}}입니다."
+        text += (
+            f" 현재 {item['overdue_days']}일 연체 중이며 연체 금액은 {{{{overdue_amount}}}}입니다."
+            f" 고객님 대출의 납부 방법은 {item['payment_method']}이니 가능한 빨리 납부해 주시기 바랍니다."
+        )
     return text + " 자세한 사항은 상담원에게 확인해 주세요."

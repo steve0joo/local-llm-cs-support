@@ -99,5 +99,28 @@ def test_fallback_with_overdue():
     assert fallback_text(OVERDUE) == (
         "{{loan_label}}의 다음 납부일은 2026-10-25이고, 납부 예정 이자는 {{interest_due}}입니다."
         " 현재 12일 연체 중이며 연체 금액은 {{overdue_amount}}입니다."
+        " 고객님 대출의 납부 방법은 가상계좌 입금이니 가능한 빨리 납부해 주시기 바랍니다."
         " 자세한 사항은 상담원에게 확인해 주세요."
     )
+
+
+# --- 자동이체 계좌 잔액 비교(balance_source.enrich가 붙인 값) ------------------------------
+
+DEBIT = {**OVERDUE, "payment_method": "자동이체", "debit_status": "연체 금액보다 적음", "debit_balance": 12300}
+
+
+def test_info_line_includes_debit_status():
+    assert info_line(DEBIT).endswith(", 연체 일수=12, 자동이체 계좌 잔액=연체 금액보다 적음")
+
+
+def test_debit_balance_is_slot_not_prompt():
+    # 잔액 금액은 슬롯으로만 흐른다. 모델에는 비교 결과 문장만 들어간다.
+    assert build_slots(DEBIT)["debit_balance"] == "12,300원"
+    text = "".join(m["content"] for m in build_messages("왜 연체예요?", [], DEBIT))
+    assert "12300" not in text and "12,300" not in text
+    assert "{{debit_balance}}" in text  # 사용할 수 있는 슬롯 줄에는 이름만
+
+
+def test_no_debit_fields_no_debit_line():
+    assert "자동이체 계좌 잔액" not in info_line(OVERDUE)
+    assert "debit_balance" not in build_slots(OVERDUE)

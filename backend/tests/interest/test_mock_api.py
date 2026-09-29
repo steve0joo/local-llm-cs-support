@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.agents.interest.mock_api import get_interest, mock_router
 
 FIELDS = {
-    "loan_id", "product_type", "repayment_method", "interest_type", "payment_method",
+    "loan_id", "product_type", "repayment_method", "interest_type", "payment_method", "debit_account_id",
     "next_due_date", "interest_due", "overdue_amount", "overdue_days",
 }
 
@@ -41,7 +41,7 @@ def test_items_have_contract_fields_and_no_rate():
             assert set(item) == FIELDS
             assert isinstance(item["interest_due"], int)
             assert isinstance(item["overdue_amount"], int)
-            assert all(isinstance(item[k], str) for k in ("repayment_method", "interest_type", "payment_method"))
+            assert all(isinstance(item[k], str) for k in ("repayment_method", "interest_type", "payment_method", "debit_account_id"))
 
 
 def test_returned_items_are_copies():
@@ -70,6 +70,7 @@ def test_matches_mock_data_table():
             "repayment_method": "만기일시",
             "interest_type": "변동",
             "payment_method": "자동이체",
+            "debit_account_id": "A002",
             "next_due_date": "2026-10-15",
             "interest_due": 58000,
             "overdue_amount": 0,
@@ -83,6 +84,7 @@ def test_matches_mock_data_table():
             "repayment_method": "원리금균등",
             "interest_type": "고정",
             "payment_method": "가상계좌 입금",
+            "debit_account_id": "",
             "next_due_date": "2026-10-25",
             "interest_due": 312500,
             "overdue_amount": 625000,
@@ -94,16 +96,16 @@ def test_matches_mock_data_table():
 NEW_CUSTOMERS = {
     # docs/agent-interest/ARCHITECTURE.md "mock 데이터" 표 — 계약 6 확장 제안(팀 합의 대기)
     "C004": {"loan_id": "L003", "product_type": "신용대출", "repayment_method": "원리금균등", "interest_type": "변동",
-             "payment_method": "자동이체", "next_due_date": "2026-10-20", "interest_due": 41500,
+             "payment_method": "자동이체", "debit_account_id": "A005", "next_due_date": "2026-10-20", "interest_due": 41500,
              "overdue_amount": 890000, "overdue_days": 65},
     "C005": {"loan_id": "L004", "product_type": "전세자금대출", "repayment_method": "원금균등", "interest_type": "고정",
-             "payment_method": "가상계좌 입금", "next_due_date": "2026-10-10", "interest_due": 176000,
+             "payment_method": "가상계좌 입금", "debit_account_id": "", "next_due_date": "2026-10-10", "interest_due": 176000,
              "overdue_amount": 0, "overdue_days": 0},
     "C006": {"loan_id": "L005", "product_type": "주택담보대출", "repayment_method": "원리금균등", "interest_type": "고정",
-             "payment_method": "자동이체", "next_due_date": "2026-10-26", "interest_due": 405000,
+             "payment_method": "자동이체", "debit_account_id": "A006", "next_due_date": "2026-10-26", "interest_due": 405000,
              "overdue_amount": 548000, "overdue_days": 2},
     "C007": {"loan_id": "L006", "product_type": "신용대출", "repayment_method": "만기일시", "interest_type": "변동",
-             "payment_method": "자동이체", "next_due_date": "2026-09-30", "interest_due": 27500,
+             "payment_method": "자동이체", "debit_account_id": "A007", "next_due_date": "2026-09-30", "interest_due": 27500,
              "overdue_amount": 0, "overdue_days": 0},
 }
 
@@ -121,3 +123,10 @@ def test_scenarios_cover_variety():
     assert {i["repayment_method"] for i in items} == {"원리금균등", "원금균등", "만기일시"}
     assert {i["interest_type"] for i in items} == {"고정", "변동"}
     assert len({i["loan_id"] for i in items}) == len(items)  # 대출 ID 중복 없음
+
+
+def test_debit_account_only_for_autodebit():
+    # 자동이체 대출만 자동이체 계좌(잔액조회 mock의 account_id)를 가리킨다. 가상계좌는 빈 문자열.
+    for c in ("C002", "C003", "C004", "C005", "C006", "C007"):
+        [item] = get_interest(c)
+        assert bool(item["debit_account_id"]) == (item["payment_method"] == "자동이체")
