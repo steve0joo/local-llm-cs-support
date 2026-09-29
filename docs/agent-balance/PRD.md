@@ -64,6 +64,7 @@ main `7466702`의 게이트웨이(`/api/chat` 처리 순서) 위에 이 브랜�
 - 2차에 했다 (2026-09-29)
   - `BalanceAgent.handle()`(`agent.py`)와 `__init__.py`의 `agent`·`mock_router` export, `tests/balance/test_agent.py`(모델은 목). 완료 기준은 `cd backend && .venv/bin/python -m pytest` 전체 통과
 - 3차 계획 (사용자 여정 보강 + 모델 준비, 2026-09-29 결정)
+  0. main 병합 — 충돌 4개는 BAL-005 "병합 시험 결과"대로 푼다. 팀원C의 `tests/gateway/test_api.py`는 fixture의 `classify`가 `["loan"]`을 돌려주고 기대 `agent`를 `"loan"`으로 바꾼다(아직 스텁인 영역으로 옮겨 검사 의도 유지, ARCHITECTURE "알려진 한계"). 전체 pytest가 통과해야 다음으로 간다
   1. `'입출금'` 오분류 수정(J8) — 거래내역 키워드를 보기 전에 질문에서 `입출금`을 지운다(ARCHITECTURE "의도 판단")
   2. 입력한 별칭·끝 4자리로 계좌 선택(J9) — 본인 계좌 하나와만 맞으면 되묻지 않는다(ARCHITECTURE "대상 계좌 결정", BAL-003)
   3. `training/balance/prepare.py` — AI Hub 샘플 + 템플릿 합성 슬롯 샘플, 입력은 `build_messages`와 같은 형식(BAL-008)

@@ -189,7 +189,8 @@ MVP 원칙: 데모에서 실제로 생기는 경우만 코드로 막고, 나머�
 - (d) 되묻기 뒤 선택지를 누르지 않고 직접 입력하면(J9) 게이트웨이가 새 질문으로 라우팅하고, 에이전트도 원래 질문을 보지 않는다. 3차 규칙 4로 계좌는 정해지지만 의도는 새 입력으로 판단한다(원래 질문이 거래내역이어도 "생활비 계좌 잔액 알려줘"는 잔액). 라우터가 balance로 보내지 않는 입력("생활비 계좌요")은 규칙 4까지 오지 않는다.
 - (e) 의도 키워드가 놓치는 표현이 있다(J11 "이번 달 급여 들어왔어?" → balance). 자체 점검 셋에서 나온 표현만 단어 목록에 더한다(BAL-001).
 - `tests/router/test_base.py` 예외: 팀원C 영역 파일(cherry-pick 발판)이지만 스텁 전용 검사 2개(`test_stub_package_exports_agent_and_mock_router`, `test_stub_handle_returns_fixed_message`)의 `AREAS`에서 balance를 뺐다. 실제 export(라우트가 있는 `mock_router`)와 실제 `handle()`(모델 호출)로 바꾸면 이 두 검사는 반드시 실패하기 때문이다. loan·interest 스텁 검사와 계약 3 dataclass·Protocol 검사 3개는 그대로다. 발판 수정의 예외는 이 파일과 `app/agents/balance/__init__.py` 둘뿐이다(BAL-005). main 병합(feat-router는 PR #4로 main에 들어갔다) 때 이 파일이 충돌하면 main 쪽 최신 파일에서 balance만 뺀다.
-  - 후속(아직 안 함): loan·interest도 스텁을 실제 구현으로 바꿀 때 같은 문제가 생기므로 팀원C에게 알린다.
+- `tests/gateway/test_api.py` 예외(main 병합 때 추가, 2026-09-29 결정): `test_response_has_exactly_the_contract_fields`는 balance 스텁의 "준비 중인 기능입니다."를 기대한다. 병합할 때 fixture의 `classify`가 `["loan"]`을 돌려주게 하고 기대 `agent`를 `"loan"`으로 바꾼다. 계약 필드 검사와 "스텁까지 도달" 의도는 그대로다. 이 파일이 세 번째 예외다.
+  - 후속(아직 안 함): loan·interest도 스텁을 실제 구현으로 바꿀 때 `test_base.py`·`test_api.py`에서 같은 문제가 생기므로 팀원C에게 알린다.
 
 ## 학습 데이터
 - 원천: 로컬 은행 라벨링 ZIP의 JSON에서 `consulting.consulting_topic == "거래내역/잔액조회"`인 `qa_data[]`를 추출하고 `source.source_id`로 공통 `split.json`을 적용한다. 실제 확인된 건수는 Training 4,017건, Validation 503건이다. 원천 Training·Validation에 함께 있는 상담 2건은 공통 분할이 train으로 보낸다(main `docs/router/ADR.md` RT-005).
