@@ -160,6 +160,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--save-total-limit", type=int, default=2,
+                         help="남길 체크포인트 수(에폭마다 저장). 기본 2는 v3와 같다. 에폭별 체크포인트를 모두 남기려면 --epochs 이상으로 준다")
     parser.add_argument("--resume-from-checkpoint", type=str, default=None)
     parser.add_argument("--limit", type=int, default=None,
                          help="train_dataset 앞에서 N개만 쓴다(시간 측정용 드라이런). eval은 자르지 않는다")
@@ -230,7 +232,7 @@ def build_sft_config(args: argparse.Namespace, has_eval: bool) -> SFTConfig:
         bf16=True,
         logging_steps=10,
         save_strategy="epoch",
-        save_total_limit=2,
+        save_total_limit=args.save_total_limit,
         eval_strategy="epoch" if has_eval else "no",
         report_to=[] if args.report_to == "none" else [args.report_to],
         run_name=Path(args.out).name,

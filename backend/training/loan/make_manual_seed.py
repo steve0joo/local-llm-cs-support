@@ -1,3 +1,4 @@
+import argparse
 import datetime
 import hashlib
 import json
@@ -24,6 +25,12 @@ while len(_extra) < 38:
 EXTRA_DATES = sorted(_extra)
 _rng.shuffle(EXTRA_DATES)
 DATE_POOL = [D_YES, D_NO] + EXTRA_DATES
+
+# 사용: python make_manual_seed.py [--version v3|v4] [--out 경로]. 기본값(v3)은 manual_seed.jsonl을 v3 그대로 재현한다.
+_parser = argparse.ArgumentParser()
+_parser.add_argument("--version", default="v3", choices=["v3", "v4"])
+_parser.add_argument("--out", type=Path, default=None)
+ARGS = _parser.parse_args()
 
 rows = []
 
@@ -89,6 +96,9 @@ OPEN_P = ["", "조회해 보니 ", "확인 결과 ", "확인해 보니 ", "말�
 CLOSE_P = ["", " 더 궁금하신 점이 있으시면 말씀해 주세요.", " 추가로 궁금하신 내용은 편하게 문의해 주세요.",
            " 다른 문의사항이 있으시면 말씀해 주세요."]
 TAIL_NO = " 자세한 사항은 상담원에게 확인해 주세요."  # 연장 불가일 때만 붙인다
+if ARGS.version == "v4":  # v4는 정상 답변 문구 풀을 자연스러운 문형으로 교체한다(v3 경로는 그대로)
+    import seed_v4
+    FIRST, NEXT, OPEN_P, CLOSE_P = seed_v4.FIRST, seed_v4.NEXT, seed_v4.OPEN_P, seed_v4.CLOSE_P
 _YES_NO = re.compile(r"(나요|가요|까요|죠|지요)\??$")
 _WH = re.compile(r"언제|얼마|어떻게|무엇|뭐|왜|어디|몇|어떤|어느")
 
@@ -625,6 +635,11 @@ for k, (key, topic, q, about_ext) in enumerate(CONCRETE_V3):
     ext = k % 2 == 0
     add(f"manual-{key}", q, refuse(k + 3, topic, about_ext), ext, combo_date(k, ext, cross_n=2))
 
+# 9-1. v4: 거절 문형 치환·중복 거절 정리·결함 유형 시드 추가(seed_v4.py). v3 경로는 여기서 아무것도 바꾸지 않는다.
+if ARGS.version == "v4":
+    import seed_v4
+    seed_v4.apply(globals())
+
 # 10. val 분리: 질문 단위로 약 12%를 떼어 둔다(유형별로 골고루, 같은 질문의 모든 변형이 함께 val로 간다).
 # 같은 질문이 train과 val에 걸치면 val 손실이 외운 것을 재게 된다. prepare.py는 val 행을 복제 없이 1배로 쓴다.
 _held = set()
@@ -639,7 +654,7 @@ for r in rows:
     if r["question"] in _held:
         r["split"] = "val"
 
-out = Path(__file__).parent / "manual_seed.jsonl"
+out = ARGS.out or Path(__file__).parent / ("manual_seed.jsonl" if ARGS.version == "v3" else "manual_seed_v4.jsonl")
 with out.open("w", encoding="utf-8") as f:
     for r in rows:
         f.write(json.dumps(r, ensure_ascii=False) + "\n")

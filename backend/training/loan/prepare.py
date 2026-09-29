@@ -342,6 +342,17 @@ REFUSAL_TEMPLATES = (
     "제공된 정보로는 {t_eul} 확인해 드리기 어렵습니다. 상담원에게 확인해 주세요.",
     "{t_eun} 저희가 확인할 수 있는 정보에 없어, 상담원에게 문의해 주시면 자세히 안내받으실 수 있습니다.",
 )
+# v4 거절 문형(2026-09-30): "~ㄹ 수 있/없"은 모델이 뒤집으면 처리 약속·사실 단정이 된다(v3 평가: "안내드릴 수 있습니다").
+# v3 상수는 v3 데이터 재현을 위해 그대로 두고, --refusal-version v4 일 때만 쓴다. 순서·슬롯(t, t_eul, t_eun)은 v3와 같다.
+REFUSAL_TEMPLATES_V4 = (
+    "정확한 {t} 내용은 제가 바로 안내해 드리기 어려워, 상담원에게 확인해 주시기 바랍니다.",
+    "죄송하지만 {t} 관련 내용은 제가 안내드리기 어렵습니다. 상담원에게 확인해 주세요.",
+    "{t} 정보는 상담원 확인이 필요한 사항입니다. 상담원에게 문의해 주세요.",
+    "{t}에 대한 자세한 안내는 상담원을 통해 확인해 주세요.",
+    "제공된 정보로는 {t_eul} 확인해 드리기 어렵습니다. 상담원에게 확인해 주세요.",
+    "{t_eun} 제가 확인하는 정보에 없어, 상담원에게 문의해 주세요.",
+)
+_REFUSAL_BY_VERSION = {"v3": REFUSAL_TEMPLATES, "v4": REFUSAL_TEMPLATES_V4}
 # AI Hub 상담사 답변에서 가장 흔한 마무리 표현을 "문의"로 통일한 것(연락 채널을 암시하는 "연락"은 뺐다).
 CLOSINGS = (
     "추가로 궁금한 사항이 있으면 언제든 문의해 주세요.",
@@ -361,8 +372,11 @@ def josa(word: str, pair: tuple[str, str]) -> str:
     return word + pair[0 if has_final else 1]
 
 
-def render_refusal(topic: str, index: int, closing: str | None = None) -> str:
-    template = REFUSAL_TEMPLATES[index % len(REFUSAL_TEMPLATES)]
+def render_refusal(topic: str, index: int, closing: str | None = None, version: str = "v3") -> str:
+    if version not in _REFUSAL_BY_VERSION:
+        raise ValueError(f"알 수 없는 거절 문형 버전: {version}")
+    templates = _REFUSAL_BY_VERSION[version]
+    template = templates[index % len(templates)]
     text = template.format(t=topic, t_eul=josa(topic, ("을", "를")), t_eun=josa(topic, ("은", "는")))
     return f"{text} {closing}" if closing else text
 
@@ -381,7 +395,8 @@ def classify_replace_type(question: str) -> str | None:
 
 
 def iter_replacement_samples(
-    raw_dir: Path, split_path: Path, split: str = "train", caps: dict[str, int] | None = None
+    raw_dir: Path, split_path: Path, split: str = "train", caps: dict[str, int] | None = None,
+    refusal_version: str = "v3",
 ) -> Iterator[dict]:
     """AI Hub 질문 중 교체 대상만 뽑아 (질문, 우리가 정한 정답) 항목으로 돌려준다. 유형별 상한 안에서 결정적으로 고른다."""
     caps = DEFAULT_REPLACE_CAPS if caps is None else caps
@@ -401,7 +416,7 @@ def iter_replacement_samples(
                 "question": item["question"].strip(),
                 "answer": "",
                 "follow_up_question": "",
-                "output": render_refusal(kind, i, closing),
+                "output": render_refusal(kind, i, closing, version=refusal_version),
                 "extendable": i % 2 == 0,  # 정답이 연장 여부를 말하지 않으므로 값은 정보 줄에만 영향을 준다
                 "maturity_date": _REPLACE_DATES[i % len(_REPLACE_DATES)],
                 "kind": kind,
@@ -415,6 +430,7 @@ def build_dataset_v2(
     split: str = "train",
     manual_path: Path | None = None,
     caps: dict[str, int] | None = None,
+    refusal_version: str = "v3",
 ) -> int:
     """수동 시드(MANUAL_COPIES배) + 교체 샘플(1배)만 쓴다. AI Hub 상담사 답변은 쓰지 않는다."""
     out_path = Path(out_path)
@@ -433,7 +449,7 @@ def build_dataset_v2(
                 f.write(json.dumps({"messages": messages}, ensure_ascii=False) + "\n")
                 counts["수동"] += 1
                 written += 1
-        for item in iter_replacement_samples(raw_dir, split_path, split, caps):
+        for item in iter_replacement_samples(raw_dir, split_path, split, caps, refusal_version):
             messages = to_messages(item, item["extendable"], item["maturity_date"])
             f.write(json.dumps({"messages": messages}, ensure_ascii=False) + "\n")
             counts[item["kind"]] = counts.get(item["kind"], 0) + 1
@@ -450,6 +466,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--which", default="train", choices=["train", "val", "test"], help="분할 이름")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--manual", type=Path, default=None, help="직접 쓴 샘플 JSONL(선택). --limit은 자동 추출분에만 적용된다")
+    parser.add_argument("--refusal-version", default="v3", choices=["v3", "v4"],
+                        help="replace 모드의 교체 문장 문형. v3는 v3 데이터 재현용, v4는 \"~ㄹ 수 있/없\" 없는 문형")
     parser.add_argument("--mode", default="legacy", choices=["legacy", "replace"],
                         help="replace: AI Hub 답변을 쓰지 않고 수동 시드 + 질문 유형별 교체 문장만 쓴다(v2)")
     return parser.parse_args(argv)
@@ -458,7 +476,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
     if args.mode == "replace":
-        build_dataset_v2(args.raw, args.split, args.out, split=args.which, manual_path=args.manual)
+        build_dataset_v2(args.raw, args.split, args.out, split=args.which, manual_path=args.manual,
+                         refusal_version=args.refusal_version)
         return
     build_dataset(
         args.raw, args.split, args.out,
