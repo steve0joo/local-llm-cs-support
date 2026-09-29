@@ -14,7 +14,7 @@ backend/
 │   └── mock_data.json     # C001~C003 계좌·거래내역
 ├── tests/balance/         # test_<모듈>.py (학습 진입점은 test_train.py)
 ├── training/balance/      # train.py·requirements-mac.txt·MAC_TRAINING.md, prepare.py(BAL-008)
-└── models/balance/Modelfile   # 3차 예정 — GGUF 변환 검증 뒤 만든다(BAL-006)
+└── models/balance/Modelfile   # cs-balance 등록용. .gguf는 GGUF 변환 검증 뒤 같은 폴더에 둔다(BAL-006)
 ```
 
 ## TDD 착수점
@@ -241,7 +241,7 @@ def main(argv: list[str] | None = None) -> None: ...  # --split·--out-dir·--zi
   - 분할: `i % 10 == 0`이면 test, `i % 10 == 1`이면 val, 나머지는 train.
 - 출력: `OUT_DIR/{train,valid,test}.jsonl`, 한 줄에 `{"messages": [...]}` 하나. AI Hub 샘플과 합성 샘플을 한 파일에 쓴다. `train.py check`(`check_dataset`)를 통과하는 형식이다.
 
-### Modelfile (3차)
+### Modelfile
 `backend/models/balance/Modelfile`. `.gguf`는 같은 폴더에 두고 커밋하지 않는다(`*.gguf` gitignore).
 - `FROM ./cs-balance.gguf`
 - `TEMPLATE`: Qwen3-4B-Instruct-2507의 ChatML(생각 블록 없음). 학습 때 MLX LM이 입힌 채팅 템플릿과 같은 모양이어야 한다.
