@@ -116,7 +116,19 @@
     {
       "step": 7,
       "name": "rewrite",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T21:38:20+0900",
+      "summary": "prepare.py에 캐시 공용부 추가(REWRITE_PATH=OUT_DIR/rewrites.jsonl·MAX_CHARS=200, mask_fields·qa_key(source_id+네 필드를 \\x1f로 이은 sha256 앞 32자)·load_rewrites(없으면 {}, 중복 키는 마지막 줄)), build_sample은 mask_fields를 쓰도록만 바꿈(동작 동일). 새 training/balance/rewrite.py: MODEL=claude-haiku-4-5·CHUNK=20·REWRITE_SYSTEM(한국어, 규칙 1~10 + key 그대로 반환, MAX_CHARS·DOCUMENT_KEYWORDS를 상수에서 채움)·OUTPUT_SCHEMA·build_prompt·build_command(--bare 없음)·parse_envelope·run_claude(빈 임시 폴더 cwd, 예외·시간 초과·0 아닌 종료 코드면 '')·split_qas·run_all(캐시 키 건너뛰기·key 중복 제거, ThreadPoolExecutor, 캐시 쓰기는 메인 스레드·묶음당 한 번, 묶음마다 진행 줄 출력)·main(--limit·--chunk·--jobs·--model, 보낼 것 없으면 안내 후 종료). 표준 라이브러리만 사용. 테스트 먼저 작성해 red 확인(prepare 11 failed, rewrite import 실패): test_prepare.py에 11개(상수·mask_fields·qa_key 안정성/필드별 변화 5/경계·load_rewrites 2), 새 test_rewrite.py 25개(상수·REWRITE_SYSTEM·build_command·build_prompt·parse_envelope 정상/실패 4/필터/비용 기본값·run_claude stdin·빈 cwd/실패 2/시간 초과·run_all 순서 무관 key 저장/줄 모양/캐시 건너뛰기/누락 집계·재전송/호출 실패/jobs=2·split_qas·main 3, 가짜 run·sys.executable만 쓰고 claude CLI 미호출). deviation: 없음(문서 미수정). claude CLI·rewrite 실행 안 함. AC 93 passed, backend 전체 360 passed",
+      "cost_usd": 2.0103,
+      "num_turns": 20,
+      "completed_at": "2026-09-29T21:42:59+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/tests/balance/test_rewrite.py",
+        "backend/training/balance/prepare.py",
+        "backend/training/balance/rewrite.py"
+      ]
     },
     {
       "step": 8,
