@@ -265,7 +265,17 @@
     {
       "step": 16,
       "name": "landing-page",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T11:20:21+0900",
+      "summary": "app/page.tsx — 'use client' 컴포넌트 하나에 main > sr-only h1 'Local LLM — 은행 상담 AI' → <ScrollWorld /> → <section id=\"chat\">(relative z-[45] min-h-dvh bg-cream px-[clamp(18px,5vw,64px)] pt-24 pb-10, grid lg:grid-cols-[1fr_minmax(0,40rem)] lg:items-center — 카피: eyebrow '직접 체험' text-accent-blue text-[0.8rem] font-bold tracking-[.16em]·h2 '데모 고객으로 물어보세요.' text-[clamp(2rem,4.4vw,3.5rem)] leading-tight break-keep·본문 '가상 고객 데이터입니다. 실제 개인정보는 입력하지 마세요.' text-ink-soft break-keep, 패널: flex flex-col h-[min(44rem,calc(100dvh_-_8rem))] max-w-[40rem] bg-surface border-ink/12 rounded-[20px] overflow-hidden, 상단 border-b border-ink/10에 CustomerPicker + type=button '새 대화'(UI_GUIDE ghost 클래스, pending이면 비활성), 그 아래 ChatWindow), handleCustomerChange를 reset(id)로 바꿔 고객 변경(onChange=reset)과 새 대화(reset(customerId))가 같은 함수를 이벤트 핸들러에서 호출(useEffect 없음), send()·sendChat 호출은 그대로 page.tsx 한 곳, 연타 테스트가 가드 없이 통과해 useRef 가드 넣지 않음 + page.test.tsx에 vi.mock ScrollWorld와 7케이스 추가(기존 5케이스·import 무변경, 삭제 줄 0: #chat 섹션 안 h2·개인정보 문구·고객 선택·새 대화·입력창(toContainElement), h1 하나, 칩 클릭 1회·choice 키 없음·C001, 칩 dblClick 1회, Enter 두 번 1회, C002 요청 reject→새 대화→log=안내 문구·칩 재표시·고객 C002 유지→다음 요청 C002·새 session_id, 요청 중 새 대화 비활성·응답 뒤 활성) | AC 전부 통과(page 12케이스, 전체 8파일 98케이스, lint·tsc·build·grep), 빌드 CSS에 z-[45]·border-ink/12·h-[min(...)]·lg:grid-cols 등 출력 확인",
+      "cost_usd": 1.3504,
+      "num_turns": 15,
+      "completed_at": "2026-09-29T11:23:14+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/app/page.test.tsx",
+        "frontend/src/app/page.tsx"
+      ]
     },
     {
       "step": 17,
