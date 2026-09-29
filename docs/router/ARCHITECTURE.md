@@ -47,6 +47,16 @@ POST /api/chat
  5. session.history에 {"role": "user", "content": 에이전트에 넘긴 masked_text}, {"role": "assistant", "content": reply.text} 추가 (계약 3) → 응답 반환
 ```
 
+### 게이트웨이 구현 결정 (`app/gateway/`, `app/main.py`)
+- 파일: `session.py`(`Session`, 모듈 dict `sessions`, `get_session()`; 되묻기 대기 질문은 `MaskResult`를 그대로 보관), `dispatch.py`(`AGENTS`, 안내 문구 상수, `dispatch(session_id, customer_id, message, choice) -> dict`), `api.py`(pydantic `ChatRequest`·`ChatResponse`·`ChatOption`, `POST /api/chat`), `main.py`(`create_app()`이 `/api/chat`과 세 패키지의 `mock_router`를 prefix 없이 등록).
+- 안내 문구: 지원 주제 2개 이상 "어느 쪽을 먼저 도와드릴까요?", 주제 없음 "어떤 업무를 도와드릴까요?", 미지원 "해당 주제는 아직 지원하지 않습니다. 상담원 연결을 도와드릴까요?"
+- 되묻기 선택지는 `topics.SUPPORTED` 순서, 라벨은 `topics.DISPLAY_NAMES`.
+- `topic` 값: answer = 에이전트 코드, unsupported = 모델이 낸 첫 코드(인수 기준 1 판정 근거), clarify = null. `agent`는 answer에서만 채운다.
+- `choice`가 지원 에이전트가 아니면 422가 아니라 unsupported 응답이다. pending이 없는 `choice`(계좌 선택 등)는 현재 메시지를 그대로 에이전트에 넘긴다.
+- history에는 answer 턴만 쌓는다. clarify·unsupported 문장은 게이트웨이가 만든 것이라 모델 문맥이 아니다. 에이전트에는 이번 턴 이전까지의 history 복사본을 넘긴다.
+- `dispatch()`는 dict를 돌려주고 스키마 클래스는 `api.py`에만 둔다. `classify`는 `router.classify()`로 불러 테스트가 `app.router.classify` 한 곳만 바꾼다.
+- 모델이 없어도 서버는 뜬다: `classify()`가 Ollama 호출 실패를 키워드 폴백으로 처리하고, 에이전트는 스텁이 답한다.
+
 ## 마스킹 규칙 (초안 — 테스트로 확정)
 | 종류 | 토큰 | 예시 입력 |
 |------|------|----------|
