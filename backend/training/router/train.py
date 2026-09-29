@@ -1,4 +1,5 @@
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -54,7 +55,7 @@ def load_model():
 
 def main() -> None:
     train_rows = load_rows(DATA_DIR / "train.jsonl")
-    val_rows = load_rows(DATA_DIR / "val.jsonl")
+    val_rows = load_rows(DATA_DIR / "val.jsonl")               # epoch 끝 val 손실: 실험 간 비교용. 주제 정확도는 evaluate.py
 
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     check_template(tokenizer, train_rows[0])
@@ -69,7 +70,8 @@ def main() -> None:
             num_train_epochs=EPOCHS,
             max_steps=MAX_STEPS,
             per_device_train_batch_size=8,
-            gradient_accumulation_steps=2,          # 유효 배치 16
+            gradient_accumulation_steps=2,          # 유효 배치 16. 학습 전 `ollama stop cs-router`로 VRAM을 비울 것 (안 비우면 10배 느려진다)
+            per_device_eval_batch_size=16,
             gradient_checkpointing=True,
             learning_rate=2e-4,
             lr_scheduler_type="cosine",
@@ -81,11 +83,15 @@ def main() -> None:
             eos_token="<|im_end|>",
             eval_strategy="no" if MAX_STEPS > 0 else "epoch",
             logging_steps=20,
-            save_strategy="no",
+            save_strategy="steps",                  # 100 step마다 체크포인트. 중단되면 `python -m training.router.train outputs/<시각>/checkpoint-N`으로 이어서
+            save_steps=100,
+            save_total_limit=1,
             report_to="none",
         ),
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=sys.argv[1] if len(sys.argv) > 1 else None)
+    if MAX_STEPS < 0:
+        print("val:", trainer.evaluate())
     trainer.save_model(str(OUT_DIR / "adapter"))
     tokenizer.save_pretrained(str(OUT_DIR / "adapter"))
     print(f"adapter → {OUT_DIR / 'adapter'}")

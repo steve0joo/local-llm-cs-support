@@ -1,6 +1,6 @@
 """라우터 학습 데이터 생성 (docs/router/ADR.md RT-005).
 
-- 은행 상담만, consulting_topic == qa_topic 인 QA만, 계약 2에 있는 주제만. follow_up_question은 쓰지 않는다.
+- 은행 상담만, consulting_topic == qa_topic 인 QA만, 계약 2에 있는 주제만, 상담의 첫 QA(_001)만. follow_up_question은 쓰지 않는다.
 - 질문은 mask()를 거치고, 원본에서 가려진 금액(●●●원)도 이어지는 번호의 [금액_n]이 된다.
 - split.json대로 나누고 train만 주제별 상한. 정렬 뒤 앞에서 잘라 결정적이다.
 - 레코드는 Ollama messages 형식이고 system 프롬프트는 topics.SYSTEM_PROMPT 그대로다.
@@ -14,11 +14,11 @@ from training.router import prepare
 BAL, LOAN, FX = "거래내역/잔액조회", "대출문의(만기/연장/조회등)", "환전문의"
 
 
-def _doc(source_id, topic, question, *, qa_topic=None, category="은행"):
+def _doc(source_id, topic, question, *, qa_topic=None, category="은행", qa_no=1):
     return {
         "source": {"source_id": source_id},
         "consulting": {"consulting_category": category, "consulting_topic": topic},
-        "qa_data": [{"qa_id": f"{source_id}_001", "qa_topic": qa_topic or topic,
+        "qa_data": [{"qa_id": f"{source_id}_{qa_no:03d}", "qa_topic": qa_topic or topic,
                      "input": {"question": question, "answer": "답변", "follow_up_question": "후속 질문입니다"}, "output": "목표"}],
     }
 
@@ -26,7 +26,7 @@ def _doc(source_id, topic, question, *, qa_topic=None, category="은행"):
 def _write_zip(path, docs):
     with zipfile.ZipFile(path, "w") as z:
         for i, doc in enumerate(docs):
-            z.writestr(f"{i:02d}/{doc['source']['source_id']}_001.json", json.dumps(doc, ensure_ascii=False))
+            z.writestr(f"{i:02d}/{doc['qa_data'][0]['qa_id']}.json", json.dumps(doc, ensure_ascii=False))
     return path
 
 
@@ -47,13 +47,14 @@ def test_same_hidden_amount_string_gets_same_token():
 
 # ---------- 추출·필터 ----------
 
-def test_read_examples_keeps_only_bank_matching_label_known_topic(tmp_path):
+def test_read_examples_keeps_only_bank_matching_label_known_topic_first_qa(tmp_path):
     z = _write_zip(tmp_path / "TL.zip", [
         _doc("s1", BAL, "잔액 알려줘"),
         _doc("s2", BAL, "적금 만기 재투자", qa_topic="만기,연장/해지,수신"),   # 라벨 불일치 → 제외
         _doc("s3", LOAN, "대출 만기", category="카드"),                     # 은행 아님 → 제외
         _doc("s4", "기타(은행)", "기타 문의"),                               # 계약 2에 없음 → 제외
         _doc("s5", FX, "환전 ●●●원 하고 싶어요"),
+        _doc("s6", BAL, "그리고 절차는요?", qa_no=2),                          # 첫 QA가 아님 → 제외
     ])
     examples = list(prepare.read_examples(z))
     assert [(e["source_id"], e["code"], e["question"]) for e in examples] == [

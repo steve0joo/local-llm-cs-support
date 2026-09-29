@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 import zipfile
 from collections import Counter
 from pathlib import Path
@@ -38,7 +39,9 @@ def read_examples(zip_path: Path):
             if doc["consulting"]["consulting_category"] != BANK or code is None:
                 continue
             for qa in doc["qa_data"]:
-                if qa.get("qa_topic") == topic:                       # 두 라벨이 다르면 어느 쪽이 맞는지 알 수 없다
+                # 라벨 일치(두 라벨이 다르면 어느 쪽이 맞는지 알 수 없다) + 상담의 첫 QA만.
+                # 라우터는 고객의 첫 메시지를 분류한다. 중간 턴은 문장만으로 주제를 알 수 없어 학습·평가 잡음이 된다.
+                if qa.get("qa_topic") == topic and qa["qa_id"].endswith("_001"):
                     yield {"source_id": doc["source"]["source_id"], "qa_id": qa["qa_id"],
                            "code": code, "question": mask_question(qa["input"]["question"])}
 
@@ -75,4 +78,4 @@ def main(zips=(TL_ZIP, VL_ZIP), split_path: Path = SPLIT_PATH, out_dir: Path = O
 
 
 if __name__ == "__main__":
-    main()
+    main(cap=int(sys.argv[1]) if len(sys.argv) > 1 else CAP_PER_TOPIC)   # 예) prepare 1000 (0이면 상한 없음)
