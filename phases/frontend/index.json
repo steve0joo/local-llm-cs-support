@@ -156,6 +156,76 @@
       "num_turns": 17,
       "completed_at": "2026-09-29T10:22:48+0900",
       "ac_verified": true
+    },
+    {
+      "step": 10,
+      "name": "landing-assets",
+      "status": "completed",
+      "started_at": "2026-09-29T11:10:10+0900",
+      "summary": "웹사이트 원본(~/Projects/local-llm-cs-support-website)에서 cp로 6개 파일 복사 — public/scroll-world/{scrub-engine.js, scene02.webp, finetune.webp, reception.webp, office.webp, vid/scene02.mp4}, SHA-256 6건 원본·AC와 일치(수정·재인코딩 없음, .DS_Store 없음) + eslint.config.mjs globalIgnores에 \"public/scroll-world/**\" 추가(주석: 엔진 원본 lint 제외, FE-008; ignore 없이 lint하면 경고 4건) | lint·build·test(7파일 65케이스) 통과",
+      "cost_usd": 0.7059,
+      "num_turns": 10,
+      "completed_at": "2026-09-29T11:11:03+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/eslint.config.mjs",
+        "frontend/public/scroll-world/finetune.webp",
+        "frontend/public/scroll-world/office.webp",
+        "frontend/public/scroll-world/reception.webp",
+        "frontend/public/scroll-world/scene02.webp",
+        "frontend/public/scroll-world/scrub-engine.js",
+        "frontend/public/scroll-world/vid/scene02.mp4",
+        "phases/frontend/step10.md",
+        "phases/frontend/step11.md",
+        "phases/frontend/step12.md",
+        "phases/frontend/step13.md",
+        "phases/frontend/step14.md",
+        "phases/frontend/step15.md",
+        "phases/frontend/step16.md",
+        "phases/frontend/step17.md",
+        "phases/frontend/step18.md"
+      ]
+    },
+    {
+      "step": 11,
+      "name": "theme-tokens",
+      "status": "pending"
+    },
+    {
+      "step": 12,
+      "name": "api-response-check",
+      "status": "pending"
+    },
+    {
+      "step": 13,
+      "name": "scroll-world",
+      "status": "pending"
+    },
+    {
+      "step": 14,
+      "name": "chat-restyle",
+      "status": "pending"
+    },
+    {
+      "step": 15,
+      "name": "chat-window",
+      "status": "pending"
+    },
+    {
+      "step": 16,
+      "name": "landing-page",
+      "status": "pending"
+    },
+    {
+      "step": 17,
+      "name": "landing-manual-check",
+      "status": "pending",
+      "type": "human"
+    },
+    {
+      "step": 18,
+      "name": "landing-review",
+      "status": "pending"
     }
   ],
   "created_at": "2026-09-29T09:39:08+0900",
