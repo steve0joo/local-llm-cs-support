@@ -20,7 +20,7 @@ backend/
 ## TDD 착수점
 - 첫 테스트: `tests/balance/test_mock_api.py` — `get_accounts(customer_id)`가 아래 mock 데이터대로 고객별 계좌를 돌려주는지 확인한다.
 - 이후 순서: `get_transactions` → `resolve` → `intent` → `prompt` → `validate`(1차 구현, 모델 없이 도는 순수 함수) → `handle()`(`tests/balance/test_agent.py`, 모델은 목). `handle()`은 팀원C 커밋을 cherry-pick한 발판(`agents/base.py`·`llm`·스캐폴드) 위에서 만든다(BAL-005, 2026-09-29 변경).
-- 3차 순서(PRD "구현 진행"): `intent`의 `입출금` 규칙 → `resolve.choose_account`의 별칭·끝 4자리 규칙 → `prepare.py`(`tests/balance/test_prepare.py`). 앞의 둘은 모델 없이 도는 순수 함수라 먼저 할 수 있다.
+- 3차 순서(PRD "구현 진행", 실행 계획은 `phases/agent-balance/`): `intent`의 `입출금` 규칙 → `resolve.choose_account`의 별칭·끝 4자리 규칙 → `prepare.py`(`tests/balance/test_prepare.py`) → `Modelfile`(`tests/balance/test_modelfile.py`). 모두 모델 없이 테스트할 수 있다.
 - 테스트 명령: `cd backend && .venv/bin/python -m pytest` — backend 전체(발판의 `tests/router`·`tests/llm` 포함). importlib 모드 등은 `pyproject.toml`이 정한다.
 
 ## mock API
@@ -167,7 +167,13 @@ backend/
   - `test_intent.py`: 위 표의 3차 세 예문
   - `test_resolve.py`: 규칙 4 예 네 개. C001 + "생활비 계좌 잔액"은 A001(규칙 5), C002 + 본인 아닌 `[계좌번호_1]` + "생활비"는 본인 아님 안내(규칙 3이 먼저). 기존 케이스는 세 번째 인자로 masked_text를 넘긴다
   - `test_agent.py`: 2턴 — C002 "잔액 알려줘" → 되묻기 → "생활비 계좌 잔액 알려줘" 턴에서 A003 잔액 slots(J9)
-  - `test_prepare.py`: 아래 "학습 데이터" 규칙
+  - `test_prepare.py`: 아래 "`prepare.py` 인터페이스" 규칙. 픽스처는 `tmp_path`에 합성 zip·`split.json`으로 만들고 실제 데이터를 쓰지 않는다
+    - 분할: val·test 상담이나 다른 `consulting_topic`, `qa_topic`이 다른 QA가 train 결과에 섞이지 않는다
+    - 마스킹: 입력에 계좌번호·전화번호·주민번호 원본을 넣으면 결과 파일 어디에도 원본 문자열이 없다
+    - 제외: 숫자가 든 `output`, 서류 키워드가 든 `output`, 입력에 없는 상품명(예: `○○자유통장`)이 든 `output`은 빠지고, 허용 목록 명칭(`체크카드`)만 든 `output`은 남는다
+    - 합성: 모든 합성 질문의 `classify_intent`가 자기 의도, 모든 응답 템플릿이 `is_valid` 통과, 합성 샘플 전체 문자열에 mock 계좌번호(하이픈 유무)·잔액(원 단위 정수·쉼표 표기)이 없다
+    - 형식: 기록한 파일이 `training.balance.train.check_dataset(out_dir, "train")`과 `"test"` 모드를 통과한다
+  - `test_modelfile.py`: `Modelfile`의 `SYSTEM """..."""` 내용이 `prompt.SYSTEM_PROMPT`와 같고, `FROM ./cs-balance.gguf`와 `stop "<|im_end|>"`가 있다
 
 ## 에러 처리·보안 (2026-09-29 점검)
 MVP 원칙: 데모에서 실제로 생기는 경우만 코드로 막고, 나머지는 여기에 기록만 한다.
@@ -199,9 +205,45 @@ MVP 원칙: 데모에서 실제로 생기는 경우만 코드로 막고, 나머�
 - 전처리 순서: 게이트웨이와 같은 `app.masking.mask()`로 치환 → `output`에 `input`에 없는 수치·상품명이 있으면 제외 → `output`이 general 출력 검증(`validate.is_valid(output, (), ())`)에 걸리면 제외(BAL-008) → `prompt.build_messages([question, answer], follow_up_question, "general")`로 입력을 만든다. 채팅 템플릿은 MLX LM이 베이스 토크나이저로 입힌다. `app.masking` import 실패 시 전처리를 중단한다. 임시 정규식·fallback 마스킹은 허용하지 않는다(계약 4).
 - 원천의 한계(2026-09-29 로컬 집계, Training 4,017건): `output`은 대부분 절차 안내형 장문이고 `{{슬롯}}`을 쓰는 답은 0건, 아라비아 숫자가 든 답이 1,311건(33%)이다. 이것만 학습하면 잔액·거래내역 턴의 모델 출력은 필수 슬롯 검사(BAL-002)에 걸려 거의 항상 기본 문장으로 바뀐다.
 - 합성 슬롯 샘플(BAL-008): `prepare.py`가 잔액·거래내역 질문 변형 → `{{슬롯}}` 응답 변형 샘플을 템플릿으로 만들어 AI Hub 샘플과 섞는다.
-  - 입력은 추론과 같은 `prompt.build_messages(history=[], 질문, 의도)`로 만든다(`SYSTEM_PROMPT`, "사용할 수 있는 슬롯:" 줄 포함). 학습 입력과 추론 입력의 모양을 맞추기 위해서다(계약 4와 같은 이유).
+  - 입력은 추론과 같은 `prompt.build_messages`로 만든다(`SYSTEM_PROMPT`, "사용할 수 있는 슬롯:" 줄 포함). 첫 턴 모양과 라벨 클릭 턴 모양 두 가지다(아래 "`prepare.py` 인터페이스"). 학습 입력과 추론 입력의 모양을 맞추기 위해서다(계약 4와 같은 이유).
   - 응답 템플릿은 그 의도로 `validate.is_valid`를 통과해야 한다(필수 슬롯 포함, 숫자·`%`·마스킹 토큰·서류 키워드 없음). 테스트로 고정한다.
   - 사실(금리·상품명·수수료·서류·메뉴 이름)은 넣지 않는다. 슬롯과 안내 문구만 쓴다.
-  - 질문 목록과 합성 비중은 첫 소규모 학습 결과를 보고 정한다.
+  - 첫 실행은 아래 인터페이스의 기본값(질문 각 20개 이상 × 응답 각 5개 이상)으로 하고, 질문 목록과 합성 비중은 첫 소규모 학습 결과를 보고 조정한다.
 - 검증: val 분할에서 샘플을 뽑아 사람이 읽어 확인한다. test 분할은 최종 점검에만 쓴다.
 - 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔지만 `prepare.py`와 실제 가공 데이터는 아직 없으므로 전처리·학습 완료로 표시하지 않는다. main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.
+
+### `prepare.py` 인터페이스 (3차)
+`backend/training/balance/prepare.py`. 원본 zip 경로와 분할 파일 경로는 `training.common.split`의 `TL_ZIP`·`VL_ZIP`·`OUT_PATH`를 import해서 쓴다(경로를 다시 적지 않는다).
+```python
+TOPIC = "거래내역/잔액조회"
+OUT_DIR: Path                     # backend/data/processed/balance (gitignore)
+SPLIT_FILES = {"train": "train.jsonl", "val": "valid.jsonl", "test": "test.jsonl"}   # MLX LM은 valid.jsonl 이름을 쓴다
+
+def load_qas(zip_path: Path) -> Iterator[dict]: ...
+    # {"source_id", "question", "answer", "follow_up", "output"}. 원본 필드 접근은 이 함수에만 둔다
+    # consulting.consulting_topic == TOPIC 이고 qa_data[].qa_topic == TOPIC 인 QA만 (RT-005 라벨 규칙)
+def normalize_amounts(text: str) -> str: ...        # 비식별 금액 "●…원" → "[금액_n]" (n은 1부터, RT-005)
+def build_sample(qa: dict) -> dict | None: ...      # 제외면 None
+def synth_samples() -> dict[str, list[dict]]: ...   # {"train": [...], "val": [...], "test": [...]}
+def build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path]) -> dict[str, int]: ...  # 분할별 기록 수
+# CLI: cd backend && python -m training.balance.prepare   (인자 없으면 위 기본 경로)
+```
+- `build_sample` 순서: 네 필드에 `normalize_amounts` → `mask()`(masked_text만 쓴다) → 제외 규칙 → `{"messages": prompt.build_messages([user: question, assistant: answer], follow_up, "general") + [assistant: output]}`.
+- 제외 규칙(`output` 기준, 하나라도 걸리면 제외):
+  1. `validate.is_valid(output, (), ())`가 `False`(숫자·`%`·마스킹 토큰·슬롯·서류 키워드, BAL-008). 공통 ADR-005의 "input에 없는 수치"는 숫자 전부 제외로 대신한다
+  2. 상품명 휴리스틱(ADR-005): 정규식 `[가-힣A-Za-z]+(통장|적금|예금|카드|대출)`에 걸린 단어가 입력 세 필드에 없고 일반 명칭 허용 목록(`입출금통장`·`정기예금`·`정기적금`·`신용카드`·`체크카드`·`신용대출`·`주택담보대출`·`전세자금대출`)에도 없다
+- 분할: `split.json`의 `source_id` 값으로 정한다. `split.json`에 없는 `source_id`는 버린다.
+- `synth_samples` 규칙:
+  - 질문 목록 `BALANCE_QUESTIONS`·`TRANSACTION_QUESTIONS`(각 20개 이상)의 모든 질문은 `intent.classify_intent`가 자기 의도로 판단해야 한다. 추론 때와 같은 분기로 들어가게 하기 위해서다.
+  - 응답 템플릿 `BALANCE_ANSWERS`·`TRANSACTION_ANSWERS`(각 5개 이상)는 `validate.is_valid(답, SLOT_NAMES[의도], SLOT_NAMES[의도])`를 통과해야 한다.
+  - 샘플 = 질문 × 응답 전체 조합(무작위 없음). 질문 인덱스 `i`가 짝수면 첫 턴 모양 `build_messages([], 질문, 의도)`, 홀수면 라벨 클릭 턴 모양 `build_messages([user: 질문, assistant: resolve.ASK_TEXT], 라벨, 의도)`다. 라벨은 mock 데이터 계좌의 `account_label`을 차례로 쓴다.
+  - 분할: `i % 10 == 0`이면 test, `i % 10 == 1`이면 val, 나머지는 train.
+- 출력: `OUT_DIR/{train,valid,test}.jsonl`, 한 줄에 `{"messages": [...]}` 하나. AI Hub 샘플과 합성 샘플을 한 파일에 쓴다. `train.py check`(`check_dataset`)를 통과하는 형식이다.
+
+### Modelfile (3차)
+`backend/models/balance/Modelfile`. `.gguf`는 같은 폴더에 두고 커밋하지 않는다(`*.gguf` gitignore).
+- `FROM ./cs-balance.gguf`
+- `TEMPLATE`: Qwen3-4B-Instruct-2507의 ChatML(생각 블록 없음). 학습 때 MLX LM이 입힌 채팅 템플릿과 같은 모양이어야 한다.
+- `SYSTEM`: `prompt.SYSTEM_PROMPT`와 글자 단위로 같다. 에이전트는 매 요청에 system 메시지를 보내므로 이 값은 `ollama run` 직접 확인용이다.
+- `PARAMETER`: `stop "<|im_end|>"`, `stop "<|endoftext|>"`, `temperature 0.2`(지어내기 억제), `num_ctx 2048`, `num_predict 256`.
+- 등록: `ollama create cs-balance -f backend/models/balance/Modelfile` (계약 5 이름).

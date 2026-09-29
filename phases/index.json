@@ -3,6 +3,10 @@
     {
       "dir": "agent-loan",
       "status": "pending"
+    },
+    {
+      "dir": "agent-balance",
+      "status": "pending"
     }
   ]
 }

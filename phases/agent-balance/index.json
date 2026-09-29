@@ -1,0 +1,20 @@
+{
+  "project": "local-llm-cs-support",
+  "phase": "agent-balance",
+  "guardrail_docs": [
+    "docs/ARCHITECTURE.md",
+    "docs/ADR.md",
+    "docs/agent-balance/ARCHITECTURE.md",
+    "docs/agent-balance/ADR.md"
+  ],
+  "steps": [
+    { "step": 0, "name": "main-merge", "status": "pending", "type": "human" },
+    { "step": 1, "name": "intent-alias", "status": "pending" },
+    { "step": 2, "name": "resolve-typed", "status": "pending" },
+    { "step": 3, "name": "train-prepare", "status": "pending" },
+    { "step": 4, "name": "modelfile", "status": "pending" },
+    { "step": 5, "name": "train-export", "status": "pending", "type": "human" },
+    { "step": 6, "name": "self-check", "status": "pending", "type": "human" },
+    { "step": 7, "name": "review", "status": "pending" }
+  ]
+}
