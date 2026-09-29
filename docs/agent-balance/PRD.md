@@ -33,18 +33,19 @@
 - `cd backend && pytest tests/balance` 통과(모델 호출은 목으로 대체)
 
 ## 1차 구현 범위
-위 담당 범위·인수 기준은 영역 전체 기준이고 그대로 둔다. 1차 구현은 `agents/base.py` 스텁(공통 ARCHITECTURE 통합 순서 1단계)이 main에 오기 전에 만들 수 있는 순수 로직까지다(BAL-005).
-- 이번에 한다
+위 담당 범위·인수 기준은 영역 전체 기준이고 그대로 둔다. 1차 구현은 모델 없이 도는 순수 로직까지였고, 2차 구현에서 팀원C 커밋을 cherry-pick한 임시 발판 위에 `handle()`과 export를 더했다(BAL-005, 2026-09-29 변경).
+- 1차에 했다
   - mock 계좌 API와 데이터: `mock_api.py`(`get_accounts`·`get_transactions`·`mock_router`), `mock_data.json`
   - 대상 계좌 결정 `resolve.py`: 라벨 클릭 확인, 계좌번호 매칭, 자동 선택, 되묻기 — plain dict 반환
   - 의도 판단 `intent.py`: balance / transactions / general 3분기
   - 프롬프트 구성 `prompt.py`: 시스템 프롬프트, messages, 슬롯, 기본 문장
   - 출력 검증 `validate.py`: 세 의도 공통 넓은 규칙
   - 모듈별 테스트 `tests/balance/test_<모듈>.py`. 완료 기준은 `cd backend && .venv/bin/python -m pytest tests/balance --import-mode=importlib -q` 전체 통과(스캐폴드 전 명령)
+- 2차에 했다 (2026-09-29)
+  - `BalanceAgent.handle()`(`agent.py`)와 `__init__.py`의 `agent`·`mock_router` export, `tests/balance/test_agent.py`(모델은 목). 완료 기준은 `cd backend && .venv/bin/python -m pytest` 전체 통과
 - 미룬다
-  - `BalanceAgent.handle()`(`agent.py`)와 `__init__.py`의 `agent`·`mock_router` export — base.py 스텁 병합 뒤. 그 전까지 `__init__.py`는 빈 파일이다
   - `training/balance/prepare.py` 등 학습 데이터 전처리·학습, Modelfile, `cs-balance` 모델
-  - PM 고정 질문 9/10 인수 — 모델과 `handle()`이 있어야 판정할 수 있다
+  - PM 고정 질문 9/10 인수 — 모델(`cs-balance`)이 있어야 판정할 수 있다
   - 프론트엔드에서 슬롯 값 속 줄바꿈(`{{recent_transactions}}`) 표시 — frontend 영역 후속 메모
 
 ## 제외

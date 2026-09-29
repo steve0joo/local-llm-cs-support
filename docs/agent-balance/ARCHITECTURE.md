@@ -4,8 +4,8 @@
 ```
 backend/
 ├── app/agents/balance/
-│   ├── __init__.py        # agent, mock_router export (계약 3) — 1차 구현에서는 빈 파일
-│   ├── agent.py           # BalanceAgent.handle() — base.py 스텁 병합 뒤
+│   ├── __init__.py        # agent, mock_router export (계약 3)
+│   ├── agent.py           # BalanceAgent.handle() — cherry-pick 발판 위 (BAL-005)
 │   ├── resolve.py         # 라벨 클릭 확인 + 대상 계좌 결정 (plain dict 반환)
 │   ├── intent.py          # 의도 판단 3분기 (balance / transactions / general)
 │   ├── prompt.py          # 시스템 프롬프트 + 메시지·슬롯·기본 문장
@@ -19,8 +19,8 @@ backend/
 
 ## TDD 착수점
 - 첫 테스트: `tests/balance/test_mock_api.py` — `get_accounts(customer_id)`가 아래 mock 데이터대로 고객별 계좌를 돌려주는지 확인한다.
-- 이후 순서: `get_transactions` → `resolve` → `intent` → `prompt` → `validate`(1차 구현, 모델 없이 도는 순수 함수) → `handle()`(base.py 스텁 병합 뒤, 모델은 목). `agents/base.py` 스텁이 main에 오기 전이면 `handle()` 테스트는 import 실패 red로 시작한다.
-- 1차 구현(스텁 전) 테스트 명령: `cd backend && .venv/bin/python -m pytest tests/balance --import-mode=importlib -q`
+- 이후 순서: `get_transactions` → `resolve` → `intent` → `prompt` → `validate`(1차 구현, 모델 없이 도는 순수 함수) → `handle()`(`tests/balance/test_agent.py`, 모델은 목). `handle()`은 팀원C 커밋을 cherry-pick한 발판(`agents/base.py`·`llm`·스캐폴드) 위에서 만든다(BAL-005, 2026-09-29 변경).
+- 테스트 명령: `cd backend && .venv/bin/python -m pytest` — backend 전체(발판의 `tests/router`·`tests/llm` 포함). importlib 모드 등은 `pyproject.toml`이 정한다.
 
 ## mock API
 | 메서드 | 경로 | 응답 |
@@ -63,7 +63,7 @@ backend/
 - 예: C002 "최근 거래내역 보여줘" → 되묻기 → 라벨 클릭 턴("생활비 ****7890")에서도 원래 질문으로 판단해 거래내역으로 답한다(테스트로 고정).
 
 ## 대상 계좌 결정 (`resolve.py`)
-계약 3 타입(`AgentReply`)을 쓰지 않고 plain dict를 돌려준다(BAL-005).
+계약 3 타입(`AgentReply`)을 쓰지 않고 plain dict를 돌려준다. `AgentReply` 포장은 `handle()` 안에서만 한다(BAL-005).
 - `account_label(account) -> str` — `"{alias} ****{account_no 끝 4자리}"`
 - `find_clicked(masked_text, history, accounts) -> dict | None` — 라벨 클릭 턴이면 `{"question": 원래 질문, "account": 계좌}`, 아니면 `None`
 - `choose_account(accounts, mask_map) -> dict` — 계좌를 정하면 `{"account": 계좌}`, 모델 없이 바로 답해야 하면 `{"text": 문구, "options": 선택지}`. 아래 순서로 첫 번째로 맞는 것:
@@ -144,6 +144,21 @@ backend/
   - balance·transactions·general 각각에서 규칙 1~7 트리거를 하나씩 넣은 문장 → `validate_output`이 그 의도의 기본 문장을 돌려준다(general은 필수 슬롯 규칙 제외)
   - 규칙에 안 걸리는 문장은 그대로 돌려준다. 예: `"{{account_label}} 계좌의 현재 잔액은 {{balance}}입니다. 더 궁금하신 점이 있으시면 말씀해 주세요."`
   - 세 기본 문장은 각자의 의도로 검증해도 통과한다(기본 문장이 자기 검증에 걸리면 안 된다)
+- `test_agent.py` (2026-09-29 추가) — 순수 함수를 엮는 `handle()` 전체를 최종 `AgentReply`로 확인한다. `handle()`은 `from app import llm` 뒤 `llm.generate(...)`로 부르고, 테스트는 `monkeypatch.setattr("app.llm.generate", 가짜)` 한 곳만 패치한다. 순수 함수 세부 규칙은 위 모듈 테스트에 맡긴다
+  - export: `from app.agents.balance import agent, mock_router`가 되고, `mock_router is mock_api.mock_router`(라우트 있음), `agent`는 `BalanceAgent` 인스턴스, `agent.name == "balance"`
+  - 세 의도 정상 경로(모델 이름 `"cs-balance"`, `options == []`): C001 "잔액 알려줘" → slots `{"account_label": "입출금 ****5678", "balance": "1,234,567원"}` / C001 "최근 거래내역 보여줘" → slots `account_label`·`recent_transactions`(A001 거래 5건) / C002 "잔액 조회는 어디서 해요?" → 되묻기 없이 모델 호출, slots `{}`, messages에 계좌 별칭·라벨·계좌번호(하이픈 유무)·잔액·거래 금액 없음(`SYSTEM_PROMPT` 안의 슬롯 이름은 허용)
+  - 계좌번호 입력: C002 + mask_map `{"[계좌번호_1]": "110-3456-7890"}` → 되묻기 없이 A003 잔액 slots
+  - 모델 미호출(호출되면 바로 실패하는 가짜 generate): C002 "잔액 알려줘" 되묻기, 없는 고객 "잔액 알려줘"(계좌 0개), C001 + 본인 아닌 `[계좌번호_1]` — text·options는 "대상 계좌 결정"의 리터럴, slots `{}`
+  - 2턴 라벨 클릭: C002 "최근 거래내역 보여줘" → 되묻기 → "생활비 ****7890" 턴에서 A003 거래내역 slots / C002 "잔액 알려줘" → 되묻기 → "입출금 ****6789" 턴에서 A002 잔액 slots. transactions면 `get_transactions` 결과를 `build_slots`에 넘기는지는 이 slots로 확인한다(`build_slots`는 transactions에 `None`을 받지 않는다)
+  - 출력 검증: 가짜 generate가 금액(`1,234,567원`)·계좌번호(`110-1234-5678`)를 흘리면 text는 그 의도의 `fallback_text`
+  - 모델 입력: 모델을 부르는 모든 케이스에서 generate에 넘긴 messages에 잔액·거래 금액 원본과 전체 계좌번호가 없다
+
+## 알려진 한계 (2026-09-29)
+코드로 고치지 않고 기록만 한다.
+- (a) `find_clicked`는 "history에 user 메시지가 있고 masked_text가 라벨과 같음"만 본다. 되묻기 직후가 아니어도 라벨과 같은 입력은 라벨 클릭으로 친다. 프론트는 가장 최근 봇 메시지의 선택지만 누를 수 있으므로(`docs/frontend/ARCHITECTURE.md` 핵심 규칙) 고객이 라벨을 직접 타이핑할 때만 생긴다.
+- (b) 계약 3대로 gateway가 라벨 클릭 턴의 masked_text(라벨)를 history user로 넣으면, 그 뒤 다시 라벨 클릭으로 판단되는 턴에서는 직전 라벨이 "원래 질문"이 되어 의도가 라벨 문자열로 판단된다(`생활비 ****7890` → balance, `입출금 ****6789` → `출금`을 포함해 transactions). 발생 조건은 (a)와 같다.
+- `tests/router/test_base.py` 예외: 팀원C 영역 파일(cherry-pick 발판)이지만 스텁 전용 검사 2개(`test_stub_package_exports_agent_and_mock_router`, `test_stub_handle_returns_fixed_message`)의 `AREAS`에서 balance를 뺐다. 실제 export(라우트가 있는 `mock_router`)와 실제 `handle()`(모델 호출)로 바꾸면 이 두 검사는 반드시 실패하기 때문이다. loan·interest 스텁 검사와 계약 3 dataclass·Protocol 검사 3개는 그대로다. 발판 수정의 예외는 이 파일과 `app/agents/balance/__init__.py` 둘뿐이다(BAL-005). feat-router 병합 때 이 파일이 충돌하면 main 쪽 최신 파일에서 balance만 뺀다.
+  - 후속(아직 안 함): loan·interest도 스텁을 실제 구현으로 바꿀 때 같은 문제가 생기므로 팀원C에게 알린다.
 
 ## 학습 데이터
 - 원천: `split.json`의 train 중 `consulting_topic == "거래내역/잔액조회"`인 라벨링 데이터 `qa_data[]` (필드명은 데이터 확인 전 가정 — 공통 ARCHITECTURE 학습 파이프라인)
