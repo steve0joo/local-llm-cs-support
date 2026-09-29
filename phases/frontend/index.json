@@ -250,7 +250,17 @@
     {
       "step": 15,
       "name": "chat-window",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T11:18:13+0900",
+      "summary": "components/ChatWindow.tsx — props 그대로(messages·pending·onSend·onSelect), EXAMPLE_CHIPS 상수(PRD 표 순서 5개)를 messages가 빌 때만 role=log 밖·폼 바로 위(flex flex-wrap gap-2 px-4 pb-2)에 type=button 칩으로 그리고 클릭 시 onSend(칩 문구)·pending이면 비활성, 클래스를 UI_GUIDE로 교체(목록 flex-1 overflow-y-auto overscroll-contain p-4, 안내 문구 text-ink-soft, 입력 중 표시 rounded-[18px] rounded-bl-md bg-bubble text-ink-soft, 폼 border-ink/10, 입력 rounded-full border-ink/20 bg-white px-5 text-ink focus:border-accent-blue disabled:opacity-40, 전송 rounded-full bg-ink px-5 font-semibold hover:bg-ink/90, 칩 rounded-full border-accent-orange/30 bg-accent-orange/15 font-semibold text-ink hover:bg-accent-orange/25), 바깥 래퍼의 bg-white 제거(step 16 패널 bg-surface가 보이게), FE-007 활성 판정·자동 스크롤·입력 처리 무변경 + ChatWindow.test.tsx 9케이스 추가(기존 11케이스 무변경·삭제 줄 0: 칩 5개 log 밖·log textContent=안내 문구, messages 생기면 칩 사라짐, it.each 칩 클릭→onSend 1회·onSelect 미호출, pending 칩 비활성·클릭 무시, log overscroll-contain) | AC 전부 통과(ChatWindow 20케이스, 전체 8파일 91케이스, lint·tsc·build·grep), teal·stone·sendChat·scrollIntoView 없음",
+      "cost_usd": 1.2011,
+      "num_turns": 18,
+      "completed_at": "2026-09-29T11:20:12+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/ChatWindow.test.tsx",
+        "frontend/src/components/ChatWindow.tsx"
+      ]
     },
     {
       "step": 16,
