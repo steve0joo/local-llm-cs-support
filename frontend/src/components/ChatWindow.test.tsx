@@ -5,6 +5,13 @@ import type { ChatMessage, ChatOption } from "../types/chat";
 import { ChatWindow } from "./ChatWindow";
 
 const GUIDE = "잔액·거래내역, 대출, 이자·연체 문의를 입력해 주세요.";
+const CHIPS = [
+  "잔액 얼마 남았어요?",
+  "대출 만기가 언제예요?",
+  "연체 이자가 얼마예요?",
+  "대출 잔액이랑 이자 얼마 남았어요?",
+  "환전하고 싶어요",
+];
 
 const CLARIFY: ChatMessage = {
   role: "bot",
@@ -157,5 +164,53 @@ describe("ChatWindow", () => {
     list.scrollTop = 0;
     rerender([user("잔액 알려줘"), ANSWER], false);
     expect(list.scrollTop).toBe(480);
+  });
+
+  it("messages가 비었으면 예시 칩 5개를 대화 목록 밖에 버튼으로 보여주고, 목록 텍스트는 안내 문구뿐이다", () => {
+    setup([]);
+    const log = screen.getByRole("log");
+
+    for (const chip of CHIPS) {
+      expect(log).not.toContainElement(screen.getByRole("button", { name: chip }));
+    }
+    expect(log.textContent).toBe(GUIDE);
+  });
+
+  it("messages가 생기면 예시 칩이 사라진다", () => {
+    const { rerender } = setup([]);
+    expect(screen.getByRole("button", { name: CHIPS[0] })).toBeInTheDocument();
+
+    rerender([user("잔액 알려줘")], false);
+
+    for (const chip of CHIPS) {
+      expect(screen.queryByRole("button", { name: chip })).not.toBeInTheDocument();
+    }
+  });
+
+  it.each(CHIPS)("예시 칩 '%s'를 누르면 그 문구로 onSend가 한 번 불리고 onSelect는 불리지 않는다", async (chip) => {
+    const u = userEvent.setup();
+    const { onSend, onSelect } = setup([]);
+
+    await u.click(screen.getByRole("button", { name: chip }));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith(chip);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("pending이면 예시 칩이 모두 비활성이고 눌러도 onSend가 불리지 않는다", async () => {
+    const u = userEvent.setup();
+    const { onSend } = setup([], true);
+
+    expectButtons(CHIPS, false);
+    await u.click(screen.getByRole("button", { name: CHIPS[0] }));
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("대화 목록에 overscroll-contain이 있어 목록 끝의 스크롤이 페이지로 넘어가지 않는다", () => {
+    setup([]);
+
+    expect(screen.getByRole("log")).toHaveClass("overscroll-contain");
   });
 });
