@@ -1,0 +1,20 @@
+{"id": "V01", "set": "v3", "customer": "C002", "category": "복합", "question": "연장 가능한지랑 남은 금액 좀 확인해 주세요.", "history": [], "expect": ["slot_extend", "slot_principal"]}
+{"id": "V02", "set": "v3", "customer": "C003", "category": "복합", "question": "만기가 언제인지, 연장은 되는지 한 번에 말씀해 주세요.", "history": [], "expect": ["date", "slot_extend"]}
+{"id": "V03", "set": "v3", "customer": "C002", "category": "복합", "question": "지금 얼마 남았고 언제 끝나는지 궁금해요.", "history": [], "expect": ["slot_principal", "date"]}
+{"id": "V04", "set": "v3", "customer": "C003", "category": "복합", "question": "대출 끝나는 날이랑 갚을 돈이 얼마인지 알고 싶어요.", "history": [], "expect": ["date", "slot_principal"]}
+{"id": "V05", "set": "v3", "customer": "C002", "category": "복합", "question": "연장이 되는지, 그리고 만기는 언제인지 알려 주세요.", "history": [], "expect": ["slot_extend", "date"]}
+{"id": "V06", "set": "v3", "customer": "C003", "category": "복합", "question": "원금이랑 만기, 연장 가능 여부 전부 알려주세요.", "history": [], "expect": ["slot_principal", "date", "slot_extend"]}
+{"id": "V07", "set": "v3", "customer": "C003", "category": "복합", "question": "남은 원금하고 연장 여부부터 알려주세요.", "history": [], "expect": ["slot_principal", "slot_extend"]}
+{"id": "V08", "set": "v3", "customer": "C002", "category": "복합", "question": "언제까지 갚아야 하는지랑 연장할 수 있는지도 궁금해요.", "history": [], "expect": ["date", "slot_extend"]}
+{"id": "V09", "set": "v3", "customer": "C002", "category": "복합", "question": "잔여 금액과 종료일이 어떻게 되나요?", "history": [], "expect": ["slot_principal", "date"]}
+{"id": "V10", "set": "v3", "customer": "C003", "category": "복합", "question": "제 대출 종류랑 만기일 알려주세요.", "history": [], "expect": ["date"]}
+{"id": "V11", "set": "v3", "customer": "C002", "category": "수수료", "question": "연장하면 따로 내야 하는 돈이 있나요?", "history": [], "expect": ["refer"]}
+{"id": "V12", "set": "v3", "customer": "C003", "category": "수수료", "question": "만기 전에 다 갚으면 벌금 같은 게 붙나요?", "history": [], "expect": ["refer"]}
+{"id": "V13", "set": "v3", "customer": "C002", "category": "수수료", "question": "대출 이용에 드는 비용이 어떻게 되죠?", "history": [], "expect": ["refer"]}
+{"id": "V14", "set": "v3", "customer": "C003", "category": "수수료", "question": "연장 신청 수수료가 얼마예요?", "history": [], "expect": ["refer"]}
+{"id": "V15", "set": "v3", "customer": "C002", "category": "수수료", "question": "일부 상환할 때 페널티가 있나요?", "history": [], "expect": ["refer"]}
+{"id": "V16", "set": "v3", "customer": "C002", "category": "전반", "question": "제 대출 상황을 한꺼번에 알려주세요.", "history": [], "expect": ["date", "slot_principal", "slot_extend"]}
+{"id": "V17", "set": "v3", "customer": "C003", "category": "전반", "question": "대출 현황 요약해 주실 수 있나요?", "history": [], "expect": ["date", "slot_principal", "slot_extend"]}
+{"id": "V18", "set": "v3", "customer": "C002", "category": "전반", "question": "지금 받은 대출에 대해 알 수 있는 건 전부 알려주세요.", "history": [], "expect": ["date", "slot_principal", "slot_extend"]}
+{"id": "V19", "set": "v3", "customer": "C003", "category": "전반", "question": "내 대출 정보 전체를 보여주세요.", "history": [], "expect": ["date", "slot_principal", "slot_extend"]}
+{"id": "V20", "set": "v3", "customer": "C002", "category": "전반", "question": "대출 관련해서 조회되는 내용 모두 알려주세요.", "history": [], "expect": ["date", "slot_principal", "slot_extend"]}

@@ -716,7 +716,13 @@ def test_seed_rows_pass_cleaning_and_runtime_validation(seed_rows):
 
     assert seed_rows
     for row in seed_rows:
-        assert row["answer"] == "" and row["follow_up_question"] == ""
+        if row["source_id"].startswith("manual-ctx"):
+            # v3 맥락 시드: 이전 턴(질문→답)을 잇는 후속 질문을 함께 담는다
+            assert row["answer"] and row["follow_up_question"], row["source_id"]
+            assert mask(row["answer"]).masked_text == row["answer"], row["source_id"]
+            assert mask(row["follow_up_question"]).masked_text == row["follow_up_question"], row["source_id"]
+        else:
+            assert row["answer"] == "" and row["follow_up_question"] == ""
         assert is_clean(row), row["source_id"]
         assert is_valid_output(row["output"], maturity_date=row["maturity_date"], extendable=row["extendable"]), (
             row["source_id"]
@@ -750,8 +756,9 @@ def test_seed_slot_sentences_have_variety(seed_rows):
     def questions(prefix):
         return {r["question"] for r in seed_rows if r["source_id"].startswith(prefix)}
 
-    assert 3 <= len(outputs("manual-extend-yes")) <= 4
-    assert 3 <= len(outputs("manual-extend-no")) <= 4
+    # v2는 4문형 이하로 묶었지만 v3는 본문 문형 풀과 도입·맺음 조합으로 문형을 늘린다(딱딱함 완화). 상한은 폭주 방지용.
+    assert 3 <= len(outputs("manual-extend-yes")) <= 40
+    assert 3 <= len(outputs("manual-extend-no")) <= 40
     assert 3 <= len(outputs("manual-why")) <= 8
     assert len(questions("manual-extend-yes")) >= 14
     assert len(questions("manual-maturity")) >= 10

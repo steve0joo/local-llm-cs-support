@@ -156,3 +156,31 @@ def test_v2_manual_seed_is_copied_and_targets_validate(tmp_path):
     out = tmp_path / "out.jsonl"
     n = build_dataset_v2(raw, split, out, manual_path=manual)
     assert n == prepare.MANUAL_COPIES
+
+
+def _manual_row(question, split=None):
+    row = {
+        "question": question, "answer": "", "follow_up_question": "",
+        "output": "고객님의 {{loan_label}} 만기일은 2027-03-31입니다.", "extendable": True, "maturity_date": "2027-03-31",
+    }
+    if split:
+        row["split"] = split
+    return row
+
+
+def test_v2_val_uses_held_out_manual_seeds_once_and_train_never_sees_them(tmp_path):
+    """val 손실이 슬롯 답변(만기·원금·연장)도 재도록, 질문 단위로 떼어 둔 수동 시드를 val에 1배로 넣는다."""
+    raw, split = _setup(tmp_path, [])
+    manual = tmp_path / "m.jsonl"
+    manual.write_text(
+        "\n".join(json.dumps(_manual_row(q, s), ensure_ascii=False) for q, s in (
+            ("만기일 알려주세요.", None), ("만기가 언제인가요?", None), ("대출 끝나는 날이 언제예요?", "val"),
+        )) + "\n",
+        encoding="utf-8",
+    )
+    train_out, val_out = tmp_path / "train.jsonl", tmp_path / "val.jsonl"
+    assert build_dataset_v2(raw, split, train_out, split="train", manual_path=manual) == 2 * prepare.MANUAL_COPIES
+    assert build_dataset_v2(raw, split, val_out, split="val", manual_path=manual) == 1  # 복제 없이 1배
+    train_text = train_out.read_text(encoding="utf-8")
+    assert "대출 끝나는 날이 언제예요?" not in train_text
+    assert "대출 끝나는 날이 언제예요?" in val_out.read_text(encoding="utf-8")
