@@ -280,13 +280,19 @@
     {
       "step": 17,
       "name": "landing-manual-check",
-      "status": "pending",
+      "status": "completed",
       "type": "human"
     },
     {
       "step": 18,
       "name": "landing-review",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T11:30:23+0900",
+      "summary": "review.md 7항목 전부 ✅ (코드 수정 없음, 랜딩 통합 step 10~16 중점) | 아키텍처 준수 ✅ ScrollWorld는 next/script(afterInteractive) onReady에서만 초기화·폴링 없음, 마운트 조건 childElementCount===0, 실패 3종(onError·함수 없음·마운트 예외 try/catch) 모두 hidden, hash #chat이면 마운트 뒤 scrollIntoView, LANDING은 정적 문자열·숫자뿐이고 PRD 랜딩 표(4섹션 id·라벨·에셋·accent·scroll·eyebrow·제목·본문·태그, 04 CTA primary만, brand·상단 CTA·hint, diveScroll 1.3·crossfade 0.35·connectors [])와 스크립트로 전수 대조 일치, 엔진 설정 키(brand·cta·hint·sections·cta.primary·connectors)가 scrub-engine.js 사용처와 일치, page.tsx가 상태·sendChat 한 곳·reset(id)를 고객 변경·새 대화 핸들러에서 호출(useEffect 없음), #chat 섹션 relative z-[45] | 기술 스택 준수 ✅ next 16.3.6·react 19.2.8·vitest 5·jsdom 29, 상태·페칭 라이브러리 없음, next.config.ts proxyTimeout 120_000·agentRules false 유지(step 10~16에서 next.config·fillSlots·types·package.json 무변경), 런타임 목·타임아웃·재시도 없음(FE-005·006) | 테스트 존재 ✅ 구현 파일 8개 모두 옆에 테스트, 8파일 98케이스 통과, step 9 이후 테스트 삭제 줄 0 | CRITICAL 규칙 ✅ fetch는 lib/api.ts 상대경로 /api/chat뿐, src에 localhost:8000·11434·/mock/·dangerouslySetInnerHTML 없음, sendChat 호출 page.tsx 한 곳, 외부 URL은 layout.tsx Pretendard 1.3.9 CSS 하나(CDN JS 없음), 엔진은 src에서 import·번들링 없이 /scroll-world/scrub-engine.js로만 로드하고 fetch는 같은 origin clip뿐, public/scroll-world 6파일 SHA-256 원본 일치(FE-008), globals.css 엔진 덮어쓰기(--sw-*·keep-all·object-fit contain)는 @layer 밖이고 변수·클래스 이름이 엔진과 일치, globals.css hex는 @theme에만(src의 다른 hex는 PRD 표가 정한 LANDING accent 값뿐), teal·stone·backdrop-blur·gradient·purple/indigo/violet·shadow·Powered by AI 없음 | 검증 통과 ✅ AC 전부(shasum 6건·lint·tsc·build·test·grep 4건·AGENTS.md/CLAUDE.md 부재) 통과, scripts/verify.sh exit 0 | 핵심 규칙 테스트 ✅ api: text null·숫자·누락·options 객체·문자열 reject(fetch 1회)·options null·누락 resolve(본문 그대로), ScrollWorld: onReady 2회→mount 1회·onError/함수 없음/예외→hidden·예외 미전파·hash #chat→scrollIntoView 1회·없으면 0회, ChatWindow: 칩은 빈 대화에서만·log 밖(log textContent=안내 문구)·pending 비활성·클릭→onSend(칩)·onSelect 미호출, page: 칩 요청 choice 키 없음·칩 dblClick·Enter 연타→요청 1회·새 대화→같은 고객(C002)·새 session_id·칩 재표시·요청 중 새 대화 비활성, 기존 fillSlots·FE-007·고객 변경 초기화·오류 말풍선 테스트 유지 | 커밋 위생 ✅ main...HEAD 변경은 frontend/·phases/frontend/·docs/frontend/, docs/PRD.md 디자인 절 1줄, phases/index.json 끝 줄바꿈만(docs/ARCHITECTURE·ADR·agent-*·router·backend·CLAUDE.md·.claude 무변경), AGENTS.md·CLAUDE.md·node_modules·.next·.env*·.DS_Store·next-env.d.ts·가중치·gitlink·비밀값 없음, lock resolved 548건 전부 registry.npmjs.org | 참고(결함 아님): vitest.config.ts CJS 로드 경고, options null 응답은 page 수준 렌더 테스트 없이 ChatWindow의 message.options && 가드로 처리",
+      "cost_usd": 1.4869,
+      "num_turns": 21,
+      "completed_at": "2026-09-29T11:33:12+0900",
+      "ac_verified": true
     }
   ],
   "created_at": "2026-09-29T09:39:08+0900",
