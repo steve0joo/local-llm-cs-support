@@ -23,6 +23,7 @@ _extract_turns 한 곳에만 모은다 — 구조가 바뀌면 그 함수만 고
 from __future__ import annotations
 
 import argparse
+import hashlib
 import itertools
 import json
 import re
@@ -319,6 +320,126 @@ def build_dataset(
     return written
 
 
+# ---------------------------------------------------------------------------
+# v2 교체 모드 (2026-09-29, docs/agent-loan/ADR.md)
+#
+# AI Hub 상담사 답변은 절차·채널·서류를 지어내므로(v1 실측: 답변 30건 점검에서 안전한 것 0건) 학습 정답으로
+# 쓰지 않는다. AI Hub는 질문 공급원으로만 쓰고, 질문 유형에 맞는 정답을 우리가 정한 문장으로 붙인다.
+# 질문 첫 턴만 쓰는 단일 턴이라 상담사의 이전 답변(가짜 히스토리)이 학습 정답으로 새어 들어가지 않는다.
+# ---------------------------------------------------------------------------
+_SYMBOL_PATTERN = re.compile(r"●|★|○|\bO(?:\s?O)+\b")
+_REPLACE_DOC_PATTERN = re.compile(r"서류|증빙|구비|준비물|제출|조건|자격|요건")
+_REPLACE_RATE_PATTERN = re.compile(r"금리|이율|이자율")
+# 다른 에이전트(이자/연체) 담당이거나 아직 교체 대상이 아닌 주제. 수수료는 v2 결과를 보고 추가한다.
+_REPLACE_EXCLUDE_PATTERN = re.compile(r"수수료|위약|이자(?!율)|상환|갚|납부|연체|한도|카드|자동이체|입금|출금|앱|어플|모바일|뱅킹")
+_REPLACE_MAX_QUESTION_LEN = 120
+
+REFUSAL_TEMPLATES = (
+    "정확한 {t} 내용은 제가 바로 안내해 드리기 어려워, 상담원에게 확인해 주시기 바랍니다.",
+    "죄송하지만 {t} 관련 내용은 제가 안내드릴 수 없어, 상담원에게 문의해 주시기 바랍니다.",
+    "{t} 정보는 상담원 확인이 필요한 사항입니다. 상담원에게 문의해 주세요.",
+    "{t}에 대한 자세한 안내는 상담원을 통해 받아보실 수 있습니다.",
+    "제공된 정보로는 {t_eul} 확인해 드리기 어렵습니다. 상담원에게 확인해 주세요.",
+    "{t_eun} 저희가 확인할 수 있는 정보에 없어, 상담원에게 문의해 주시면 자세히 안내받으실 수 있습니다.",
+)
+# AI Hub 상담사 답변에서 가장 흔한 마무리 표현을 "문의"로 통일한 것(연락 채널을 암시하는 "연락"은 뺐다).
+CLOSINGS = (
+    "추가로 궁금한 사항이 있으면 언제든 문의해 주세요.",
+    "궁금하신 점이 있으시면 언제든지 문의해 주시기 바랍니다.",
+    "추가로 궁금하신 사항이 있으면 언제든지 문의해 주시기 바랍니다.",
+    "추가로 궁금하신 점이 있으면 언제든 문의해 주세요.",
+)
+_CLOSING_EVERY = 3  # 교체 문장 세 개 중 하나에만 마무리 문장을 붙인다(단조로움 방지)
+_REPLACE_DATES = (_SAMPLE_MATURITY, _ALT_MATURITY, "2035-06-30")
+DEFAULT_REPLACE_CAPS = {"서류·조건": 125, "금리": 126}
+
+
+def josa(word: str, pair: tuple[str, str]) -> str:
+    """받침이 있으면 pair[0], 없으면 pair[1]을 붙인다(예: ("은", "는"), ("을", "를"))."""
+    last = word[-1]
+    has_final = "\uac00" <= last <= "\ud7a3" and (ord(last) - 0xAC00) % 28 != 0
+    return word + pair[0 if has_final else 1]
+
+
+def render_refusal(topic: str, index: int, closing: str | None = None) -> str:
+    template = REFUSAL_TEMPLATES[index % len(REFUSAL_TEMPLATES)]
+    text = template.format(t=topic, t_eul=josa(topic, ("을", "를")), t_eun=josa(topic, ("은", "는")))
+    return f"{text} {closing}" if closing else text
+
+
+def classify_replace_type(question: str) -> str | None:
+    """질문이 교체 대상 유형("서류·조건" 또는 "금리") 하나에만 해당하면 그 이름을, 아니면 None을 돌려준다."""
+    if len(question) > _REPLACE_MAX_QUESTION_LEN or _SYMBOL_PATTERN.search(question):
+        return None
+    if _REPLACE_EXCLUDE_PATTERN.search(question):
+        return None
+    is_doc = "연장" in question and bool(_REPLACE_DOC_PATTERN.search(question))
+    is_rate = bool(_REPLACE_RATE_PATTERN.search(question))
+    if is_doc == is_rate:  # 둘 다이거나 둘 다 아님
+        return None
+    return "서류·조건" if is_doc else "금리"
+
+
+def iter_replacement_samples(
+    raw_dir: Path, split_path: Path, split: str = "train", caps: dict[str, int] | None = None
+) -> Iterator[dict]:
+    """AI Hub 질문 중 교체 대상만 뽑아 (질문, 우리가 정한 정답) 항목으로 돌려준다. 유형별 상한 안에서 결정적으로 고른다."""
+    caps = DEFAULT_REPLACE_CAPS if caps is None else caps
+    candidates: dict[str, list[dict]] = {t: [] for t in caps}
+    for item in iter_conversations(raw_dir, split_path, split):
+        kind = classify_replace_type(item["question"].strip())
+        if kind in candidates:
+            candidates[kind].append(item)
+
+    for kind, items in candidates.items():
+        items.sort(key=lambda it: hashlib.sha1(f"{it['source_id']}|{it['qa_id']}".encode()).hexdigest())
+        for i, item in enumerate(items[: caps[kind]]):
+            closing = CLOSINGS[(i // _CLOSING_EVERY) % len(CLOSINGS)] if i % _CLOSING_EVERY == 0 else None
+            yield {
+                "source_id": item["source_id"],
+                "qa_id": item["qa_id"],
+                "question": item["question"].strip(),
+                "answer": "",
+                "follow_up_question": "",
+                "output": render_refusal(kind, i, closing),
+                "extendable": i % 2 == 0,  # 정답이 연장 여부를 말하지 않으므로 값은 정보 줄에만 영향을 준다
+                "maturity_date": _REPLACE_DATES[i % len(_REPLACE_DATES)],
+                "kind": kind,
+            }
+
+
+def build_dataset_v2(
+    raw_dir: Path,
+    split_path: Path,
+    out_path: Path,
+    split: str = "train",
+    manual_path: Path | None = None,
+    caps: dict[str, int] | None = None,
+) -> int:
+    """수동 시드(MANUAL_COPIES배) + 교체 샘플(1배)만 쓴다. AI Hub 상담사 답변은 쓰지 않는다."""
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    counts = {"수동": 0}
+    written = 0
+    with out_path.open("w", encoding="utf-8") as f:
+        if split == "train":
+            for item in iter_manual_samples(manual_path, split):
+                if not is_clean(item):
+                    continue
+                for _ in range(MANUAL_COPIES):
+                    messages = to_messages(item, item["extendable"], item.get("maturity_date", _SAMPLE_MATURITY))
+                    f.write(json.dumps({"messages": messages}, ensure_ascii=False) + "\n")
+                    counts["수동"] += 1
+                    written += 1
+        for item in iter_replacement_samples(raw_dir, split_path, split, caps):
+            messages = to_messages(item, item["extendable"], item["maturity_date"])
+            f.write(json.dumps({"messages": messages}, ensure_ascii=False) + "\n")
+            counts[item["kind"]] = counts.get(item["kind"], 0) + 1
+            written += 1
+    print(f"{out_path}: {written} samples ({split}) — " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+    return written
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="대출문의 학습 데이터 준비")
     parser.add_argument("--raw", required=True, type=Path, help="TL_은행.zip·VL_은행.zip이 있는 디렉터리")
@@ -327,11 +448,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--which", default="train", choices=["train", "val", "test"], help="분할 이름")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--manual", type=Path, default=None, help="직접 쓴 샘플 JSONL(선택). --limit은 자동 추출분에만 적용된다")
+    parser.add_argument("--mode", default="legacy", choices=["legacy", "replace"],
+                        help="replace: AI Hub 답변을 쓰지 않고 수동 시드 + 질문 유형별 교체 문장만 쓴다(v2)")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
+    if args.mode == "replace":
+        build_dataset_v2(args.raw, args.split, args.out, split=args.which, manual_path=args.manual)
+        return
     build_dataset(
         args.raw, args.split, args.out,
         split=args.which, limit=args.limit, manual_path=args.manual,

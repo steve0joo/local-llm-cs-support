@@ -1,0 +1,60 @@
+{"id": "C01", "set": "compare", "customer": "C002", "category": "만기", "question": "대출 종료일이 언제로 되어 있죠?", "history": [], "expect": ["date"]}
+{"id": "C02", "set": "compare", "customer": "C003", "category": "만기", "question": "제 대출은 몇 월 며칠에 끝나나요?", "history": [], "expect": ["date"]}
+{"id": "C03", "set": "compare", "customer": "C002", "category": "만기", "question": "상환 마감일 좀 알려 주세요.", "history": [], "expect": ["date"]}
+{"id": "C04", "set": "compare", "customer": "C003", "category": "만기", "question": "대출 기한이 언제까지예요?", "history": [], "expect": ["date"]}
+{"id": "C05", "set": "compare", "customer": "C002", "category": "만기", "question": "대출 계약이 끝나는 날이 언제인가요?", "history": [], "expect": ["date"]}
+{"id": "C06", "set": "compare", "customer": "C002", "category": "원금", "question": "아직 못 갚은 돈이 얼마나 돼요?", "history": [], "expect": ["slot_principal"]}
+{"id": "C07", "set": "compare", "customer": "C003", "category": "원금", "question": "현재 남은 대출금 총액을 알려주세요.", "history": [], "expect": ["slot_principal"]}
+{"id": "C08", "set": "compare", "customer": "C002", "category": "원금", "question": "지금 기준으로 상환해야 할 원금이 얼마죠?", "history": [], "expect": ["slot_principal"]}
+{"id": "C09", "set": "compare", "customer": "C003", "category": "원금", "question": "저한테 남아 있는 원금 액수가 궁금합니다.", "history": [], "expect": ["slot_principal"]}
+{"id": "C10", "set": "compare", "customer": "C002", "category": "연장가능", "question": "이 대출은 기간 연장이 가능한 상품인지 알려주세요.", "history": [], "expect": ["slot_extend"]}
+{"id": "C11", "set": "compare", "customer": "C002", "category": "연장가능", "question": "만기 때 한 번 더 연장할 수 있는지 궁금합니다.", "history": [], "expect": ["slot_extend"]}
+{"id": "C12", "set": "compare", "customer": "C002", "category": "연장가능", "question": "연장 자격이 되는지 조회 부탁드립니다.", "history": [], "expect": ["slot_extend"]}
+{"id": "C13", "set": "compare", "customer": "C003", "category": "연장불가", "question": "만기 지나서도 계속 쓸 수 있게 연장되는 대출인가요?", "history": [], "expect": ["slot_extend"]}
+{"id": "C14", "set": "compare", "customer": "C003", "category": "연장불가", "question": "연장 신청이 받아지는 대출인지 확인 부탁해요.", "history": [], "expect": ["slot_extend"]}
+{"id": "C15", "set": "compare", "customer": "C003", "category": "연장불가", "question": "제 주택담보대출 만기를 뒤로 미룰 수 있나요?", "history": [], "expect": ["slot_extend"]}
+{"id": "C16", "set": "compare", "customer": "C002", "category": "서류·조건", "question": "연장하려면 어떤 걸 준비해서 내야 하나요?", "history": [], "expect": ["refer"]}
+{"id": "C17", "set": "compare", "customer": "C003", "category": "서류·조건", "question": "연장 심사 통과하려면 어떤 조건이 필요해요?", "history": [], "expect": ["refer"]}
+{"id": "C18", "set": "compare", "customer": "C002", "category": "서류·조건", "question": "기간 늘릴 때 제출해야 하는 자료가 있나요?", "history": [], "expect": ["refer"]}
+{"id": "C19", "set": "compare", "customer": "C002", "category": "금리", "question": "연 이율이 어떻게 되는지 알려 주세요.", "history": [], "expect": ["refer"]}
+{"id": "C20", "set": "compare", "customer": "C003", "category": "금리", "question": "연장하면 이자율이 올라가나요?", "history": [], "expect": ["refer"]}
+{"id": "C21", "set": "compare", "customer": "C002", "category": "금리", "question": "금리 인하 요구할 수 있나요?", "history": [], "expect": ["refer"]}
+{"id": "C22", "set": "compare", "customer": "C002", "category": "수수료", "question": "중간에 일부 갚으면 별도 비용이 드나요?", "history": [], "expect": ["refer"]}
+{"id": "C23", "set": "compare", "customer": "C003", "category": "수수료", "question": "연장 신청 시 부대비용이 발생하나요?", "history": [], "expect": ["refer"]}
+{"id": "C24", "set": "compare", "customer": "C003", "category": "연장불가사유", "question": "어떤 이유로 연장 대상에서 빠진 건가요?", "history": [], "expect": ["slot_extend", "refer"]}
+{"id": "C25", "set": "compare", "customer": "C003", "category": "연장불가사유", "question": "연장 불가로 나오는 까닭을 설명해 주세요.", "history": [], "expect": ["slot_extend", "refer"]}
+{"id": "C26", "set": "compare", "customer": "C003", "category": "연장불가사유", "question": "왜 이 대출만 연장이 막혀 있죠?", "history": [], "expect": ["slot_extend", "refer"]}
+{"id": "C27", "set": "compare", "customer": "C002", "category": "조회", "question": "제가 가진 대출 정보 한번 정리해 주세요.", "history": [], "expect": ["date", "slot_principal"]}
+{"id": "C28", "set": "compare", "customer": "C003", "category": "조회", "question": "대출 내용 전반을 확인하고 싶어요.", "history": [], "expect": ["date", "slot_principal"]}
+{"id": "C29", "set": "compare", "customer": "C002", "category": "처리기간", "question": "연장 신청하면 결과 나오는 데 시간이 얼마나 걸려요?", "history": [], "expect": ["refer"]}
+{"id": "C30", "set": "compare", "customer": "C003", "category": "처리기간", "question": "승인 여부가 언제쯤 정해지나요?", "history": [], "expect": ["refer"]}
+{"id": "F01", "set": "final", "customer": "C002", "category": "만기", "question": "저번에 받은 대출 마감일이 궁금해서요.", "history": [], "expect": ["date"]}
+{"id": "F02", "set": "final", "customer": "C003", "category": "원금", "question": "내가 아직 안 갚은 대출금이 얼마 남았죠?", "history": [], "expect": ["slot_principal"]}
+{"id": "F03", "set": "final", "customer": "C002", "category": "연장가능", "question": "연장 처리가 되는 대출로 등록돼 있나요?", "history": [], "expect": ["slot_extend"]}
+{"id": "F04", "set": "final", "customer": "C003", "category": "연장불가", "question": "주택담보대출 연장이 가능하다고 봐도 될까요?", "history": [], "expect": ["slot_extend"]}
+{"id": "F05", "set": "final", "customer": "C002", "category": "서류·조건", "question": "만기 연장 접수할 때 가져갈 서류가 있을까요?", "history": [], "expect": ["refer"]}
+{"id": "F06", "set": "final", "customer": "C003", "category": "금리", "question": "지금 대출 이자 비율이 어느 정도예요?", "history": [], "expect": ["refer"]}
+{"id": "F07", "set": "final", "customer": "C003", "category": "연장불가사유", "question": "연장이 안 된다면 그 이유를 알 수 있나요?", "history": [], "expect": ["slot_extend", "refer"]}
+{"id": "F08", "set": "final", "customer": "C001", "category": "대출없음", "question": "제 대출 만기가 언제인지 알려주세요.", "history": [], "expect": ["no_loan"]}
+{"id": "F09", "set": "final", "customer": "C002", "category": "수수료", "question": "연장할 때 돈을 더 내야 하나요?", "history": [], "expect": ["refer"]}
+{"id": "F10", "set": "final", "customer": "C003", "category": "수수료", "question": "미리 갚으면 위약금 같은 게 있나요?", "history": [], "expect": ["refer"]}
+{"id": "R01", "set": "regress", "customer": "C002", "category": "인사", "question": "안녕하세요", "history": [], "expect": ["off_topic"]}
+{"id": "R02", "set": "regress", "customer": "C002", "category": "감사", "question": "감사합니다 덕분에 도움이 됐어요", "history": [], "expect": ["off_topic"]}
+{"id": "R03", "set": "regress", "customer": "C003", "category": "인사", "question": "수고하세요", "history": [], "expect": ["off_topic"]}
+{"id": "R04", "set": "regress", "customer": "C002", "category": "복합", "question": "만기일과 원금 남은 거 둘 다 말씀해 주세요.", "history": [], "expect": ["date", "slot_principal"]}
+{"id": "R05", "set": "regress", "customer": "C003", "category": "복합", "question": "남은 금액이랑 연장 여부가 궁금해요.", "history": [], "expect": ["slot_principal", "slot_extend"]}
+{"id": "R06", "set": "regress", "customer": "C002", "category": "복합", "question": "연장되는지랑 원금 알려주세요.", "history": [], "expect": ["slot_extend", "slot_principal"]}
+{"id": "R07", "set": "regress", "customer": "C001", "category": "대출없음", "question": "제 대출이 얼마나 남아 있는지 확인해 주세요.", "history": [], "expect": ["no_loan"]}
+{"id": "R08", "set": "regress", "customer": "C001", "category": "대출없음", "question": "만기가 언제인지 볼 수 있을까요?", "history": [], "expect": ["no_loan"]}
+{"id": "R09", "set": "regress", "customer": "C002", "category": "범위밖", "question": "내일 비 와요?", "history": [], "expect": ["off_topic"]}
+{"id": "R10", "set": "regress", "customer": "C002", "category": "범위밖", "question": "삼성전자 주식 사도 될까요?", "history": [], "expect": ["off_topic"]}
+{"id": "R11", "set": "regress", "customer": "C003", "category": "범위밖", "question": "체크카드를 잃어버렸어요.", "history": [], "expect": ["off_topic"]}
+{"id": "R12", "set": "regress", "customer": "C002", "category": "범위밖", "question": "당신은 무슨 일을 하는 챗봇이에요?", "history": [], "expect": ["off_topic"]}
+{"id": "R13", "set": "regress", "customer": "C002", "category": "마스킹", "question": "[계좌번호_1]에 연결된 대출 만기 알려주세요.", "history": [], "expect": ["date"]}
+{"id": "R14", "set": "regress", "customer": "C003", "category": "마스킹", "question": "[전화번호_1]로 등록된 대출 연장 되나요?", "history": [], "expect": ["slot_extend"]}
+{"id": "R15", "set": "regress", "customer": "C002", "category": "마스킹", "question": "[금액_1] 남았다고 들었는데 맞나요?", "history": [], "expect": ["slot_principal"]}
+{"id": "R16", "set": "regress", "customer": "C002", "category": "맥락", "question": "그럼 연장도 되나요?", "history": [{"role": "user", "content": "만기가 언제예요?"}, {"role": "assistant", "content": "고객님의 {{loan_label}} 만기일은 2027-03-31입니다."}], "expect": ["slot_extend"]}
+{"id": "R17", "set": "regress", "customer": "C003", "category": "맥락", "question": "마감은 언제죠?", "history": [{"role": "user", "content": "원금이 얼마 남았어요?"}, {"role": "assistant", "content": "고객님의 {{loan_label}} 남은 원금은 {{principal_remaining}}입니다."}], "expect": ["date"]}
+{"id": "R18", "set": "regress", "customer": "C002", "category": "표현변형", "question": "만기일 알려주삼", "history": [], "expect": ["date"]}
+{"id": "R19", "set": "regress", "customer": "C003", "category": "표현변형", "question": "연장 되는지 좀 봐주세욧", "history": [], "expect": ["slot_extend"]}
+{"id": "R20", "set": "regress", "customer": "C002", "category": "표현변형", "question": "원금 얼마 남았음?", "history": [], "expect": ["slot_principal"]}

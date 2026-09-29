@@ -27,6 +27,7 @@ chat_template에는 `{% generation %}` 태그가 없어서 `return_assistant_tok
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import torch
@@ -162,6 +163,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--resume-from-checkpoint", type=str, default=None)
     parser.add_argument("--limit", type=int, default=None,
                          help="train_dataset 앞에서 N개만 쓴다(시간 측정용 드라이런). eval은 자르지 않는다")
+    parser.add_argument("--report-to", default="none", choices=["none", "tensorboard", "wandb"],
+                         help="학습 경과 기록. 학습 로그는 로컬에만 둔다(EVALUATION 공용틀 3-1) — tensorboard는 로컬 대시보드, "
+                              "wandb는 오프라인 모드(WANDB_MODE=offline)로만 동작한다")
+    parser.add_argument("--wandb-online", action="store_true",
+                         help="--report-to wandb일 때 wandb.ai 웹으로 올린다(기본은 오프라인). 사용자가 직접 wandb login을 해 둔 경우에만 쓴다. "
+                              "올라가는 것은 loss·lr·grad_norm 같은 숫자와 하이퍼파라미터뿐이고 학습 데이터 원문·코드·모델은 올리지 않는다")
     parser.add_argument("--max-steps", type=int, default=-1,
                          help="지정하면 --epochs 대신 이 스텝 수에서 멈춘다(드라이런용, 예: 20)")
     return parser.parse_args(argv)
@@ -225,13 +232,22 @@ def build_sft_config(args: argparse.Namespace, has_eval: bool) -> SFTConfig:
         save_strategy="epoch",
         save_total_limit=2,
         eval_strategy="epoch" if has_eval else "no",
-        report_to=[],
+        report_to=[] if args.report_to == "none" else [args.report_to],
+        run_name=Path(args.out).name,
         seed=args.seed,
     )
 
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
+    if args.report_to == "wandb":
+        if args.wandb_online:
+            os.environ["WANDB_MODE"] = "online"
+        else:
+            os.environ["WANDB_MODE"] = "offline"  # 기본은 외부 서버로 보내지 않는다(EVALUATION 공용틀 3-1)
+        os.environ.setdefault("WANDB_PROJECT", "cs-loan")
+        os.environ["WANDB_DISABLE_CODE"] = "true"  # 코드·git 정보를 올리지 않는다
+        os.environ["WANDB_LOG_MODEL"] = "false"  # 어댑터·모델 파일을 올리지 않는다
 
     train_dataset = load_dataset("json", data_files=str(args.train_data), split="train")
     if args.limit is not None:
