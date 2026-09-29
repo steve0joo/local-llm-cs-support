@@ -187,6 +187,23 @@ def test_label_click_answers_original_question(monkeypatch, question, label, slo
     assert len(calls) == 1
 
 
+def test_typed_alias_after_ask_picks_account(monkeypatch):
+    _forbid_generate(monkeypatch)
+    first = agent.handle(_req("C002", "잔액 알려줘"))
+    assert first.options == C002_OPTIONS
+
+    calls = _fake_generate(monkeypatch, BALANCE_TEXT)
+    history = [{"role": "user", "content": "잔액 알려줘"}, {"role": "assistant", "content": first.text}]
+    second = agent.handle(_req("C002", "생활비 계좌 잔액 알려줘", history=history))
+
+    assert second == AgentReply(
+        text=BALANCE_TEXT,
+        slots={"account_label": "생활비 ****7890", "balance": "2,400,000원"},
+        options=[],
+    )
+    assert len(calls) == 1
+
+
 @pytest.mark.parametrize(
     ("question", "intent"),
     [("잔액 알려줘", "balance"), ("최근 거래내역 보여줘", "transactions"), ("잔액 조회는 어디서 해요?", "general")],

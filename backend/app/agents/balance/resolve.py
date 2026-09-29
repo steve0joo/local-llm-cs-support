@@ -29,7 +29,7 @@ def _options(accounts: list[dict]) -> list[dict]:
     return [{"label": account_label(a), "choice": "balance"} for a in accounts]
 
 
-def choose_account(accounts: list[dict], mask_map: dict[str, str]) -> dict:
+def choose_account(accounts: list[dict], mask_map: dict[str, str], masked_text: str) -> dict:
     if not accounts:
         return {"text": NO_ACCOUNT_TEXT, "options": []}
     tokens = sorted(
@@ -43,6 +43,9 @@ def choose_account(accounts: list[dict], mask_map: dict[str, str]) -> dict:
                 return {"account": account}
     if tokens:
         return {"text": NOT_OWN_ACCOUNT_TEXT, "options": _options(accounts)}
+    typed = [a for a in accounts if a["alias"] in masked_text or a["account_no"][-4:] in masked_text]
+    if len(typed) == 1:
+        return {"account": typed[0]}
     if len(accounts) == 1:
         return {"account": accounts[0]}
     return {"text": ASK_TEXT, "options": _options(accounts)}

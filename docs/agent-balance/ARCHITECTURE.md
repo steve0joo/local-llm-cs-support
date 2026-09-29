@@ -53,7 +53,7 @@ backend/
    - 아니면 원래 질문 = masked_text. history가 빈 첫 턴은 라벨과 같아도 라벨 클릭으로 보지 않는다
 3. 의도 판단(원래 질문 기준) — intent.classify_intent(원래 질문) → "balance" | "transactions" | "general"
 4. general이면 계좌 결정·되묻기·슬롯을 건너뛰고 7로 간다. get_accounts는 2의 라벨 확인에 이미 썼고, 모델 입력에는 계좌 정보를 넣지 않는다
-5. 대상 계좌 결정 — 라벨 클릭 턴이면 2의 계좌. 아니면 resolve.choose_account(accounts, mask_map, masked_text)  ※ masked_text 인자는 3차에 추가
+5. 대상 계좌 결정 — 라벨 클릭 턴이면 2의 계좌. 아니면 resolve.choose_account(accounts, mask_map, masked_text)
    - 결과에 "text"가 있으면 모델을 부르지 않고 AgentReply(text, slots={}, options)로 바로 답한다 (아래 "대상 계좌 결정")
 6. slots = prompt.build_slots(intent, account, transactions)
    - transactions면 get_transactions(account_id)를 조회해 넘긴다
@@ -68,11 +68,11 @@ backend/
 계약 3 타입(`AgentReply`)을 쓰지 않고 plain dict를 돌려준다. `AgentReply` 포장은 `handle()` 안에서만 한다(BAL-005).
 - `account_label(account) -> str` — `"{alias} ****{account_no 끝 4자리}"`
 - `find_clicked(masked_text, history, accounts) -> dict | None` — 라벨 클릭 턴이면 `{"question": 원래 질문, "account": 계좌}`, 아니면 `None`
-- `choose_account(accounts, mask_map, masked_text) -> dict` — 계좌를 정하면 `{"account": 계좌}`, 모델 없이 바로 답해야 하면 `{"text": 문구, "options": 선택지}`. 아래 순서로 첫 번째로 맞는 것(`masked_text` 인자와 규칙 4는 3차에 추가, 현재 코드는 `choose_account(accounts, mask_map)`):
+- `choose_account(accounts, mask_map, masked_text) -> dict` — 계좌를 정하면 `{"account": 계좌}`, 모델 없이 바로 답해야 하면 `{"text": 문구, "options": 선택지}`. 아래 순서로 첫 번째로 맞는 것:
   1. 계좌가 0개 → `{"text": "고객님 명의로 조회되는 계좌가 없습니다.", "options": []}`
   2. `mask_map`의 `[계좌번호_n]` 원본 중 숫자만 비교해(하이픈 무시) 본인 계좌 `account_no`와 같은 것이 있으면 → 그 계좌 (`n`이 작은 토큰 먼저)
   3. `[계좌번호_n]`이 있는데 본인 계좌와 하나도 맞지 않으면 → `{"text": "입력하신 계좌번호로 조회되는 계좌가 없습니다. 어느 계좌를 조회할까요?", "options": 본인 계좌 전체 선택지}` (계좌가 1개여도 선택지를 준다)
-  4. (3차) `masked_text`에 별칭(`alias`)이나 `account_no` 끝 4자리가 부분 문자열로 들어 있는 본인 계좌가 정확히 1개 → 그 계좌. 0개나 2개 이상이면 다음 규칙으로 간다
+  4. `masked_text`에 별칭(`alias`)이나 `account_no` 끝 4자리가 부분 문자열로 들어 있는 본인 계좌가 정확히 1개 → 그 계좌. 0개나 2개 이상이면 다음 규칙으로 간다
   5. 계좌가 1개 → 그 계좌
   6. 그 외 → `{"text": "어느 계좌를 조회할까요?", "options": 본인 계좌 전체 선택지}`
 - 규칙 4 예(C002): "생활비 계좌 잔액 알려줘" → A003, "7890 계좌 잔액" → A003, "입출금 계좌 잔액 알려줘" → A002, "잔액 알려줘" → 되묻기(규칙 6). 첫 턴에 라벨을 그대로 쳐도("생활비 ****7890") 규칙 4로 A003이 된다.

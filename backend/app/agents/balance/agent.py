@@ -22,7 +22,7 @@ class BalanceAgent:
             if clicked:
                 account = clicked["account"]
             else:
-                chosen = choose_account(accounts, req.mask_map)
+                chosen = choose_account(accounts, req.mask_map, req.masked_text)
                 if "text" in chosen:
                     return AgentReply(text=chosen["text"], slots={}, options=chosen["options"])
                 account = chosen["account"]
