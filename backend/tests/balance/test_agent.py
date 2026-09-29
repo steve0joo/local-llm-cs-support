@@ -5,10 +5,9 @@ import pytest
 from app.agents.balance import agent, mock_api, mock_router
 from app.agents.balance.agent import BalanceAgent
 from app.agents.balance.mock_api import get_accounts, get_transactions
-from app.agents.balance.prompt import build_slots, fallback_text
+from app.agents.balance.prompt import fallback_text
 from app.agents.base import AgentReply, AgentRequest
 
-A001 = get_accounts("C001")[0]
 A002, A003 = get_accounts("C002")
 ALL_ACCOUNTS = [a for c in ("C001", "C002", "C003") for a in get_accounts(c)]
 
@@ -21,6 +20,22 @@ C002_OPTIONS = [
     {"label": "입출금 ****6789", "choice": "balance"},
     {"label": "생활비 ****7890", "choice": "balance"},
 ]
+
+# 거래내역 슬롯 기대값은 mock_data.json에서 옮겨 적은 리터럴이다(build_slots 결과를 기대값으로 쓰지 않는다).
+A001_TRANSACTIONS = (
+    "2026-09-28 · 이체입금 · +150,000원\n"
+    "2026-09-20 · 편의점 · -8,000원\n"
+    "2026-09-15 · 통신요금 · -65,000원\n"
+    "2026-09-10 · 관리비 · -180,000원\n"
+    "2026-09-05 · 카드대금 · -450,000원"
+)
+A003_TRANSACTIONS = (
+    "2026-09-25 · 이체입금 · +120,000원\n"
+    "2026-09-18 · 편의점 · -7,500원\n"
+    "2026-09-13 · 통신요금 · -48,000원\n"
+    "2026-09-09 · 관리비 · -145,000원\n"
+    "2026-09-02 · 카드대금 · -380,000원"
+)
 
 
 def _money(value: int) -> list[str]:
@@ -93,7 +108,7 @@ def test_transactions_single_account(monkeypatch):
 
     assert reply == AgentReply(
         text=TRANSACTIONS_TEXT,
-        slots=build_slots("transactions", A001, get_transactions("A001")),
+        slots={"account_label": "입출금 ****5678", "recent_transactions": A001_TRANSACTIONS},
         options=[],
     )
     assert [model for model, _ in calls] == ["cs-balance"]
@@ -149,14 +164,17 @@ def test_replies_without_model(monkeypatch, customer_id, masked_text, mask_map, 
 
 
 @pytest.mark.parametrize(
-    ("question", "label", "account", "intent", "text"),
+    ("question", "label", "slots", "text"),
     [
-        ("최근 거래내역 보여줘", "생활비 ****7890", A003, "transactions", TRANSACTIONS_TEXT),
-        ("잔액 알려줘", "입출금 ****6789", A002, "balance", BALANCE_TEXT),
+        (
+            "최근 거래내역 보여줘", "생활비 ****7890",
+            {"account_label": "생활비 ****7890", "recent_transactions": A003_TRANSACTIONS}, TRANSACTIONS_TEXT,
+        ),
+        ("잔액 알려줘", "입출금 ****6789", {"account_label": "입출금 ****6789", "balance": "850,000원"}, BALANCE_TEXT),
     ],
     ids=["transactions", "balance"],
 )
-def test_label_click_answers_original_question(monkeypatch, question, label, account, intent, text):
+def test_label_click_answers_original_question(monkeypatch, question, label, slots, text):
     _forbid_generate(monkeypatch)
     first = agent.handle(_req("C002", question))
     assert first.options == C002_OPTIONS
@@ -165,8 +183,7 @@ def test_label_click_answers_original_question(monkeypatch, question, label, acc
     history = [{"role": "user", "content": question}, {"role": "assistant", "content": first.text}]
     second = agent.handle(_req("C002", label, history=history))
 
-    transactions = get_transactions(account["account_id"]) if intent == "transactions" else None
-    assert second == AgentReply(text=text, slots=build_slots(intent, account, transactions), options=[])
+    assert second == AgentReply(text=text, slots=slots, options=[])
     assert len(calls) == 1
 
 
