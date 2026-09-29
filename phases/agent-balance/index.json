@@ -8,7 +8,7 @@
     "docs/agent-balance/ADR.md"
   ],
   "steps": [
-    { "step": 0, "name": "main-merge", "status": "pending", "type": "human" },
+    { "step": 0, "name": "main-merge", "status": "completed", "type": "human", "summary": "origin/main(7466702)을 머지 커밋 cb892a6으로 병합. 충돌 4개는 BAL-005대로 해소(__init__.py·test_base.py·training/requirements.txt는 ours, README는 Mac 안내 뒤 main 구동 절차), test_api.py는 classify를 loan으로 옮김(세 번째 예외). backend pytest 253 passed" },
     { "step": 1, "name": "intent-alias", "status": "pending" },
     { "step": 2, "name": "resolve-typed", "status": "pending" },
     { "step": 3, "name": "train-prepare", "status": "pending" },
