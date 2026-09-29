@@ -219,7 +219,17 @@
     {
       "step": 13,
       "name": "scroll-world",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T11:14:17+0900",
+      "summary": "components/ScrollWorld.tsx — 'use client', props 없음, 컨테이너 div(data-testid=scroll-world, ref, 실패면 hidden·아니면 min-h-dvh) + next/script(src '/scroll-world/scrub-engine.js', afterInteractive), onReady에서만 초기화(폴링 없음)·컨테이너가 비었을 때만 window.mountScrollWorld(container, LANDING), 실패 3종(onError·함수 없음·마운트 예외 try/catch)→hidden, 마운트 직후 location.hash==='#chat'이면 #chat scrollIntoView, declare global Window.mountScrollWorld?, LANDING 상수(PRD 랜딩 표 4섹션 backlog·finetune·onboard·privacy 카피·에셋 /scroll-world/ 절대경로·accent·scroll, 04 CTA primary '직접 물어보기' #chat만, brand 'Local LLM' #top, 상단 cta '직접 물어보기' #chat, hint '스크롤해서 들어가기', diveScroll 1.3·crossfade 0.35·connectors [], 정적 문자열만 — PRD 표와 44건 문자열 대조 일치) + ScrollWorld.test.tsx 9케이스(vi.hoisted+vi.mock next/script로 props 보관, fakeMount가 컨테이너에 자식 추가: Script props, 초기 min-h-dvh·미마운트, onReady 1회 마운트·설정 확인, onReady 2회에도 1회, onError hidden·미마운트, 함수 없음 hidden, 예외 미전파·hidden, hash #chat이면 scrollIntoView 1회·없으면 0회) | AC 전부 통과(전체 8파일 82케이스, lint·tsc·build·grep), page.tsx 미연결(step 16)",
+      "cost_usd": 1.2569,
+      "num_turns": 17,
+      "completed_at": "2026-09-29T11:16:42+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/ScrollWorld.test.tsx",
+        "frontend/src/components/ScrollWorld.tsx"
+      ]
     },
     {
       "step": 14,
