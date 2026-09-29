@@ -100,18 +100,38 @@
     },
     {
       "step": 6,
+      "name": "prepare-filter-widen",
+      "status": "pending"
+    },
+    {
+      "step": 7,
+      "name": "rewrite",
+      "status": "pending"
+    },
+    {
+      "step": 8,
+      "name": "prepare-rewrite",
+      "status": "pending"
+    },
+    {
+      "step": 9,
+      "name": "synth-widen",
+      "status": "pending"
+    },
+    {
+      "step": 10,
       "name": "train-export",
       "status": "pending",
       "type": "human"
     },
     {
-      "step": 7,
+      "step": 11,
       "name": "self-check",
       "status": "pending",
       "type": "human"
     },
     {
-      "step": 8,
+      "step": 12,
       "name": "review",
       "status": "pending"
     }

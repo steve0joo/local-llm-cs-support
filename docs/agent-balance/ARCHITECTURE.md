@@ -13,7 +13,7 @@ backend/
 │   ├── mock_api.py        # mock_router + get_accounts(), get_transactions()
 │   └── mock_data.json     # C001~C003 계좌·거래내역
 ├── tests/balance/         # test_<모듈>.py (학습 진입점은 test_train.py)
-├── training/balance/      # train.py·requirements-mac.txt·MAC_TRAINING.md, prepare.py(BAL-008)
+├── training/balance/      # train.py·requirements-mac.txt·MAC_TRAINING.md, prepare.py(BAL-008), rewrite.py(BAL-010)
 └── models/balance/Modelfile   # cs-balance 등록용. .gguf는 GGUF 변환 검증 뒤 같은 폴더에 둔다(BAL-006)
 ```
 
@@ -171,8 +171,10 @@ backend/
     - 분할: val·test 상담이나 다른 `consulting_topic`, `qa_topic`이 다른 QA가 train 결과에 섞이지 않는다
     - 마스킹: 입력에 계좌번호·전화번호·주민번호 원본을 넣으면 결과 파일 어디에도 원본 문자열이 없다
     - 제외: 숫자가 든 `output`, 서류 키워드가 든 `output`, 입력에 없는 상품명(예: `○○자유통장`)이 든 `output`은 빠지고, 허용 목록 명칭(`체크카드`)만 든 `output`은 남는다
-    - 콜센터식 정답 제외(BAL-009): 아래 "학습 데이터"의 빠질 예문은 모두 빠지고, 남길 예문은 모두 남는다
-    - 합성: 모든 합성 질문의 `classify_intent`가 자기 의도, 모든 응답 템플릿이 `is_valid` 통과, 합성 샘플 전체 문자열에 mock 계좌번호(하이픈 유무)·잔액(원 단위 정수·쉼표 표기)이 없다
+    - 안전망 필터(BAL-009·BAL-010): 아래 "학습 데이터"의 빠질 예문은 모두 빠지고, 남길 예문은 모두 남는다
+    - 재작성 사용(BAL-010): 캐시에 없는 QA는 샘플이 없고, 캐시에 있으면 첫 턴·이어진 턴 샘플이 다시 쓴 답으로 만들어진다. 원문 `answer`·`output`은 결과 파일에 없다
+    - 합성: 모든 합성 질문의 `classify_intent`가 자기 의도, 모든 응답 템플릿이 그 의도의 `is_valid`와 안전망 필터 통과, 합성 샘플 전체 문자열에 mock 계좌번호(하이픈 유무)·잔액(원 단위 정수·쉼표 표기)이 없다. 가상 계좌번호 질문은 `[계좌번호_1]`로 바뀌어 들어간다
+  - `test_rewrite.py`: 가짜 `run` 함수로 실제 `claude` CLI를 부르지 않는다. 명령 모양(`-p`·모델·`--tools ""`·`--json-schema`·`--output-format json`), 마스킹된 입력과 key, 결과 JSON 파싱 실패·`is_error`·요청하지 않은 key·빈 문자열 처리, 캐시에 있는 키 건너뛰기, 묶음 크기, 누락 key 집계
     - 형식: 기록한 파일이 `training.balance.train.check_dataset(out_dir, "train")`과 `"test"` 모드를 통과한다
   - `test_modelfile.py`: `Modelfile`의 `SYSTEM """..."""` 내용이 `prompt.SYSTEM_PROMPT`와 같고, `FROM ./cs-balance.gguf`와 `stop "<|im_end|>"`가 있다
 
@@ -202,50 +204,116 @@ MVP 원칙: 데모에서 실제로 생기는 경우만 코드로 막고, 나머�
 ## 학습 데이터
 - 원천: 로컬 은행 라벨링 ZIP의 JSON에서 `consulting.consulting_topic == "거래내역/잔액조회"`인 `qa_data[]`를 추출하고 `source.source_id`로 공통 `split.json`을 적용한다. 실제 확인된 건수는 Training 4,017건, Validation 503건이다. 원천 Training·Validation에 함께 있는 상담 2건은 공통 분할이 train으로 보낸다(main `docs/router/ADR.md` RT-005).
 - RT-005의 영역 규칙을 따른다: 같은 QA의 `qa_topic`이 `consulting_topic`과 다르면 뺀다. 원본에서 가려진 금액 `●●●원`은 `[금액_n]`으로 바꾼 뒤 `mask()`를 적용한다.
-- 한 항목 = 대화 1개: user(`input.question`) → assistant(`input.answer`) → user(`input.follow_up_question`) → **assistant 목표(`output`)**
-- 전처리 순서: 게이트웨이와 같은 `app.masking.mask()`로 치환 → `output`에 `input`에 없는 수치·상품명이 있으면 제외 → `output`이 general 출력 검증(`validate.is_valid(output, (), ())`)에 걸리면 제외(BAL-008) → `output`이 콜센터식 정답(아래)이면 제외(BAL-009) → `prompt.build_messages([question, answer], follow_up_question, "general")`로 입력을 만든다. 채팅 템플릿은 MLX LM이 베이스 토크나이저로 입힌다. `app.masking` import 실패 시 전처리를 중단한다. 임시 정규식·fallback 마스킹은 허용하지 않는다(계약 4).
-- 원천의 한계(2026-09-29 로컬 집계, Training 4,017건): `output`은 대부분 절차 안내형 장문이고 `{{슬롯}}`을 쓰는 답은 0건, 아라비아 숫자가 든 답이 1,311건(33%)이다. 이것만 학습하면 잔액·거래내역 턴의 모델 출력은 필수 슬롯 검사(BAL-002)에 걸려 거의 항상 기본 문장으로 바뀐다.
-- 콜센터식 정답 제외(BAL-009): 마스킹 뒤 `output`만 본다(학습은 `--mask-prompt`라 history의 assistant 답은 loss에 들지 않는다).
-  - 개인정보 요구: 성함·생년월일·계좌번호(`계좌 번호`)·비밀번호·주민(등록)번호·카드번호(`카드 번호`) 뒤 같은 문장 25자 안에 `알려`·`말씀해`·`입력해`·`눌러`가 오면 뺀다. 빠질 예문: "성함과 생년월일 앞 여섯 자리를 알려주시기 바랍니다", "계좌 비밀번호 네 자리를 입력해 주십시오", "계좌 번호를 알려 주시면 확인해 드리겠습니다"
-  - 행동 약속: `보내`·`전송해`·`발급해`·`조치해`·`정정해`·`처리해` 뒤에 `드리겠`·`드리니`가 오면(띄어쓰기 유무 모두) 뺀다. 빠질 예문: "문자로 상세 정보를 보내드리겠습니다", "필요하시면 영수증도 전송해 드리니 잠시만 기다려 주시기 바랍니다", "PDF 파일이나 우편으로 발급해 드리겠습니다", "신속히 확인하여 조치해 드리겠습니다"
-  - 남길 예문: "카드사 상담원과 연결해 드리겠습니다", "담당 부서로 연결해 드리겠습니다", "고객센터로 문의해 주시기 바랍니다", "조회 방법을 안내해 드리겠습니다"
-  - 2026-09-29 로컬 집계: AI Hub 통과분 2,327건(train 2,029·val 139·test 159) → 2,046건(train 1,805·val 109·test 132)
-- 합성 슬롯 샘플(BAL-008): `prepare.py`가 잔액·거래내역 질문 변형 → `{{슬롯}}` 응답 변형 샘플을 템플릿으로 만들어 AI Hub 샘플과 섞는다.
-  - 입력은 추론과 같은 `prompt.build_messages`로 만든다(`SYSTEM_PROMPT`, "사용할 수 있는 슬롯:" 줄 포함). 첫 턴 모양과 라벨 클릭 턴 모양 두 가지다(아래 "`prepare.py` 인터페이스"). 학습 입력과 추론 입력의 모양을 맞추기 위해서다(계약 4와 같은 이유).
-  - 응답 템플릿은 그 의도로 `validate.is_valid`를 통과해야 한다(필수 슬롯 포함, 숫자·`%`·마스킹 토큰·서류 키워드 없음). 테스트로 고정한다.
+- 한 QA에서 대화를 최대 2개 만든다(BAL-010). 목표 답은 모두 LLM이 다시 쓴 답이다.
+  - 첫 턴: user(`question`) → **assistant 목표(다시 쓴 `answer`)**
+  - 이어진 턴: user(`question`) → assistant(다시 쓴 `answer`) → user(`follow_up_question`) → **assistant 목표(다시 쓴 `output`)**
+- 전처리 순서: 네 필드에 `normalize_amounts` → 게이트웨이와 같은 `app.masking.mask()`(`mask_fields`) → 재작성 캐시에서 이 QA(`qa_key`)의 결과를 찾는다. 결과가 없으면 QA를 빼고 원문으로 대신하지 않는다 → 다시 쓴 두 답에도 `mask()` → 목표 답마다 안전망 필터(아래)를 적용하고, 걸린 샘플만 뺀다 → `prompt.build_messages(history, 질문, "general")`로 입력을 만든다. history는 필터 대상이 아니다(학습은 `--mask-prompt`라 loss에 들지 않는다). 채팅 템플릿은 MLX LM이 베이스 토크나이저로 입힌다. `app.masking` import 실패 시 전처리를 중단한다. 임시 정규식·fallback 마스킹은 허용하지 않는다(계약 4).
+- 원천의 한계(2026-09-29 로컬 집계, Training 4,017건): `output`은 대부분 절차 안내형 장문이고 `{{슬롯}}`을 쓰는 답은 0건, 아라비아 숫자가 든 답이 1,311건(33%)이다. 이것만 학습하면 잔액·거래내역 턴의 모델 출력은 필수 슬롯 검사(BAL-002)에 걸려 거의 항상 기본 문장으로 바뀐다. 원천은 콜센터 상담원 답이라 조회 결과 단정·행동 약속·개인정보 요구·지어낸 메뉴가 섞여 있다(BAL-009·BAL-010).
+- LLM 재작성(BAL-010): `training/balance/rewrite.py`가 QA마다 `answer`와 `output`을 한 번의 호출로 다시 쓴다.
+  - Claude Code 헤드리스 모드(`claude -p`, 사용자 구독 로그인)로 돌린다. 기본 모델은 `claude-haiku-4-5`다. 호출 한 번에 QA `CHUNK`(20)건을 묶는다. 규칙은 `--system-prompt`로 넘기고, 구조화 출력은 `--json-schema`로 받는다. 형식은 `{"items": [{"key", "answer", "output"}]}`다. stdin으로 보내는 입력은 `{"items": [{"key": qa_key(qa), **mask_fields(qa)}]}` JSON이다(마스킹을 거친 텍스트만 보낸다). 도구는 끄고(`--tools ""`), 빈 임시 폴더에서 실행해 프로젝트 CLAUDE.md가 읽히지 않게 한다.
+  - `REWRITE_SYSTEM`에 담을 규칙(문구는 구현이 정하되 아래를 빠짐없이 담는다):
+    1. 역할: 입력은 콜센터 상담 기록 한 건(question·answer·follow_up·output)이다. 이것을 은행 잔액조회 챗봇의 답으로 다시 쓴다. `answer`는 question에 대한 답이고, `output`은 다시 쓴 `answer` 다음 follow_up에 대한 답이다.
+    2. 챗봇이 할 수 있는 일은 등록된 계좌의 잔액과 최근 거래내역을 보여 주는 것뿐이다. 이 답을 쓰는 턴에서는 계좌를 조회하지 않는다.
+    3. 정중한 존댓말로 쓴다. 답마다 200자 이내(공백 포함), 2~3문장이다.
+    4. 조회·확인 결과를 말하지 않는다(예: "확인 결과 정상 입금되었습니다").
+    5. 할 수 없는 행동을 약속하지 않는다(문자·서면 발송, 발급, 정정, 처리, 접수, "조회해 드리겠습니다"). 상담원·담당 부서 연결 안내와 고객센터 문의 안내는 괜찮다.
+    6. 성함·생년월일·계좌번호·비밀번호·주민번호·카드번호를 요구하지 않는다.
+    7. 금리·수수료·한도·상품명·메뉴 이름·화면 위치·준비물을 지어내지 않는다. 모르는 내용은 상담원에게 확인하라고 안내한다.
+    8. 아라비아 숫자·`%`·날짜·금액을 쓰지 않는다. `[금액_1]` 같은 대괄호 토큰, `★`·`●`·`○`·`OO` 가림 표시, 은행 이름을 답에 옮기지 않는다. 은행은 "저희 은행"이나 "해당 은행"이라고 쓴다.
+    9. "서류"·"증명서"·"등본"·"재직"·"소득"이라는 단어를 쓰지 않는다(`validate.DOCUMENT_KEYWORDS`).
+    10. 원래 답에 있던 일반 안내(앱을 최신 버전으로 업데이트한 뒤 다시 시도, 송금한 은행에 문의 등)는 살린다.
+  - 캐시: `REWRITE_PATH`(`data/processed/balance/rewrites.jsonl`, gitignore). 한 줄 형식은 `{"key", "source": mask_fields(qa), "answer", "output"}`다. 키는 `qa_key(qa)`이고, 이미 캐시에 있는 키는 다시 보내지 않는다. 묶음이 끝날 때마다 덧붙이므로 중간에 끊겨도 다시 실행하면 이어서 돈다. 응답에서 빠진 키는 다음 실행 때 다시 보낸다.
+  - 실행 순서(사람, MAC_TRAINING): 30건을 시범으로 돌린다(`rewrite --limit 30`). 사람이 읽고 통과하면 나머지를 돌린다(`rewrite --jobs N`). 규칙 위반이 많으면 멈추고 `REWRITE_SYSTEM`이나 모델을 바꾸는 step을 추가한다.
+- 안전망 필터(목표 답 기준, 하나라도 걸리면 그 샘플을 뺀다). 다시 쓴 답과 합성 응답 모두에 적용한다.
+  1. `validate.is_valid(답, (), ())`가 `False`(숫자·`%`·마스킹 토큰·슬롯·서류 키워드, BAL-008)
+  2. 상품명 휴리스틱(ADR-005): 아래 인터페이스의 제외 규칙 2. 입력은 첫 턴이면 question, 이어진 턴이면 question·다시 쓴 answer·follow_up이다
+  3. 콜센터식 정답(BAL-009)
+     - 개인정보 요구: 성함·생년월일·계좌번호(`계좌 번호`)·비밀번호·주민(등록)번호·카드번호(`카드 번호`) 뒤 같은 문장 25자 안에 `알려`·`말씀해`·`입력해`·`눌러`·`제공해`가 오면 뺀다. 빠질 예문: "성함과 생년월일 앞 여섯 자리를 알려주시기 바랍니다", "계좌 비밀번호 네 자리를 입력해 주십시오", "계좌 번호를 알려 주시면 확인해 드리겠습니다", "먼저 성함과 생년월일을 제공해 주셔야 본인 확인 절차를 진행할 수 있습니다"
+     - 행동 약속: 동사 `보내`·`전송해`·`발급해`·`조치해`·`정정해`·`처리해`·`발송해`·`전달해`·`제공해`·`진행해`·`정리해`·`접수해`·`신청해`·`조회해` 뒤에 `드리겠`·`드리니`·`드립니다`·`드릴 수`가 오면(띄어쓰기 유무 모두) 뺀다. 단 `드릴 수 없`(할 수 없다는 안내)은 남긴다. `즉시`·`바로` 뒤 `진행하겠`·`처리하겠`도 뺀다. 빠질 예문: "문자로 상세 정보를 보내드리겠습니다", "필요하시면 영수증도 전송해 드리니 잠시만 기다려 주시기 바랍니다", "PDF 파일이나 우편으로 발급해 드리겠습니다", "신속히 확인하여 조치해 드리겠습니다", "문자 발송을 바로 진행해 드리겠습니다", "요청해 주시면 해당 내용을 전달해 드리겠습니다", "입금 상세 내역을 추가로 제공해 드리겠습니다", "변경을 원하시는 내용을 알려 주시면 즉시 처리해 드립니다", "원하시는 신청 방법을 알려 주시면 즉시 진행하겠습니다", "변경 내역을 서면으로 발송해 드릴 수 있으니 요청해 주세요", "문자 메시지로도 정리해 드릴 수 있으니 문의해 주시기 바랍니다", "최근 자동이체 여부를 조회해 드리겠습니다"
+     - 남길 예문: "카드사 상담원과 연결해 드리겠습니다", "담당 부서로 연결해 드리겠습니다", "고객센터로 문의해 주시기 바랍니다", "조회 방법을 안내해 드리겠습니다", "해당 내역은 조회해 드릴 수 없으니 상담원에게 확인해 주세요"
+  4. 조회 결과 단정(BAL-010): `조회`·`확인` 뒤에 (`한`·`해 본`·`해 보니`·`해 드린`) `결과`가 오면 뺀다. `결과` 바로 뒤가 `는`·`를`이면 남긴다. `확인한 바에 따르면`·`확인되었습니다`도 뺀다. 빠질 예문: "시스템 확인 결과 해당 일자에는 거래가 없습니다", "거래내역을 확인한 결과, 자동이체로 출금된 금액은 대출 상환입니다", "확인한 바에 따르면 변경 사항이 정상적으로 적용되어 있습니다", "입금이 정상적으로 확인되었습니다". 남길 예문: "조회 결과는 화면에 표시되며 캡처하실 수 있습니다", "조회 결과를 앱에서 확인하실 수 있습니다", "입금 여부는 앱에서 확인하실 수 있습니다"
+  5. 비식별 표시(BAL-010): `★`·`●`·`○`·`OO`가 있으면 뺀다. 빠질 예문: "★★은행 모바일 앱에서 확인해 주세요", "●월 ●일 기준으로 반영됩니다", "OOO 고객님 확인 부탁드립니다"
+  6. 길이(BAL-010): `MAX_CHARS`(200자, 공백 포함)를 넘으면 뺀다. 원문이 아니라 다시 쓴 답과 합성 응답에 적용한다
+  - 2026-09-29 로컬 집계(원문 `output`, 재작성 전): AI Hub 통과분 2,327건(train 2,029·val 139·test 159) → 2,048건(train 1,807·val 109·test 132, BAL-009 1차 규칙) → 1,831건(train 1,626·val 89·test 116, BAL-009 보강 규칙) → 약 1,438건(train 1,282·val 68·test 88, 조회 단정·비식별 표시 추가). 재작성 뒤 집계는 train-export step에서 적는다.
+- 합성 샘플(BAL-008, BAL-010): `prepare.py`가 템플릿으로 만들어 AI Hub 샘플과 섞는다. 세 종류가 있다.
+  - 슬롯 샘플: 잔액·거래내역 질문 변형 → `{{슬롯}}` 응답 변형. 첫 턴 모양과 라벨 클릭 턴 모양 두 가지다.
+  - 가상 계좌번호 질문(BAL-010): mock 데이터의 가상 계좌번호를 질문 템플릿에 넣고 `mask()`로 바꾼다. 그러면 런타임과 같은 `[계좌번호_1]` 토큰이 든 입력이 된다. 원래 번호는 샘플에 남지 않는다. 응답은 슬롯 샘플과 같은 템플릿이다.
+  - general "상담원 안내"(BAL-010): 조회 방법·조회 오류·수수료·금리·한도·발급·모르는 입금처럼 모델이 사실을 모르는 질문에 대해, 지어내지 않고 채팅 조회 방법이나 상담원 확인을 안내하는 응답이다. 자체 점검 Q6~Q8의 기대 행동이다.
+  - 입력은 추론과 같은 `prompt.build_messages`로 만든다(`SYSTEM_PROMPT`, 슬롯 의도면 "사용할 수 있는 슬롯:" 줄 포함). 학습 입력과 추론 입력의 모양을 맞추기 위해서다(계약 4와 같은 이유).
+  - 응답 템플릿은 그 의도로 `validate.is_valid`를 통과해야 한다(필수 슬롯 포함, 숫자·`%`·마스킹 토큰·서류 키워드 없음). 안전망 필터도 통과해야 한다. 테스트로 고정한다.
   - 사실(금리·상품명·수수료·서류·메뉴 이름)은 넣지 않는다. 슬롯과 안내 문구만 쓴다.
-  - 첫 실행은 아래 인터페이스의 기본값(질문 각 20개 이상 × 응답 각 5개 이상)으로 하고, 질문 목록과 합성 비중은 첫 소규모 학습 결과를 보고 조정한다.
+  - 질문 목록과 합성 비중은 첫 소규모 학습 결과를 보고 조정한다.
 - 검증: val 분할에서 샘플을 뽑아 사람이 읽어 확인한다. test 분할은 최종 점검에만 쓴다.
-- 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔고, 실제 가공 데이터는 step 6에서 만든다(`phases/agent-balance/`, 사람). main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.
+- 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔다. 재작성 실행과 가공 데이터 생성은 train-export step(`phases/agent-balance/`, 사람)에서 한다. 학습은 로컬에서만 하고, 외부 API는 재작성에만 쓴다(BAL-010). main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.
 
 ### `prepare.py` 인터페이스
-`backend/training/balance/prepare.py`. 원본 zip 경로와 분할 파일 경로는 `training.common.split`의 `TL_ZIP`·`VL_ZIP`·`OUT_PATH`를 import해서 쓴다(경로를 다시 적지 않는다).
+`backend/training/balance/prepare.py`. 원본 zip 경로와 분할 파일 경로는 `training.common.split`의 `TL_ZIP`·`VL_ZIP`·`OUT_PATH`를 import해서 쓴다(경로를 다시 적지 않는다). 재작성 캐시 읽기(`qa_key`·`load_rewrites`)도 여기에 둔다. `rewrite.py`가 `prepare`를 import하고, 그 반대 방향 import는 하지 않는다.
 ```python
 TOPIC = "거래내역/잔액조회"
 OUT_DIR: Path                     # backend/data/processed/balance (gitignore)
 SPLIT_FILES = {"train": "train.jsonl", "val": "valid.jsonl", "test": "test.jsonl"}   # MLX LM은 valid.jsonl 이름을 쓴다
+REWRITE_PATH: Path                # OUT_DIR / "rewrites.jsonl" (gitignore, BAL-010)
+MAX_CHARS = 200                   # 다시 쓴 답·합성 응답 길이 상한(공백 포함)
 
 def load_qas(zip_path: Path) -> Iterator[dict]: ...
     # {"source_id", "question", "answer", "follow_up", "output"}. 원본 필드 접근은 이 함수에만 둔다
     # consulting.consulting_topic == TOPIC 이고 qa_data[].qa_topic == TOPIC 인 QA만 (RT-005 라벨 규칙)
 def normalize_amounts(text: str) -> str: ...        # 비식별 금액 "●…원" → "[금액_n]" (n은 1부터, RT-005). mask() 금액 규칙의 숫자 자리를 ●로 바꾼 모양(쉼표·억만천백십 허용)
-def build_sample(qa: dict) -> dict | None: ...      # 제외면 None
+def mask_fields(qa: dict) -> dict: ...              # {"question", "answer", "follow_up", "output"} 각각 normalize_amounts → mask().masked_text
+def qa_key(qa: dict) -> str: ...                    # source_id와 원문 네 필드를 이은 문자열의 sha256 hex 앞 32자. 재작성 캐시 키이자 입력 items의 key
+def load_rewrites(path: Path) -> dict[str, dict]: ...   # {key: {"answer", "output"}}. 파일이 없으면 {}. 같은 키가 여러 줄이면 마지막 줄
+def build_samples(qa: dict, rewrite: dict | None) -> list[dict]: ...   # 첫 턴·이어진 턴 중 안전망 필터를 통과한 것(0~2개). rewrite가 None이면 []
 def synth_samples() -> dict[str, list[dict]]: ...   # {"train": [...], "val": [...], "test": [...]}
-def build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path]) -> dict[str, int]: ...  # 분할별 기록 수
-def main(argv: list[str] | None = None) -> None: ...  # --split·--out-dir·--zip(여러 개), 인자 없으면 OUT_PATH·OUT_DIR·[TL_ZIP, VL_ZIP]
+def build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path], rewrites_path: Path = REWRITE_PATH) -> dict[str, int]: ...  # 분할별 기록 수
+def main(argv: list[str] | None = None) -> None: ...  # --split·--out-dir·--zip(여러 개)·--rewrites. 인자가 없으면 OUT_PATH·OUT_DIR·[TL_ZIP, VL_ZIP]·REWRITE_PATH. 분할별 기록 수와 재작성 없음으로 빠진 QA 수를 출력
 # CLI: cd backend && python -m training.balance.prepare
 ```
-- `build_sample` 순서: 네 필드에 `normalize_amounts` → `mask()`(masked_text만 쓴다) → 제외 규칙 → `{"messages": prompt.build_messages([user: question, assistant: answer], follow_up, "general") + [assistant: output]}`.
-- 제외 규칙(`output` 기준, 하나라도 걸리면 제외):
-  1. `validate.is_valid(output, (), ())`가 `False`(숫자·`%`·마스킹 토큰·슬롯·서류 키워드, BAL-008). 공통 ADR-005의 "input에 없는 수치"는 숫자 전부 제외로 대신한다
-  2. 상품명 휴리스틱(ADR-005): 정규식 `[가-힣A-Za-z]+(통장|적금|예금|카드|대출)`에 걸린 단어가 입력 세 필드에 없고 일반 명칭 허용 목록 `GENERIC_PRODUCT_NAMES`(`입출금통장`·`정기예금`·`정기적금`·`신용카드`·`체크카드`·`신용대출`·`주택담보대출`·`전세자금대출`)에도 없다
+- `build_samples` 순서: `mask_fields(qa)` → 다시 쓴 `answer`·`output`에 `mask()` → 첫 턴 `{"messages": build_messages([], question, "general") + [assistant: answer]}`, 이어진 턴 `{"messages": build_messages([user: question, assistant: answer], follow_up, "general") + [assistant: output]}` → 각 샘플의 목표 답에 안전망 필터. 순서는 첫 턴, 이어진 턴이다.
+- 제외 규칙(안전망 필터, 위 "학습 데이터" 1~6). 상품명 휴리스틱의 기준:
+  1. `validate.is_valid(답, (), ())`가 `False`. 공통 ADR-005의 "input에 없는 수치"는 숫자 전부 제외로 대신한다
+  2. 상품명 휴리스틱(ADR-005): 정규식 `[가-힣A-Za-z]+(통장|적금|예금|카드|대출)`에 걸린 단어가 입력 필드에 없고 일반 명칭 허용 목록 `GENERIC_PRODUCT_NAMES`(`입출금통장`·`정기예금`·`정기적금`·`신용카드`·`체크카드`·`신용대출`·`주택담보대출`·`전세자금대출`)에도 없다
 - 분할: `split.json`의 `source_id` 값으로 정한다. `split.json`에 없는 `source_id`는 버린다.
 - `synth_samples` 규칙:
-  - 질문 목록 `BALANCE_QUESTIONS`·`TRANSACTION_QUESTIONS`(각 20개 이상)의 모든 질문은 `intent.classify_intent`가 자기 의도로 판단해야 한다. 추론 때와 같은 분기로 들어가게 하기 위해서다.
-  - 응답 템플릿 `BALANCE_ANSWERS`·`TRANSACTION_ANSWERS`(각 5개 이상)는 `validate.is_valid(답, SLOT_NAMES[의도], SLOT_NAMES[의도])`를 통과해야 한다.
-  - 샘플 = 질문 × 응답 전체 조합(무작위 없음). 질문 인덱스 `i`가 짝수면 첫 턴 모양 `build_messages([], 질문, 의도)`, 홀수면 라벨 클릭 턴 모양 `build_messages([user: 질문, assistant: resolve.ASK_TEXT], 라벨, 의도)`다. 라벨은 mock 데이터 계좌의 `account_label`을 차례로 쓴다.
-  - 분할: `i % 10 == 0`이면 test, `i % 10 == 1`이면 val, 나머지는 train.
+  - 슬롯 샘플: 질문 목록 `BALANCE_QUESTIONS`·`TRANSACTION_QUESTIONS`(각 20개 이상)의 모든 질문은 `intent.classify_intent`가 자기 의도로 판단해야 한다. 추론 때와 같은 분기로 들어가게 하기 위해서다. 응답 템플릿 `BALANCE_ANSWERS`·`TRANSACTION_ANSWERS`(각 5개 이상)는 `validate.is_valid(답, SLOT_NAMES[의도], SLOT_NAMES[의도])`를 통과해야 한다. 샘플 = 질문 × 응답 전체 조합(무작위 없음). 질문 인덱스 `i`가 짝수면 첫 턴 모양 `build_messages([], 질문, 의도)`, 홀수면 라벨 클릭 턴 모양 `build_messages([user: 질문, assistant: resolve.ASK_TEXT], 라벨, 의도)`다. 라벨은 mock 데이터 계좌의 `account_label`을 차례로 쓴다.
+  - 가상 계좌번호 질문: `MASKED_BALANCE_QUESTIONS`·`MASKED_TRANSACTION_QUESTIONS`(각 5개 이상)는 `{account_no}` 자리표시자가 든 템플릿이다. 인덱스 `i`마다 mock 데이터 계좌(C001~C003 순서)의 `account_no`를 차례로 넣고 `mask()`로 바꾼다. 바뀐 질문은 `[계좌번호_1]`을 담고 `classify_intent`가 자기 의도로 판단해야 한다. 샘플 = 바뀐 질문 × 그 의도 응답 템플릿 전체, 모양은 첫 턴 `build_messages([], 바뀐 질문, 의도)`다.
+  - general "상담원 안내": `GENERAL_SYNTH`는 범주별 `(질문들, 응답들)` 튜플의 튜플이다(범주마다 질문 4개 이상·응답 3개 이상). 모든 질문은 `classify_intent`가 `general`이고, 모든 응답은 `is_valid(답, (), ())`·안전망 필터·`MAX_CHARS`를 통과한다. 샘플 = 범주 안 질문 × 그 범주 응답 전체, 모양은 `build_messages([], 질문, "general")`이다.
+  - 분할: 각 목록(범주) 안 질문 인덱스 `i`로 정한다. `i % 10 == 0`이면 test, `i % 10 == 1`이면 val, 나머지는 train.
 - 출력: `OUT_DIR/{train,valid,test}.jsonl`, 한 줄에 `{"messages": [...]}` 하나. AI Hub 샘플과 합성 샘플을 한 파일에 쓴다. `train.py check`(`check_dataset`)를 통과하는 형식이다.
+
+### `rewrite.py` 인터페이스 (BAL-010)
+`backend/training/balance/rewrite.py`. 사람이 train-export step에서 실행한다. Claude Code CLI(`claude`)를 `subprocess`로 부른다. 인증은 사용자의 Claude Code 로그인이므로 API 키와 SDK가 필요 없다. 테스트는 `run` 인자에 가짜 함수를 넣어 CLI를 부르지 않는다.
+```python
+MODEL = "claude-haiku-4-5"
+CHUNK = 20                        # 호출 한 번에 보낼 QA 수
+REWRITE_SYSTEM: str               # 위 "LLM 재작성" 규칙 1~10 + "입력 items마다 key를 그대로 돌려준다"
+OUTPUT_SCHEMA = {"type": "object", "properties": {"items": {"type": "array", "items": {
+                     "type": "object", "properties": {"key": {"type": "string"}, "answer": {"type": "string"}, "output": {"type": "string"}},
+                     "required": ["key", "answer", "output"], "additionalProperties": False}}},
+                 "required": ["items"], "additionalProperties": False}
+
+def build_prompt(qas: list[dict]) -> str: ...       # json.dumps({"items": [{"key": prepare.qa_key(q), **prepare.mask_fields(q)} for q in qas]}, ensure_ascii=False)
+def build_command(model: str) -> list[str]: ...
+    # ["claude", "-p", "--model", model, "--system-prompt", REWRITE_SYSTEM, "--tools", "",
+    #  "--json-schema", json.dumps(OUTPUT_SCHEMA), "--output-format", "json",
+    #  "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands"]
+def parse_envelope(stdout: str, keys: set[str]) -> tuple[dict[str, dict], float]: ...
+    # stdout은 `--output-format json` 결과 한 개다: {"type": "result", "is_error": bool, "structured_output": {...}, "total_cost_usd": float, ...}
+    # JSON이 아니거나 is_error가 참이거나 structured_output이 없으면 ({}, 0.0)
+    # structured_output["items"] 중 key가 keys에 있고 answer·output이 비어 있지 않은 문자열인 것만 {key: {"answer", "output"}}. 두 번째 값은 total_cost_usd(없으면 0.0)
+def run_claude(command: list[str], prompt: str) -> str: ...
+    # subprocess.run(command, input=prompt, capture_output=True, text=True, timeout=600, cwd=빈 tempfile.TemporaryDirectory())의 stdout
+    # 실패·시간 초과면 ""(parse_envelope가 빈 결과로 처리)
+def split_qas(split_path: Path, zip_paths: list[Path]) -> list[dict]: ...   # split.json에 있는 QA, load_qas 순서 그대로(결정적)
+def run_all(qas: list[dict], cache_path: Path, model: str = MODEL, chunk: int = CHUNK, jobs: int = 1,
+            run: Callable[[list[str], str], str] = run_claude) -> dict[str, float]: ...
+    # 캐시(prepare.load_rewrites)에 없는 QA만 chunk개씩 나눈다. 묶음을 jobs개까지 동시에 run으로 돌린다(ThreadPoolExecutor)
+    # 묶음이 끝날 때마다 메인 스레드에서 캐시에 {"key", "source": prepare.mask_fields(qa), "answer", "output"}를 한 줄씩 덧붙인다
+    # 반환 {"saved": n, "missing": n, "cost_usd": 합}. missing은 보냈지만 결과가 없었던 QA 수
+def main(argv: list[str] | None = None) -> None: ...
+    # --limit N(캐시에 없는 split QA 중 앞에서 N개, 기본 전부)·--chunk·--jobs·--model. 집계를 출력한다
+# CLI: cd backend && python -m training.balance.rewrite --limit 30
+```
+- 테스트와 AC에서 `claude` CLI를 실제로 부르지 않는다. 결과 순서와 누락은 `key`로 맞춘다.
 
 ### Modelfile
 `backend/models/balance/Modelfile`. `.gguf`는 같은 폴더에 두고 커밋하지 않는다(`*.gguf` gitignore).

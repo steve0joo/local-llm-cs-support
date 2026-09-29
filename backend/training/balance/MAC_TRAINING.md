@@ -1,13 +1,22 @@
 # 잔액조회 에이전트: Mac 학습·평가
 
-범위는 `cs-balance`뿐이다. 라우터·대출·이자 학습은 공통 Windows 계획을 따른다. 현재 장비는 Apple M4 Pro, 통합 메모리 24GB, Python 3.11이다. Hugging Face는 **베이스 모델 다운로드**에, Ollama는 **학습 후 추론·평가**에 쓴다. AI Hub 원본·가공본과 어댑터·가중치는 로컬에만 보관한다.
+범위는 `cs-balance`뿐이다. 라우터·대출·이자 학습은 공통 Windows 계획을 따른다. 현재 장비는 Apple M4 Pro, 통합 메모리 24GB, Python 3.11이다. Hugging Face는 **베이스 모델 다운로드**에, Ollama는 **학습 후 추론·평가**에 쓴다. AI Hub 원본·가공본과 어댑터·가중치는 로컬에만 보관한다. 학습 데이터 재작성 때만 마스킹된 텍스트를 Claude Code 헤드리스 모드(`claude -p`, Claude Haiku 4.5)로 보낸다(BAL-010). 학습 자체는 로컬에서만 한다.
 
 ## 선행 조건과 데이터
 
 1. AI Hub 은행 라벨링 원본 `TL_은행.zip`·`VL_은행.zip`은 `backend/data/raw/` 아래에 있다. 공통 `training/common/split.py`는 `backend/data/raw/TL_은행.zip`·`VL_은행.zip` 경로를 그대로 읽는다. 이 Mac에는 zip이 `backend/data/raw/금융분야_고객상담_데이터/3.개방데이터/2.데이터(NIA)/{Training,Validation}/02.라벨링데이터/` 안에 있으므로 한 번 링크를 만든다: `ln -s "$PWD/backend/data/raw/금융분야_고객상담_데이터/3.개방데이터/2.데이터(NIA)/Training/02.라벨링데이터/TL_은행.zip" backend/data/raw/TL_은행.zip`(VL도 같은 방식, 저장소 루트에서 실행). 실제 JSON 구조는 `source.source_id`, `consulting.consulting_topic`, `qa_data[].input.question`·`input.answer`·`input.follow_up_question`·`output`이다. 잔액조회 라벨은 Training 4,017건, Validation 503건이다. 이용조건을 확인하고 원본·가공본을 저장소에 추가하지 않는다.
 2. 팀원C의 `training/common`이 은행 데이터를 `source.source_id` 단위로 train/val/test 분할한다. 원천 Training/Validation 사이에도 겹치는 `source_id`가 2개 있으므로 원천 디렉터리를 그대로 분할로 쓰지 않는다(공통 분할은 이 2건을 train으로 보낸다, main `docs/router/ADR.md` RT-005). 같은 `source_id`의 QA가 분할을 넘나들면 안 된다.
-3. `training/balance/prepare.py`는 공통 `split.json`에 따라 `consulting.consulting_topic == "거래내역/잔액조회"` 대화를 추출해야 한다. 모든 user·assistant 발화는 게이트웨이와 같은 `app.masking.mask()`로 마스킹한다(계약 4). import에 실패하면 전처리를 멈추며 임시 정규식이나 fallback 함수로 학습 데이터를 만들지 않는다. 입력에 없는 숫자·상품명을 출력에 덧붙인 샘플과 실제 금액·계좌번호가 남은 샘플은 제외한다. 인터페이스와 제외 규칙은 `docs/agent-balance/ARCHITECTURE.md` "`prepare.py` 인터페이스"가 기준이다. 실행: `cd backend && .venv/bin/python -m training.common.split && .venv/bin/python -m training.balance.prepare`.
-4. 결과를 `backend/data/processed/balance/{train,valid,test}.jsonl`로 만든다. 한 줄에 `{"messages":[{"role":"system","content":"..."},{"role":"user","content":"..."},{"role":"assistant","content":"..."}]}` 한 대화를 쓴다. 마지막 메시지는 학습 목표 assistant 답변이다. 원천에는 `{{슬롯}}` 응답이 없으므로 잔액·거래내역 슬롯 응답은 템플릿 합성 샘플로 보강하고, 입력은 추론과 같은 `prompt.build_messages` 형식으로 만든다(`docs/agent-balance/ADR.md` BAL-008). 원본 필드와 정제 결과를 확인하기 전에는 학습을 시작하지 않는다.
+3. `training/balance/prepare.py`는 공통 `split.json`에 따라 `consulting.consulting_topic == "거래내역/잔액조회"` 대화를 추출해야 한다. 모든 user·assistant 발화는 게이트웨이와 같은 `app.masking.mask()`로 마스킹한다(계약 4). import에 실패하면 전처리를 멈추며 임시 정규식이나 fallback 함수로 학습 데이터를 만들지 않는다. 정답은 `training/balance/rewrite.py`가 챗봇 답변으로 다시 쓴 것만 쓴다. 다시 쓴 답에도 안전망 필터(숫자·상품명·콜센터식 정답·조회 결과 단정·비식별 표시·200자)를 적용한다(BAL-010). 인터페이스와 제외 규칙은 `docs/agent-balance/ARCHITECTURE.md` "학습 데이터"와 "`prepare.py`·`rewrite.py` 인터페이스"가 기준이다. 실행(`backend/`에서):
+
+   ```bash
+   claude --version                                       # Claude Code CLI가 설치되고 로그인돼 있어야 한다(API 키 불필요)
+   .venv/bin/python -m training.common.split
+   .venv/bin/python -m training.balance.rewrite --limit 30  # 시범 30건(묶음 2번). saved·missing·cost_usd를 출력한다
+   # data/processed/balance/rewrites.jsonl의 30건을 원문(source)과 나란히 읽고, 규칙 위반이 적으면 나머지를 돌린다
+   .venv/bin/python -m training.balance.rewrite --jobs 4    # 캐시에 없는 나머지 전부. 끊기면 같은 명령으로 이어서 돈다
+   .venv/bin/python -m training.balance.prepare             # 재작성 캐시만 읽는다(결정적)
+   ```
+4. 결과를 `backend/data/processed/balance/{train,valid,test}.jsonl`로 만든다. 한 줄에 `{"messages":[{"role":"system","content":"..."},{"role":"user","content":"..."},{"role":"assistant","content":"..."}]}` 한 대화를 쓴다. 마지막 메시지는 학습 목표 assistant 답변이다. AI Hub QA 하나에서 첫 턴·이어진 턴 샘플을 최대 2개 만든다. 원천에는 `{{슬롯}}` 응답이 없으므로 잔액·거래내역 슬롯 응답과 general 상담원 안내는 템플릿 합성 샘플로 보강하고, 입력은 추론과 같은 `prompt.build_messages` 형식으로 만든다(`docs/agent-balance/ADR.md` BAL-008). 원본 필드와 정제 결과를 확인하기 전에는 학습을 시작하지 않는다.
 5. `valid`에서 최소 20건을 사람이 읽고 마스킹·슬롯·사실성·존댓말을 점검한다. `test`는 최종 점검 때만 연다. 자동 평가는 MLX LM test loss/perplexity이며, 인수 판정은 Ollama의 PM 고정 10문항으로 한다.
 
 이 브랜치에는 공통 `mask()` 원본 `6c61e00`과 `source_id` 분할 원본 `925c7da`를 수정 없이 가져왔다. main에서 둘 중 하나가 바뀌면 balance 가공 데이터를 다시 만든다.
