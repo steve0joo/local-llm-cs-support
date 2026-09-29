@@ -101,7 +101,17 @@
     {
       "step": 6,
       "name": "prepare-filter-widen",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T21:35:59+0900",
+      "summary": "prepare.build_sample 제외 규칙 확장(마스킹 뒤 output에만, 기존 규칙 뒤): _ASKS_PERSONAL_INFO 동사에 제공해 추가, _PROMISES_ACTION을 동사 14개 × 어미 드리겠·드리니·드립니다·드릴 수(띄어쓰기 유무, '드릴 수 ?없' 제외) + 즉시·바로 ?진행하겠·처리하겠로 확장, 새 비공개 정규식 _CLAIMS_LOOKUP(조회·확인 (한|해 본|해 보니|해 드린)? ?결과, 뒤가 는·를이면 제외 / 확인한 바에 따르면 / 확인되었습니다)·_DEID_MARK(★·●·○·OO). 공개 시그니처 그대로, random 없음. test_prepare.py에 21개 추가(콜센터 빠질 예문 9·남길 1을 기존 parametrize에, 조회 단정 빠질 4·남길 3, 비식별 빠질 3, 입력 쪽 ★★·OO·●·조회 단정 표현이 있어도 남는지 1), 먼저 16 failed red 확인. deviation: 없음(ARCHITECTURE 단어 목록·예문 그대로, 문서 미수정). 실제 AI Hub 데이터로 실행 안 함. AC 57 passed, backend 전체 324 passed",
+      "cost_usd": 1.2924,
+      "num_turns": 15,
+      "completed_at": "2026-09-29T21:38:17+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/prepare.py"
+      ]
     },
     {
       "step": 7,
