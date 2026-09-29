@@ -1,8 +1,9 @@
 """잔액조회 학습 데이터 생성 (docs/agent-balance/ARCHITECTURE.md "`prepare.py` 인터페이스", BAL-008).
 
-AI Hub 잔액조회 QA를 추론과 같은 입력(prompt.build_messages)으로 바꾸고, 출력 검증에 걸릴 정답과 콜센터식 정답(BAL-009),
-조회 결과 단정·비식별 표시가 남은 정답(BAL-010)은 뺀다.
-잔액·거래내역 슬롯 응답은 원천에 없으므로 템플릿 합성 샘플을 더한다. 무작위를 쓰지 않는다.
+AI Hub 잔액조회 QA의 정답은 재작성 캐시(rewrite.py가 쓴 REWRITE_PATH)의 다시 쓴 답만 쓴다(BAL-010). 캐시에 없는 QA는 뺀다.
+QA 하나에서 첫 턴·이어진 턴 샘플을 추론과 같은 입력(prompt.build_messages)으로 만들고,
+목표 답마다 안전망 필터(출력 검증·상품명·콜센터식 정답·조회 결과 단정·비식별 표시·길이)에 걸리면 그 샘플을 뺀다.
+잔액·거래내역 슬롯 응답은 원천에 없으므로 템플릿 합성 샘플을 더한다. 무작위와 네트워크를 쓰지 않는다.
 
 실행: cd backend && .venv/bin/python -m training.balance.prepare
 출력: data/processed/balance/{train,valid,test}.jsonl — gitignore, 커밋 금지
@@ -175,23 +176,35 @@ def _unknown_product(output: str, inputs: tuple[str, ...]) -> bool:
     )
 
 
-def _call_center_answer(output: str) -> bool:
-    """정답만 본다. 학습은 --mask-prompt라 입력 쪽 문장은 loss에 들지 않는다(BAL-009)."""
-    return bool(_ASKS_PERSONAL_INFO.search(output) or _PROMISES_ACTION.search(output))
+def _rejected(target: str, inputs: tuple[str, ...]) -> bool:
+    """안전망 필터 1~6. 목표 답만 본다. 학습은 --mask-prompt라 입력·history 문장은 loss에 들지 않는다(BAL-009)."""
+    return (not is_valid(target, (), ()) or _unknown_product(target, inputs)
+            or bool(_ASKS_PERSONAL_INFO.search(target) or _PROMISES_ACTION.search(target))
+            or bool(_CLAIMS_LOOKUP.search(target) or _DEID_MARK.search(target))
+            or len(target) > MAX_CHARS)
 
 
 def _sample(messages: list[dict], target: str) -> dict:
     return {"messages": messages + [{"role": "assistant", "content": target}]}
 
 
-def build_sample(qa: dict) -> dict | None:
+def build_samples(qa: dict, rewrite: dict | None) -> list[dict]:
+    """첫 턴 [question] → answer, 이어진 턴 [question, answer, follow_up] → output. 답은 모두 다시 쓴 답이다(BAL-010).
+
+    재작성이 없으면 원문 answer·output으로 대신하지 않고 []를 돌려준다.
+    """
+    if rewrite is None:
+        return []
     fields = mask_fields(qa)
-    question, answer, follow_up, output = (fields[key] for key in _FIELDS)
-    if (not is_valid(output, (), ()) or _unknown_product(output, (question, answer, follow_up))
-            or _call_center_answer(output) or _CLAIMS_LOOKUP.search(output) or _DEID_MARK.search(output)):
-        return None
-    history = [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
-    return _sample(build_messages(history, follow_up, "general"), output)
+    question, follow_up = fields["question"], fields["follow_up"]
+    answer, output = (mask(rewrite[key]).masked_text for key in ("answer", "output"))
+    samples = []
+    if not _rejected(answer, (question,)):
+        samples.append(_sample(build_messages([], question, "general"), answer))
+    if not _rejected(output, (question, answer, follow_up)):
+        history = [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
+        samples.append(_sample(build_messages(history, follow_up, "general"), output))
+    return samples
 
 
 def synth_samples() -> dict[str, list[dict]]:
@@ -216,15 +229,26 @@ def synth_samples() -> dict[str, list[dict]]:
     return samples
 
 
-def build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path]) -> dict[str, int]:
+def build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path],
+                  rewrites_path: Path = REWRITE_PATH) -> dict[str, int]:
+    return _build_dataset(split_path, out_dir, zip_paths, rewrites_path)[0]
+
+
+def _build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path],
+                   rewrites_path: Path) -> tuple[dict[str, int], int]:
+    """(분할별 기록 수, 재작성 없음으로 빠진 QA 수). main이 zip을 두 번 읽지 않게 한 번에 센다."""
     split_of = json.loads(split_path.read_text(encoding="utf-8"))   # {source_id: "train" | "val" | "test"}
+    rewrites = load_rewrites(rewrites_path)
     rows: dict[str, list[dict]] = {split: [] for split in SPLIT_FILES}
+    missing = 0
     for zip_path in zip_paths:
         for qa in load_qas(zip_path):
             split = split_of.get(qa["source_id"])      # split.json에 없는 상담은 버린다
-            sample = build_sample(qa) if split else None
-            if sample is not None:
-                rows[split].append(sample)
+            if split is None:
+                continue
+            rewrite = rewrites.get(qa_key(qa))
+            missing += rewrite is None
+            rows[split] += build_samples(qa, rewrite)
     for split, samples in synth_samples().items():
         rows[split] += samples
 
@@ -233,7 +257,7 @@ def build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path]) -> dic
         with (out_dir / file_name).open("w", encoding="utf-8") as f:
             for row in rows[split]:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
-    return {split: len(samples) for split, samples in rows.items()}
+    return {split: len(samples) for split, samples in rows.items()}, missing
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -241,9 +265,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--split", type=Path, default=SPLIT_PATH, help="공통 split.json")
     parser.add_argument("--out-dir", type=Path, default=OUT_DIR)
     parser.add_argument("--zip", dest="zips", type=Path, nargs="+", default=[TL_ZIP, VL_ZIP], help="은행 라벨링 zip")
+    parser.add_argument("--rewrites", type=Path, default=REWRITE_PATH, help="LLM 재작성 캐시(rewrite.py)")
     args = parser.parse_args(argv)
-    counts = build_dataset(args.split, args.out_dir, args.zips)
-    print(f"{args.out_dir}: {counts}")
+    counts, missing = _build_dataset(args.split, args.out_dir, args.zips, args.rewrites)
+    print(f"{args.out_dir}: {counts}, 재작성 없음으로 빠진 QA {missing}건")
 
 
 if __name__ == "__main__":      # python -m training.balance.prepare

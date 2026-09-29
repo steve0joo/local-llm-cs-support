@@ -16,6 +16,10 @@ from training.balance.train import check_dataset
 TOPIC = "거래내역/잔액조회"
 OK_OUTPUT = "앱에서 계좌를 선택하시면 확인하실 수 있습니다."
 ACCOUNTS = [a for customer_id in ("C001", "C002", "C003") for a in get_accounts(customer_id)]
+# 재작성 캐시의 다시 쓴 답(BAL-010). 안전망 필터를 모두 통과한다
+RW_ANSWER = "잔액과 최근 거래내역은 채팅으로 바로 보여 드릴 수 있습니다."
+RW_OUTPUT = "앱에서 계좌를 선택하시면 거래내역을 확인하실 수 있습니다."
+REWRITE = {"answer": RW_ANSWER, "output": RW_OUTPUT}
 
 
 def _doc(source_id, question, *, topic=TOPIC, qa_topic=TOPIC, answer="네, 확인해 드리겠습니다.",
@@ -39,8 +43,23 @@ def _write_zip(path, docs):
     return path
 
 
+def _write_rewrites(path, zip_paths, rewrite=REWRITE, source_ids=None):
+    """load_qas가 내는 QA마다 rewrite.py와 같은 모양의 캐시 한 줄을 쓴다."""
+    lines = [
+        json.dumps({"key": prepare.qa_key(qa), "source": prepare.mask_fields(qa), **rewrite}, ensure_ascii=False) + "\n"
+        for zip_path in zip_paths for qa in prepare.load_qas(zip_path)
+        if source_ids is None or qa["source_id"] in source_ids
+    ]
+    path.write_text("".join(lines), encoding="utf-8")
+    return path
+
+
 def _read(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def _read_all(out_dir):
+    return "".join((out_dir / file).read_text(encoding="utf-8") for file in prepare.SPLIT_FILES.values())
 
 
 @pytest.fixture
@@ -59,7 +78,7 @@ def raw(tmp_path):
     split_path.write_text(json.dumps(
         {"S1": "train", "S2": "val", "S3": "test", "S4": "train", "S5": "train"}
     ), encoding="utf-8")
-    return split_path, [tl, vl]
+    return split_path, [tl, vl], _write_rewrites(tmp_path / "rewrites.jsonl", [tl, vl])
 
 
 def _synth_counts():
@@ -154,23 +173,44 @@ def test_load_rewrites_keeps_last_line_per_key(tmp_path):
     }
 
 
-def test_build_sample_uses_general_prompt_and_output_as_target():
-    qa = {"source_id": "S1", "question": "잔액이 ●●●원 맞나요?", "answer": "네, 확인해 드리겠습니다.",
-          "follow_up": "어떻게 확인하나요?", "output": OK_OUTPUT}
-    assert prepare.build_sample(qa) == {"messages": [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": "잔액이 [금액_1] 맞나요?"},
-        {"role": "assistant", "content": "네, 확인해 드리겠습니다."},
-        {"role": "user", "content": "어떻게 확인하나요?"},
-        {"role": "assistant", "content": OK_OUTPUT},
-    ]}
+def _qa(**fields):
+    return {"source_id": "S1", "question": "잔액 알려주세요", "answer": "원문 답변입니다.",
+            "follow_up": "어떻게 확인하나요?", "output": "원문 정답입니다.", **fields}
 
 
-def test_build_sample_masks_personal_info_in_inputs():
-    qa = {"source_id": "S1", "question": "제 계좌 110-9876-5432 잔액이요",
-          "answer": "주민번호 900101-1234567 확인했습니다.",
-          "follow_up": "010-2222-3333으로 연락 주세요", "output": OK_OUTPUT}
-    text = json.dumps(prepare.build_sample(qa), ensure_ascii=False)
+def _turns(samples):
+    """첫 턴 샘플은 메시지 3개, 이어진 턴 샘플은 5개다."""
+    return [{3: "first", 5: "follow_up"}[len(s["messages"])] for s in samples]
+
+
+def test_build_samples_returns_nothing_without_rewrite():
+    assert prepare.build_samples(_qa(), None) == []
+
+
+def test_build_samples_makes_first_and_follow_up_turns_from_rewrite():
+    qa = _qa(question="잔액이 ●●●원 맞나요?")
+    assert prepare.build_samples(qa, REWRITE) == [
+        {"messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": "잔액이 [금액_1] 맞나요?"},
+            {"role": "assistant", "content": RW_ANSWER},
+        ]},
+        {"messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": "잔액이 [금액_1] 맞나요?"},
+            {"role": "assistant", "content": RW_ANSWER},
+            {"role": "user", "content": "어떻게 확인하나요?"},
+            {"role": "assistant", "content": RW_OUTPUT},
+        ]},
+    ]
+
+
+def test_build_samples_masks_inputs_and_rewritten_answers():
+    qa = _qa(question="제 계좌 110-9876-5432 잔액이요", follow_up="010-2222-3333으로 연락 주세요")
+    rewrite = {**REWRITE, "answer": "주민번호 900101-1234567 같은 정보는 채팅에 입력하지 마세요."}
+    samples = prepare.build_samples(qa, rewrite)
+    assert _turns(samples) == ["follow_up"]      # 마스킹 토큰이 든 answer는 첫 턴 목표에서 빠진다
+    text = json.dumps(samples, ensure_ascii=False)
     for original in ("110-9876-5432", "900101-1234567", "010-2222-3333"):
         assert original not in text
     for token in ("[계좌번호_1]", "[주민번호_1]", "[전화번호_1]"):
@@ -178,25 +218,30 @@ def test_build_sample_masks_personal_info_in_inputs():
 
 
 @pytest.mark.parametrize("output", [
-    "잔액은 ●●●원입니다.",                       # 금액 → 마스킹 토큰
+    "잔액은 [금액_1]입니다.",                     # 마스킹 토큰
     "영업일 기준 3일 뒤에 확인하세요.",            # 숫자
     "신분증과 서류를 지참해 주세요.",               # 서류 키워드
     "○○자유통장으로 바꾸시면 편리합니다.",         # 입력에 없는 상품명
 ])
-def test_build_sample_excludes_bad_outputs(output):
-    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
-          "follow_up": "통장 바꾸면 좋은가요?", "output": output}
-    assert prepare.build_sample(qa) is None
+def test_build_samples_excludes_bad_outputs(output):
+    qa = _qa(follow_up="통장 바꾸면 좋은가요?")
+    assert _turns(prepare.build_samples(qa, {**REWRITE, "output": output})) == ["first"]
 
 
 @pytest.mark.parametrize("follow_up, output", [
     ("카드로도 되나요?", "체크카드로 결제하신 내역도 앱에서 보실 수 있습니다."),           # 허용 목록 명칭
     ("자유통장도 조회되나요?", "자유통장도 앱에서 조회하실 수 있습니다."),                  # 입력에 있는 상품명
 ])
-def test_build_sample_keeps_generic_or_mentioned_product_names(follow_up, output):
-    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
-          "follow_up": follow_up, "output": output}
-    assert prepare.build_sample(qa)["messages"][-1]["content"] == output
+def test_build_samples_keeps_generic_or_mentioned_product_names(follow_up, output):
+    samples = prepare.build_samples(_qa(follow_up=follow_up), {**REWRITE, "output": output})
+    assert samples[-1]["messages"][-1]["content"] == output
+
+
+def test_product_names_are_checked_against_each_turn_inputs():
+    # 첫 턴의 입력은 question뿐이고, 이어진 턴의 입력은 question·answer·follow_up이다
+    qa = _qa(follow_up="자유통장도 조회되나요?")
+    rewrite = {"answer": "자유통장 잔액도 채팅으로 보실 수 있습니다.", "output": "자유통장도 앱에서 조회하실 수 있습니다."}
+    assert _turns(prepare.build_samples(qa, rewrite)) == ["follow_up"]
 
 
 @pytest.mark.parametrize("output", [
@@ -219,10 +264,8 @@ def test_build_sample_keeps_generic_or_mentioned_product_names(follow_up, output
     "문자 메시지로도 정리해 드릴 수 있으니 문의해 주시기 바랍니다",
     "최근 자동이체 여부를 조회해 드리겠습니다",
 ])
-def test_build_sample_excludes_call_center_outputs(output):
-    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
-          "follow_up": "어떻게 확인하나요?", "output": output}
-    assert prepare.build_sample(qa) is None
+def test_build_samples_excludes_call_center_outputs(output):
+    assert _turns(prepare.build_samples(_qa(), {**REWRITE, "output": output})) == ["first"]
 
 
 @pytest.mark.parametrize("output", [
@@ -232,10 +275,8 @@ def test_build_sample_excludes_call_center_outputs(output):
     "조회 방법을 안내해 드리겠습니다",
     "해당 내역은 조회해 드릴 수 없으니 상담원에게 확인해 주세요",
 ])
-def test_build_sample_keeps_handoff_and_guide_outputs(output):
-    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
-          "follow_up": "어떻게 확인하나요?", "output": output}
-    assert prepare.build_sample(qa)["messages"][-1]["content"] == output
+def test_build_samples_keeps_handoff_and_guide_outputs(output):
+    assert prepare.build_samples(_qa(), {**REWRITE, "output": output})[-1]["messages"][-1]["content"] == output
 
 
 @pytest.mark.parametrize("output", [
@@ -244,10 +285,8 @@ def test_build_sample_keeps_handoff_and_guide_outputs(output):
     "확인한 바에 따르면 변경 사항이 정상적으로 적용되어 있습니다",
     "입금이 정상적으로 확인되었습니다",
 ])
-def test_build_sample_excludes_lookup_claims(output):
-    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
-          "follow_up": "어떻게 확인하나요?", "output": output}
-    assert prepare.build_sample(qa) is None
+def test_build_samples_excludes_lookup_claims(output):
+    assert _turns(prepare.build_samples(_qa(), {**REWRITE, "output": output})) == ["first"]
 
 
 @pytest.mark.parametrize("output", [
@@ -255,10 +294,8 @@ def test_build_sample_excludes_lookup_claims(output):
     "조회 결과를 앱에서 확인하실 수 있습니다",
     "입금 여부는 앱에서 확인하실 수 있습니다",
 ])
-def test_build_sample_keeps_lookup_guides(output):
-    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
-          "follow_up": "어떻게 확인하나요?", "output": output}
-    assert prepare.build_sample(qa)["messages"][-1]["content"] == output
+def test_build_samples_keeps_lookup_guides(output):
+    assert prepare.build_samples(_qa(), {**REWRITE, "output": output})[-1]["messages"][-1]["content"] == output
 
 
 @pytest.mark.parametrize("output", [
@@ -266,23 +303,30 @@ def test_build_sample_keeps_lookup_guides(output):
     "●월 ●일 기준으로 반영됩니다",
     "OOO 고객님 확인 부탁드립니다",
 ])
-def test_build_sample_excludes_deidentified_marks(output):
-    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "네.",
-          "follow_up": "어떻게 확인하나요?", "output": output}
-    assert prepare.build_sample(qa) is None
+def test_build_samples_excludes_deidentified_marks(output):
+    assert _turns(prepare.build_samples(_qa(), {**REWRITE, "output": output})) == ["first"]
 
 
-def test_call_center_rule_applies_to_output_only():
-    qa = {"source_id": "S1", "question": "잔액 알려주세요", "answer": "문자로 상세 정보를 보내드리겠습니다",
-          "follow_up": "계좌 번호를 알려드릴게요", "output": OK_OUTPUT}
-    messages = prepare.build_sample(qa)["messages"]
-    assert [m["content"] for m in messages[2:]] == ["문자로 상세 정보를 보내드리겠습니다", "계좌 번호를 알려드릴게요", OK_OUTPUT]
+@pytest.mark.parametrize("length, turns", [(200, ["first", "follow_up"]), (201, ["first"])])
+def test_build_samples_excludes_targets_over_max_chars(length, turns):
+    output = ("앱에서 확인하실 수 있습니다. " * 20)[:length]
+    assert len(output) == length
+    assert _turns(prepare.build_samples(_qa(), {**REWRITE, "output": output})) == turns
 
 
-def test_lookup_claim_and_deid_rules_apply_to_output_only():
-    qa = {"source_id": "S1", "question": "★★은행 OO 계좌 잔액 알려주세요", "answer": "확인 결과 입금이 정상적으로 확인되었습니다",
-          "follow_up": "●월 ●일에 들어온 거 맞나요?", "output": OK_OUTPUT}
-    assert prepare.build_sample(qa)["messages"][-1]["content"] == OK_OUTPUT
+@pytest.mark.parametrize("answer", [
+    "문자로 상세 정보를 보내드리겠습니다",            # 행동 약속
+    "확인 결과 입금이 정상적으로 확인되었습니다",      # 조회 결과 단정
+])
+def test_rejected_answer_drops_only_first_turn_and_stays_in_history(answer):
+    samples = prepare.build_samples(_qa(), {**REWRITE, "answer": answer})
+    assert _turns(samples) == ["follow_up"]
+    assert [m["content"] for m in samples[0]["messages"][2:]] == [answer, "어떻게 확인하나요?", RW_OUTPUT]
+
+
+def test_safety_filter_does_not_judge_inputs():
+    qa = _qa(question="★★은행 OO 계좌 잔액 알려주세요", follow_up="계좌 번호를 알려드릴게요. ●월 ●일에 들어온 거 맞나요?")
+    assert _turns(prepare.build_samples(qa, REWRITE)) == ["first", "follow_up"]
 
 
 def test_generic_product_names_constant():
@@ -346,12 +390,12 @@ def test_synth_samples_have_no_mock_account_numbers_or_balances():
 
 
 def test_build_dataset_splits_by_source_id_and_adds_synth(raw, tmp_path):
-    split_path, zip_paths = raw
+    split_path, zip_paths, rewrites = raw
     out_dir = tmp_path / "out"
-    counts = prepare.build_dataset(split_path, out_dir, zip_paths)
+    counts = prepare.build_dataset(split_path, out_dir, zip_paths, rewrites)
 
-    synth = _synth_counts()
-    assert counts == {"train": synth["train"] + 1, "val": synth["val"] + 1, "test": synth["test"] + 1}
+    synth = _synth_counts()      # AI Hub QA 하나에서 첫 턴·이어진 턴 2개
+    assert counts == {"train": synth["train"] + 2, "val": synth["val"] + 2, "test": synth["test"] + 2}
     files = {name: (out_dir / file).read_text(encoding="utf-8") for name, file in prepare.SPLIT_FILES.items()}
     assert {name: len(_read(out_dir / file)) for name, file in prepare.SPLIT_FILES.items()} == counts
     assert "학습용" in files["train"] and "학습용" not in files["val"] + files["test"]
@@ -359,6 +403,36 @@ def test_build_dataset_splits_by_source_id_and_adds_synth(raw, tmp_path):
     assert "평가용" in files["test"] and "평가용" not in files["train"] + files["val"]
     for excluded in ("다른 주제", "라벨 어긋난", "분할에 없는"):
         assert excluded not in "".join(files.values())
+
+
+def test_build_dataset_skips_qas_missing_from_rewrite_cache(raw, tmp_path):
+    split_path, zip_paths, _ = raw
+    partial = _write_rewrites(tmp_path / "partial.jsonl", zip_paths, source_ids={"S1", "S2"})
+    counts = prepare.build_dataset(split_path, tmp_path / "out", zip_paths, partial)
+
+    synth = _synth_counts()
+    assert counts == {"train": synth["train"] + 2, "val": synth["val"] + 2, "test": synth["test"]}
+    assert "평가용" not in _read_all(tmp_path / "out")
+
+
+def test_build_dataset_without_rewrite_cache_writes_only_synth(raw, tmp_path):
+    split_path, zip_paths, _ = raw
+    counts = prepare.build_dataset(split_path, tmp_path / "out", zip_paths, tmp_path / "none.jsonl")
+    assert counts == dict(_synth_counts())
+
+
+def test_build_dataset_writes_rewritten_answers_not_originals(tmp_path):
+    zip_path = _write_zip(tmp_path / "TL.zip", [
+        _doc("S1", "잔액 알려주세요", answer="원문답변에만있는문구입니다.", output="원문정답에만있는문구입니다."),
+    ])
+    split_path = tmp_path / "split.json"
+    split_path.write_text(json.dumps({"S1": "train"}), encoding="utf-8")
+    out_dir = tmp_path / "out"
+    prepare.build_dataset(split_path, out_dir, [zip_path], _write_rewrites(tmp_path / "rewrites.jsonl", [zip_path]))
+
+    text = _read_all(out_dir)
+    assert "원문답변에만있는문구" not in text and "원문정답에만있는문구" not in text
+    assert RW_ANSWER in text and RW_OUTPUT in text
 
 
 def test_build_dataset_leaves_no_personal_info_in_files(tmp_path):
@@ -369,19 +443,22 @@ def test_build_dataset_leaves_no_personal_info_in_files(tmp_path):
     ])
     split_path = tmp_path / "split.json"
     split_path.write_text(json.dumps({"S1": "train", "S2": "train"}), encoding="utf-8")
+    rewrites = _write_rewrites(tmp_path / "rewrites.jsonl", [zip_path], rewrite={
+        **REWRITE, "answer": "010-4444-5555 번호로는 연락드리지 않으니 채팅으로 문의해 주세요."})
     out_dir = tmp_path / "out"
-    prepare.build_dataset(split_path, out_dir, [zip_path])
+    prepare.build_dataset(split_path, out_dir, [zip_path], rewrites)
 
-    text = "".join((out_dir / file).read_text(encoding="utf-8") for file in prepare.SPLIT_FILES.values())
-    for original in ("110-9876-5432", "900101-1234567", "010-2222-3333"):
+    text = _read_all(out_dir)
+    for original in ("110-9876-5432", "900101-1234567", "010-2222-3333", "010-4444-5555"):
         assert original not in text
+    assert "[전화번호_1] 번호로는" in text     # 다시 쓴 answer도 mask()를 거쳐 이어진 턴 history에 남는다
 
 
 def test_build_dataset_output_passes_train_check_and_is_deterministic(raw, tmp_path):
-    split_path, zip_paths = raw
+    split_path, zip_paths, rewrites = raw
     first, second = tmp_path / "first", tmp_path / "second"
-    counts = prepare.build_dataset(split_path, first, zip_paths)
-    prepare.build_dataset(split_path, second, zip_paths)
+    counts = prepare.build_dataset(split_path, first, zip_paths, rewrites)
+    prepare.build_dataset(split_path, second, zip_paths, rewrites)
 
     assert check_dataset(first, "train") == {"train": counts["train"], "valid": counts["val"]}
     assert check_dataset(first, "test") == {"test": counts["test"]}
@@ -389,8 +466,20 @@ def test_build_dataset_output_passes_train_check_and_is_deterministic(raw, tmp_p
         assert (first / file).read_bytes() == (second / file).read_bytes()
 
 
-def test_main_takes_paths_as_arguments(raw, tmp_path):
-    split_path, zip_paths = raw
+def test_main_takes_paths_as_arguments(raw, tmp_path, capsys):
+    split_path, zip_paths, _ = raw
+    partial = _write_rewrites(tmp_path / "partial.jsonl", zip_paths, source_ids={"S1"})
+    out_dir = tmp_path / "cli"
+    prepare.main(["--split", str(split_path), "--out-dir", str(out_dir), "--zip", *map(str, zip_paths),
+                  "--rewrites", str(partial)])
+    assert check_dataset(out_dir, "train")
+    assert RW_OUTPUT in (out_dir / "train.jsonl").read_text(encoding="utf-8")
+    assert "재작성 없음으로 빠진 QA 2건" in capsys.readouterr().out    # S2·S3. S6은 분할에 없어 세지 않는다
+
+
+def test_main_reads_default_rewrite_cache(raw, tmp_path, monkeypatch):
+    split_path, zip_paths, rewrites = raw
+    monkeypatch.setattr(prepare, "REWRITE_PATH", rewrites)
     out_dir = tmp_path / "cli"
     prepare.main(["--split", str(split_path), "--out-dir", str(out_dir), "--zip", *map(str, zip_paths)])
-    assert check_dataset(out_dir, "train")
+    assert RW_OUTPUT in (out_dir / "train.jsonl").read_text(encoding="utf-8")
