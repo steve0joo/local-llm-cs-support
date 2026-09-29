@@ -5,6 +5,7 @@ classify와 에이전트는 목, 마스킹은 진짜를 쓴다.
 - choice가 오면 라우팅을 건너뛴다. pending이 있으면 원래 질문을 에이전트에 넘기고 pending을 비운다.
 - 에이전트와 classify는 마스킹된 문장만 본다. history에는 answer 턴만 쌓이고 원본 값·슬롯 값은 들어가지 않는다.
 """
+import httpx
 import pytest
 
 from app.agents.base import AgentReply, AgentRequest
@@ -190,3 +191,35 @@ def test_sessions_are_isolated(agents, classifier):
     dispatch("s1", "C001", "잔액")
     dispatch("s2", "C001", "잔액")
     assert agents["balance"].requests[1].history == []
+
+
+def test_new_message_after_clarify_discards_stale_pending(agents, classifier):
+    """되묻기 뒤 버튼 대신 타이핑하면 이전 되묻기는 무효다. 이후 계좌 선택 choice에 옛 질문이 딸려가면 안 된다."""
+    classifier.topics = ["loan", "interest"]
+    dispatch("s1", "C002", "대출 잔액이랑 이자 얼마 남았어요?")      # clarify → pending 저장
+    classifier.topics = ["balance"]
+    dispatch("s1", "C002", "잔액 알려줘")                          # 타이핑 → pending 무효
+    assert get_session("s1").pending is None
+    dispatch("s1", "C002", "입출금 ****5678", choice="balance")    # 계좌 선택 버튼
+    assert agents["balance"].requests[-1].masked_text == "입출금 ****5678"
+
+
+# ---- 모델 호출 실패 안전망 ----
+
+def test_agent_model_failure_returns_fallback_answer_not_500(agents, classifier, monkeypatch):
+    def broken(req):
+        raise httpx.ConnectError("Ollama down")
+
+    monkeypatch.setattr(agents["balance"], "handle", broken)
+    res = dispatch("s1", "C001", "잔액 알려줘")
+    assert res["type"] == "answer" and res["agent"] == "balance" and res["topic"] == "balance"
+    assert res["text"] == dispatch_module.MODEL_UNAVAILABLE_TEXT
+    assert res["slots"] == {} and res["options"] == []
+    assert get_session("s1").history == []      # 게이트웨이 문장은 모델 문맥이 아니다
+
+
+def test_non_http_agent_errors_still_propagate(agents, classifier, monkeypatch):
+    """코드 버그(KeyError 등)까지 삼키면 안 된다. 안전망은 모델 호출 실패에만 적용한다."""
+    monkeypatch.setattr(agents["balance"], "handle", lambda req: (_ for _ in ()).throw(KeyError("bug")))
+    with pytest.raises(KeyError):
+        dispatch("s1", "C001", "잔액 알려줘")

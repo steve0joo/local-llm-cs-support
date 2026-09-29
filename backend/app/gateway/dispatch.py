@@ -2,6 +2,8 @@
 
 from collections.abc import Iterable
 
+import httpx
+
 from app import router
 from app.agents import balance, interest, loan
 from app.agents.base import Agent, AgentRequest
@@ -13,7 +15,8 @@ AGENTS: dict[str, Agent] = {"balance": balance.agent, "loan": loan.agent, "inter
 
 CLARIFY_TEXT = "어느 쪽을 먼저 도와드릴까요?"
 NO_TOPIC_TEXT = "어떤 업무를 도와드릴까요?"
-UNSUPPORTED_TEXT = "해당 주제는 아직 지원하지 않습니다. 상담원 연결을 도와드릴까요?" 
+UNSUPPORTED_TEXT = "해당 주제는 아직 지원하지 않습니다. 상담원 연결을 도와드릴까요?"
+MODEL_UNAVAILABLE_TEXT = "지금은 답변을 드릴 수 없습니다. 상담원 연결을 도와드릴까요?"   # 에이전트의 모델 호출 실패(Ollama 없음·모델 없음·타임아웃)
 
 
 def dispatch(session_id: str, customer_id: str, message: str, choice: str | None = None) -> dict:
@@ -27,6 +30,7 @@ def dispatch(session_id: str, customer_id: str, message: str, choice: str | None
             question, session.pending = session.pending, None
         return _answer(session, session_id, customer_id, choice, question)
 
+    session.pending = None                                # 새 질문이 오면 이전 되묻기는 무효
     topics = router.classify(question.masked_text).topics
     supported = [t for t in SUPPORTED if t in topics]
 
@@ -48,7 +52,10 @@ def _answer(session: Session, session_id: str, customer_id: str, target: str, qu
         mask_map=question.mask_map,
         history=list(session.history),                 # 이번 턴 이전까지의 복사본
     )
-    reply = AGENTS[target].handle(req)
+    try:
+        reply = AGENTS[target].handle(req)
+    except httpx.HTTPError:                                # 모델 호출 실패는 500 대신 안내 문장으로. 코드 버그는 그대로 올린다
+        return _response("answer", agent=target, topic=target, text=MODEL_UNAVAILABLE_TEXT)
     session.history += [
         {"role": "user", "content": question.masked_text},
         {"role": "assistant", "content": reply.text},  # {{슬롯}} 그대로, 슬롯 값은 넣지 않는다
