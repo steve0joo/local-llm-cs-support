@@ -6,12 +6,16 @@
 
 답변 자리표시: {due} = 다음 납부일, {days} = 연체 일수, {repay} = 상환 방식, {rate_type} = 금리 방식,
 {pay} = 납부 방법. {{슬롯}}은 그대로 남는다.
+
+자동이체 조회값에는 서비스(balance_source.enrich)처럼 계좌 잔액 비교 결과(debit_status)와 잔액 슬롯(debit_balance)이 붙는다.
+debit_split 템플릿은 답을 "{scenario}_short"(잔액이 적음)·"{scenario}_enough"(잔액이 이상)로 나눈다.
 """
 
 import random
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
+from app.agents.interest.balance_source import debit_check
 from app.agents.interest.prompt import build_messages
 
 # TRAINING_DATA_PLAN.md 3절 목표 비중(%)
@@ -69,10 +73,13 @@ class Template:
     answers: dict[str, tuple[str, ...]]  # scenario → 답변 후보
     scenarios: tuple[str, ...] = BOTH
     history: tuple[tuple[str, dict[str, str]], ...] = field(default=())  # (이전 질문, scenario → 이전 답변)
+    payment: str | None = None  # 납부 방법 고정(자동이체 전용 질문)
+    debit_split: bool = False  # 자동이체 계좌 잔액이 적은지에 따라 답을 나눈다
 
 
 PAY_SOON = "가능한 빨리 납부해 주시기 바랍니다."
 ASK_STAFF = "자세한 사항은 상담원에게 확인해 주세요."
+NO_ASSERT = "약정과 기준에 따라 달라 제가 단정해 드리기 어렵습니다."
 
 TEMPLATES: tuple[Template, ...] = (
     Template(
@@ -137,6 +144,19 @@ TEMPLATES: tuple[Template, ...] = (
         },
     ),
     Template(
+        "tpl-overdue_action-rule",
+        "overdue_action",
+        ("연체하면 신용점수 떨어져요?", "연체되면 금리도 올라가요?", "며칠 연체되면 기록이 남아요?", "연체 중이어도 대출 연장 되나요?"),
+        {
+            "normal": (
+                "연체가 신용이나 대출 조건에 어떤 영향을 주는지는 " + NO_ASSERT + " 현재 {{loan_label}}은 연체 없이 정상 상태이며, 적용 기준은 상담원에게 확인해 주세요.",
+            ),
+            "overdue": (
+                "연체가 신용이나 대출 조건에 어떤 영향을 주는지는 " + NO_ASSERT + " 현재 {days}일 연체된 금액 {{overdue_amount}}이 있으니 " + PAY_SOON + " 적용 기준은 상담원에게 확인해 주세요.",
+            ),
+        },
+    ),
+    Template(
         "tpl-reason-01",
         "reason",
         ("이자가 왜 이렇게 많이 나왔어요?", "이번 달 이자가 평소보다 많은 것 같아요", "이자가 늘어난 이유가 뭐예요?"),
@@ -149,6 +169,27 @@ TEMPLATES: tuple[Template, ...] = (
                 "현재 {{loan_label}}이 {days}일 연체되어 연체 금액 {{overdue_amount}}이 남아 있습니다. 연체가 있으면 납부할 금액이 늘어날 수 있습니다. 정확한 계산 내역은 상담원에게 확인해 주세요.",
             ),
         },
+    ),
+    Template(
+        "tpl-reason-autodebit",
+        "reason",
+        ("자동이체 해 뒀는데 왜 연체예요?", "자동이체인데 연체된 이유가 뭐예요?", "통장에서 이자가 왜 안 빠져나갔어요?"),
+        {
+            "overdue_short": (
+                "현재 {{loan_label}}은 {days}일 연체 중이며, 자동이체 계좌 잔액 {{debit_balance}}이 연체 금액 {{overdue_amount}}보다 적은 상태입니다. 출금이 되지 않은 정확한 이유는 상담원에게 확인해 주세요.",
+            ),
+            "overdue_enough": (
+                "현재 {{loan_label}}은 {days}일 연체 중이며 연체 금액은 {{overdue_amount}}입니다. 자동이체 계좌 잔액은 연체 금액 이상으로 조회되며, 출금이 되지 않은 이유는 상담원에게 확인해 주세요.",
+            ),
+            "normal_short": (
+                "조회 결과 현재 {{loan_label}}에는 연체된 금액이 없습니다. 다만 자동이체 계좌 잔액 {{debit_balance}}이 납부 예정 이자 {{interest_due}}보다 적은 상태이니 다음 납부일 {due} 전에 확인해 주세요.",
+            ),
+            "normal_enough": (
+                "조회 결과 현재 {{loan_label}}에는 연체된 금액이 없고, 자동이체 계좌 잔액도 납부 예정 이자 이상입니다. 다음 납부일은 {due}이며, 출금 내역은 상담원에게 확인해 주세요.",
+            ),
+        },
+        payment="자동이체",
+        debit_split=True,
     ),
     Template(
         "tpl-term-overdue_interest",
@@ -285,6 +326,27 @@ TEMPLATES: tuple[Template, ...] = (
         },
     ),
     Template(
+        "tpl-loan_terms-debit_balance",
+        "loan_terms",
+        ("자동이체 통장 잔액으로 충분해요?", "이번 이자 빠져나갈 돈 통장에 있어요?", "자동이체 계좌에 돈 얼마 있어요?"),
+        {
+            "normal_short": (
+                "자동이체 계좌 잔액은 {{debit_balance}}으로, 납부 예정 이자 {{interest_due}}보다 적은 상태입니다. 다음 납부일 {due} 전에 잔액을 확인해 주세요.",
+            ),
+            "normal_enough": (
+                "자동이체 계좌 잔액은 {{debit_balance}}으로, 납부 예정 이자 {{interest_due}} 이상입니다. 다음 납부일은 {due}입니다.",
+            ),
+            "overdue_short": (
+                "자동이체 계좌 잔액은 {{debit_balance}}으로, 현재 {days}일 연체된 금액 {{overdue_amount}}보다 적은 상태입니다. " + PAY_SOON,
+            ),
+            "overdue_enough": (
+                "자동이체 계좌 잔액은 {{debit_balance}}으로, {days}일 연체된 금액 {{overdue_amount}} 이상입니다. 연체 금액이 언제 출금되는지는 상담원에게 확인해 주세요.",
+            ),
+        },
+        payment="자동이체",
+        debit_split=True,
+    ),
+    Template(
         "tpl-followup-01",
         "followup",
         ("그럼 연체된 건요?", "연체 금액은요?", "그건 언제까지 내야 돼요?"),
@@ -307,20 +369,32 @@ TEMPLATES: tuple[Template, ...] = (
 )
 
 
-def make_item(rng: random.Random, scenario: str) -> dict:
+def make_item(rng: random.Random, scenario: str, payment: str | None = None) -> dict:
     """가상 조회 결과. 금액은 슬롯으로만 쓰여 모델 입력에 나타나지 않는다."""
     overdue = scenario == "overdue"
-    return {
+    item = {
         "loan_id": "L000",
         "product_type": rng.choice(PRODUCT_TYPES),
         "repayment_method": rng.choice(REPAYMENT_METHODS),
         "interest_type": rng.choice(INTEREST_TYPES),
-        "payment_method": rng.choice(PAYMENT_METHODS),
+        "payment_method": payment or rng.choice(PAYMENT_METHODS),
+        "debit_account_id": "",
         "next_due_date": (date(2026, 10, 1) + timedelta(days=rng.randint(0, 90))).isoformat(),
         "interest_due": rng.randrange(10_000, 1_000_000, 10),
         "overdue_amount": rng.randrange(10_000, 3_000_000, 10) if overdue else 0,
         "overdue_days": rng.randint(2, 90) if overdue else 0,  # 2 이상: "하루밖에 안 됐죠?" 전제를 바로잡는 답과 맞춘다
     }
+    if item["payment_method"] == "자동이체":  # 서비스의 balance_source.enrich와 같은 필드
+        target = item["overdue_amount"] if overdue else item["interest_due"]
+        balance = rng.randrange(0, target, 10) if rng.random() < 0.5 else rng.randrange(target, target * 3, 10)
+        item |= {"debit_account_id": "A000", "debit_status": debit_check(item, balance), "debit_balance": balance}
+    return item
+
+
+def _answer_key(t: Template, scenario: str, item: dict) -> str:
+    if not t.debit_split:
+        return scenario
+    return f"{scenario}_{'short' if item['debit_status'].endswith('적음') else 'enough'}"
 
 
 def _fill(text: str, item: dict) -> str:
@@ -353,13 +427,13 @@ def generate(total: int = 400, seed: int = 42) -> list[dict]:
         for i in range(n):
             t = templates[i % len(templates)]
             scenario = t.scenarios[(i // len(templates)) % len(t.scenarios)]
-            item = make_item(rng, scenario)
+            item = make_item(rng, scenario, t.payment)
             question = t.questions[(i // len(templates)) % len(t.questions)]
             history = []
             for prev_q, prev_a in t.history:
                 history += [{"role": "user", "content": prev_q}, {"role": "assistant", "content": _fill(prev_a[scenario], item)}]
             messages = build_messages(question, history, item)
-            messages.append({"role": "assistant", "content": _fill(rng.choice(t.answers[scenario]), item)})
+            messages.append({"role": "assistant", "content": _fill(rng.choice(t.answers[_answer_key(t, scenario, item)]), item)})
             records.append(
                 {
                     "id": f"synth-{t.id}-{i:03d}",

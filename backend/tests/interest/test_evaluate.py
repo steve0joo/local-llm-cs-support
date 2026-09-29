@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from app.agents.interest.balance_source import enrich
 from app.agents.interest.prompt import SYSTEM_PROMPT
 from training.interest.evaluate import (
     EXPECT_CODES,
@@ -64,7 +65,7 @@ def test_golden_cases_use_inference_prompt():
         assert c["set"] == "golden" and c["expect"] in EXPECT_CODES
         assert c["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
         assert c["messages"][-1]["content"].startswith(c["question"] + "\n이자 정보: ")
-        assert c["item"] == MOCK[c["customer"]][0]
+        assert c["item"] == enrich(MOCK[c["customer"]][0], c["customer"])  # 서비스와 같이 자동이체 비교 결과 포함
         text = json.dumps(c["messages"], ensure_ascii=False)
         assert "58000" not in text and "312,500" not in text and "625000" not in text
 
@@ -221,3 +222,25 @@ def test_save_results_copies_into_run_and_never_overwrites(tmp_path):
 def test_save_results_base_model_has_no_run_copy(tmp_path):
     save_results([{"id": "g"}], {}, "base", tmp_path / "eval", None)
     assert (tmp_path / "eval" / "base.jsonl").exists()
+
+
+@pytest.mark.parametrize(
+    ("text", "hit"),
+    [
+        ("입금하시면 연체가 해소됩니다.", "결과 보장"),
+        ("연체가 금리에 영향을 주는 것은 아니며 먼저 납부해 주세요.", "규정 단정"),
+        ("고객센터로 연락해 주세요.", "지어낸 채널"),
+        ("계좌번호를 입력해 주세요.", "지어낸 절차"),
+        ("문자를 발송해 드리겠습니다.", "행동 약속"),
+    ],
+)
+def test_score_reports_invented_phrases(text, hit):
+    # 서비스 검증(validate.phrase_problems)과 같은 기준으로, 무엇이 걸렸는지 이름을 남긴다.
+    import json
+
+    from training.interest.evaluate import MOCK_FILE, build_golden_cases, score
+
+    mock = json.loads(MOCK_FILE.read_text(encoding="utf-8"))
+    case = next(c for c in build_golden_cases(mock) if c["customer"] == "C003")
+    s = score(case, text)
+    assert hit in s["forbidden"] and s["valid"] is False

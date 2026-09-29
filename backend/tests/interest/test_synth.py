@@ -111,3 +111,51 @@ def test_loan_terms_answers_use_item_values():
 def test_reviewed_ids_are_real_templates():
     # 오타로 존재하지 않는 ID를 넣으면 그 템플릿이 검수 누락된 채 조용히 빠진다.
     assert REVIEWED <= {t.id for t in TEMPLATES}
+
+
+# --- 자동이체 계좌 잔액 비교(balance_source.debit_check와 같은 기준) ------------------------
+
+from app.agents.interest.balance_source import debit_check  # noqa: E402
+from app.agents.interest.validate import phrase_problems  # noqa: E402
+
+DEBIT_TEMPLATES = {"tpl-reason-autodebit", "tpl-loan_terms-debit_balance"}
+
+
+def test_autodebit_items_carry_balance_like_service():
+    # 서비스(agent.py)는 자동이체 고객이면 잔액 비교 결과를 이자 정보 줄에 넣는다. 학습 입력도 같아야 한다.
+    for r in RECORDS:
+        item = r["item"]
+        if item["payment_method"] == "자동이체":
+            assert item["debit_status"] == debit_check(item, item["debit_balance"])
+            assert "자동이체 계좌 잔액=" + item["debit_status"] in last_user(r)
+        else:
+            assert "debit_status" not in item and "debit_balance" not in item
+
+
+def test_autodebit_templates_force_autodebit_and_cover_both_statuses():
+    debit = [r for r in RECORDS if r["source_id"] in DEBIT_TEMPLATES]
+    assert debit and all(r["item"]["payment_method"] == "자동이체" for r in debit)
+    statuses = Counter(r["item"]["debit_status"] for r in debit)
+    assert {"연체 금액보다 적음", "연체 금액 이상", "납부 예정 이자보다 적음", "납부 예정 이자 이상"} <= set(statuses)
+
+
+def test_autodebit_answers_match_status():
+    for r in RECORDS:
+        if r["source_id"] not in DEBIT_TEMPLATES:
+            continue
+        a, status = answer(r), r["item"]["debit_status"]
+        if status.endswith("적음"):
+            assert "적은 상태" in a, a
+        else:
+            assert "적은 상태" not in a and "이상" in a, a
+
+
+def test_no_invented_phrases():
+    # 결과 보장·규정 단정·지어낸 채널·약속은 서비스 검증에서 기본 문장으로 바뀐다.
+    for r in RECORDS:
+        assert phrase_problems(answer(r)) == [], (r["id"], answer(r))
+
+
+def test_rule_questions_answered_without_assertion():
+    rule = [r for r in RECORDS if r["source_id"] == "tpl-overdue_action-rule"]
+    assert rule and all("상담원" in answer(r) and "단정" in answer(r) for r in rule)

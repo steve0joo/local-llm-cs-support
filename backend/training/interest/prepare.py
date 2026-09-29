@@ -4,7 +4,7 @@ AI Hub 라벨링데이터(이자/연체금액)를 추론과 같은 입력 형식
 추론 때 출력 검증(validate.is_valid)에 걸릴 정답은 학습에서 뺀다(INT-004).
 합성 샘플(synth.py)은 --with-synth일 때만 넣는다(팀 합의 대기). 사람 검수(reviews.json)를 통과한 레코드만 학습에 쓴다.
 
-실행: cd backend && python -m training.interest.prepare [--with-synth] [--include-unreviewed]
+실행: cd backend && python -m training.interest.prepare [--with-synth] [--with-manual] [--include-unreviewed] [--allow-fallback-mask]
 출력: data/processed/interest/candidates.jsonl(검수 대상 전체), {train,val,test}.jsonl, stats.json
 검수: data/processed/interest/reviews.json = {"<id>": {"ok": true|false, "note": "...", "output": "고친 정답(선택)"}}
 """
@@ -48,6 +48,27 @@ _GENERIC_PRODUCT = {
 }
 # 모델은 조회만 한다. 무언가를 처리했다고 말하면 지어낸 사실이다.
 _CLAIM = re.compile(r"(?:완료|처리|적용|등록|신청|접수|변경|해지|정지|발송)(?:해\s?드렸|되었|됐|했|하였)")
+# 챗봇이 나중에 할 수 없는 일을 약속하는 정답(문자 발송·연락·상담원 연결·확인 후 회신). "안내해 드리겠습니다"는 제외.
+_PROMISE = re.compile(r"(?:발송|연결|처리|확인|등록|접수|전송|변경|신청)(?:해|하여)?\s?드리겠|연락\s?드리겠|보내\s?드리겠")
+# 통화 상담의 대기 표현
+_CALL_CONTEXT = re.compile(r"잠시만|기다려\s?주|대기해")
+# 상담 톤(evaluate.tone_ok와 공유): 마크다운 없음, 요약체 아님, 존댓말 끝맺음, 5문장 이하
+_MARKDOWN = re.compile(r"\*\*|^\s*[-*•]\s|^\s*\d+[.)]\s|^#{1,6}\s", re.M)
+_SUMMARY_START = re.compile(r"^\s*고객님(?:께서는|께서)")
+_POLITE_END = re.compile(r"(?:니다|세요|까요|어요|에요|예요|해요|돼요|네요|아요)[.!?]?\s*$")
+_SENTENCE = re.compile(r"[^.!?]+[.!?]?")
+
+
+def tone_ok(answer: str) -> bool:
+    sentences = [x for x in _SENTENCE.findall(answer) if x.strip()]
+    return (
+        not _MARKDOWN.search(answer)
+        and not _SUMMARY_START.search(answer)
+        and bool(_POLITE_END.search(answer))
+        and len(sentences) <= 5
+    )
+
+
 # 고객에게 개인정보·인증정보를 요구하는 정답. 챗봇은 원본 개인정보를 받지 않는다.
 _PII_REQUEST = re.compile(r"주민\s*(?:등록)?\s*번호|비밀\s*번호|생년월일|인증\s*번호|보안\s*카드|OTP")
 # 통화 요약체로 시작하는 정답("고객님께서는 ~하고자 하셨습니다")
@@ -212,6 +233,12 @@ def build_sample(qa: dict, mask_fn) -> tuple[dict | None, str | None]:
         return None, "pii_request"
     if _CLAIM.search(output):
         return None, "claim"
+    if _PROMISE.search(output):
+        return None, "promise"
+    if _CALL_CONTEXT.search(output):
+        return None, "call_context"
+    if not tone_ok(output):
+        return None, "tone"
 
     overdue = "overdue_amount" in used or bool(_OVERDUE_STATE.search(output))
     item = make_item(qa["qa_id"], overdue, product, mentioned_terms(output))
@@ -340,10 +367,16 @@ def fallback_mask(text: str) -> str:
     return text
 
 
-def resolve_mask():
+def resolve_mask(allow_fallback: bool = False):
+    """공통 app.masking(팀원C)을 쓴다. 없으면 --allow-fallback-mask일 때만 임시 함수로 만든다.
+    학습 입력은 서비스 게이트웨이와 같은 마스킹이어야 하므로(계약 4) 최종 학습 데이터에 임시 함수가 섞이지 않게 막는다."""
     try:
         from app.masking import mask
     except ImportError:
+        if not allow_fallback:
+            raise SystemExit(
+                "app.masking이 없다. 실험용으로 임시 마스킹을 쓰려면 --allow-fallback-mask를 준다(최종 학습 데이터에는 쓰지 않는다)."
+            )
         return fallback_mask, "fallback"
     return (lambda text: mask(text).masked_text), "app.masking"
 
@@ -352,12 +385,14 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="cs-interest 학습 데이터 생성")
     p.add_argument("--with-synth", action="store_true", help="합성 샘플 포함(팀 합의 후)")
     p.add_argument("--synth-total", type=int, default=400)
+    p.add_argument("--with-manual", action="store_true", help="사람이 고친 수동 샘플(training/interest/manual/qNN.json) 포함")
     p.add_argument("--include-unreviewed", action="store_true", help="검수 전 레코드도 학습에 포함(파이프라인 시험용)")
     p.add_argument("--out-dir", type=Path, default=OUT_DIR, help="출력 폴더(기본 data/processed/interest)")
+    p.add_argument("--allow-fallback-mask", action="store_true", help="공통 app.masking이 없을 때 임시 마스킹 허용(실험용)")
     args = p.parse_args(argv)
     out_dir = args.out_dir
 
-    mask_fn, mask_source = resolve_mask()
+    mask_fn, mask_source = resolve_mask(args.allow_fallback_mask)
     split_map = json.loads(SPLIT_FILE.read_text(encoding="utf-8")) if SPLIT_FILE.exists() else None
     reviews = json.loads(REVIEWS_FILE.read_text(encoding="utf-8")) if REVIEWS_FILE.exists() else {}
     synth = []
@@ -365,6 +400,11 @@ def main(argv: list[str] | None = None) -> None:
         from training.interest.synth import generate
 
         synth = generate(total=args.synth_total)
+    if args.with_manual:
+        from training.interest import manual_data
+
+        mock = json.loads((BACKEND / "app/agents/interest/mock_data.json").read_text(encoding="utf-8"))
+        synth = synth + manual_data.expand(manual_data.load_manual(manual_data.MANUAL_DIR), mock)
 
     splits, candidates, stats = build_dataset(
         load_qas(RAW_DIR), mask_fn, split_map, synth=synth, reviews=reviews, include_unreviewed=args.include_unreviewed
@@ -373,6 +413,7 @@ def main(argv: list[str] | None = None) -> None:
         "mask": mask_source,
         "split": "split.json" if split_map is not None else "fallback-hash",
         "with_synth": args.with_synth,
+        "with_manual": args.with_manual,
         "include_unreviewed": args.include_unreviewed,
         "reviews": len(reviews),
         "out_dir": str(out_dir),

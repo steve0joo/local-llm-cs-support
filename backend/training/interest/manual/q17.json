@@ -1,0 +1,11 @@
+{
+  "no": 17,
+  "customer": "C002",
+  "question": "이자 계산 좀 해 주세요",
+  "check": "계산하지 않음, 조회된 이자만",
+  "v03_answer": "{{loan_label}}의 다음 납부일은 2026-10-15입니다. 납부하실 이자는 {{interest_due}}이며, 납부일까지 연체 없이 납부해 주시면 됩니다.",
+  "note": "",
+  "source": "ok",
+  "answer": "{{loan_label}}의 다음 납부일은 {due}입니다. 납부하실 이자는 {{interest_due}}이며, 납부일까지 연체 없이 납부해 주시면 됩니다.",
+  "train": true
+}

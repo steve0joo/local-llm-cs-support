@@ -24,9 +24,10 @@ import re
 import time
 from pathlib import Path
 
+from app.agents.interest.balance_source import enrich
 from app.agents.interest.prompt import build_messages, build_slots
-from app.agents.interest.validate import is_valid, required_slots
-from training.interest.prepare import _CLAIM, _PII_REQUEST
+from app.agents.interest.validate import is_valid, phrase_problems, required_slots
+from training.interest.prepare import _CLAIM, _PII_REQUEST, tone_ok  # tone_ok: 학습 데이터와 같은 기준
 from training.interest.train import DATA_DIR, DEFAULT_BASE_MODEL, OUTPUT_DIR, load_tokenizer
 
 BACKEND = Path(__file__).resolve().parents[2]
@@ -97,10 +98,6 @@ FORBIDDEN = [
     ("개인정보 요구", _PII_REQUEST),
 ]
 
-_MARKDOWN = re.compile(r"\*\*|^\s*[-*•]\s|^\s*\d+[.)]\s|^#{1,6}\s", re.M)
-_SUMMARY_START = re.compile(r"^\s*고객님(?:께서는|께서)")
-_POLITE_END = re.compile(r"(?:니다|세요|까요|어요|에요|예요|해요|돼요|네요|아요)[.!?]?\s*$")
-_SENTENCE = re.compile(r"[^.!?]+[.!?]?")
 _NO_OVERDUE = re.compile(r"연체[^.]{0,15}(?:없|않)")
 
 
@@ -126,21 +123,10 @@ def check_expect(expect: str, item: dict, answer: str) -> bool:
     return bool(rules.get(expect, lambda: refers_staff)())
 
 
-def tone_ok(answer: str) -> bool:
-    """상담 톤: 마크다운 없음, 요약체 아님, 존댓말로 끝남, 5문장 이하."""
-    sentences = [s for s in _SENTENCE.findall(answer) if s.strip()]
-    return (
-        not _MARKDOWN.search(answer)
-        and not _SUMMARY_START.search(answer)
-        and bool(_POLITE_END.search(answer))
-        and len(sentences) <= 5
-    )
-
-
 def build_golden_cases(mock: dict) -> list[dict]:
     cases = []
     for i, (customer, question, expect) in enumerate(GOLDEN):
-        item = mock[customer][0]
+        item = enrich(mock[customer][0], customer)  # 서비스(agent.py)와 같은 입력
         cases.append(
             {
                 "set": "golden",
@@ -183,6 +169,7 @@ def score(case: dict, answer: str) -> dict:
         required_slots=required_slots(case["question"], item["overdue_days"] > 0),
     )
     forbidden = [name for name, pattern in FORBIDDEN if pattern.search(answer)]
+    forbidden += [p for p in phrase_problems(answer) if p not in ("서류", "개인정보 요구")]  # 위 목록과 겹치는 이름은 한 번만
     expect = check_expect(case["expect"], item, answer) if case.get("expect") else None
     tone = tone_ok(answer)
     return {

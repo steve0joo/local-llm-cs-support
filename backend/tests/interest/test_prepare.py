@@ -178,8 +178,8 @@ def test_other_qa_topic_is_excluded():
 
 
 def test_bank_placeholder_in_output_is_normalized():
-    sample, _ = build_sample(qa("★★은행 고객센터로 문의해 주세요."), identity)
-    assert sample["messages"][4]["content"] == "은행 고객센터로 문의해 주세요."
+    sample, _ = build_sample(qa("★★은행 상담원에게 문의해 주세요."), identity)
+    assert sample["messages"][4]["content"] == "은행 상담원에게 문의해 주세요."
 
 
 @pytest.mark.parametrize(
@@ -194,6 +194,15 @@ def test_bank_placeholder_in_output_is_normalized():
         ("성함과 주민등록번호 앞 네 자리, 계좌 비밀번호를 알려 주시면 확인해 드리겠습니다.", "pii_request"),
         ("본인 확인을 위해 생년월일을 말씀해 주세요.", "pii_request"),
         ("휴대폰으로 받으신 인증번호를 입력해 주세요.", "pii_request"),
+        # 챗봇이 나중에 할 수 없는 일을 약속하면 지어낸 사실이 된다(문자 발송·연락·연결·확인).
+        ("확인 후 문자로 발송해 드리겠습니다.", "promise"),
+        ("담당자가 확인 후 연락드리겠습니다.", "promise"),
+        ("상담원에게 연결해 드리겠습니다.", "promise"),
+        # 통화 상담의 대기 표현은 챗봇 답에 맞지 않는다.
+        ("잠시만 기다려 주시면 확인 결과를 알려드립니다.", "call_context"),
+        # 상담 톤: 마크다운·반말·6문장 이상(evaluate.tone_ok와 같은 기준).
+        ("**연체 금액**은 상담원에게 확인해 주세요.", "tone"),
+        ("이자는 다음 납부일에 나가.", "tone"),
     ],
 )
 def test_more_excluded_outputs(output, reason):
@@ -357,9 +366,76 @@ def test_main_writes_to_out_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(prepare, "REVIEWS_FILE", tmp_path / "none2.json")
     out = tmp_path / "04"
 
-    prepare.main(["--include-unreviewed", "--out-dir", str(out)])
+    prepare.main(["--include-unreviewed", "--allow-fallback-mask", "--out-dir", str(out)])
 
     names = {p.name for p in out.iterdir()}
     assert {"train.jsonl", "val.jsonl", "test.jsonl", "candidates.jsonl", "stats.json"} <= names
     stats = json.loads((out / "stats.json").read_text(encoding="utf-8"))
     assert stats["aihub_total"] == 1 and stats["out_dir"] == str(out)
+
+
+# --- 임시 마스킹 차단: 공통 app.masking이 없으면 명시적으로 허용할 때만 임시 함수 ---------------
+
+
+def test_resolve_mask_refuses_fallback_by_default(monkeypatch):
+    import sys
+
+    from training.interest.prepare import resolve_mask
+
+    monkeypatch.setitem(sys.modules, "app.masking", None)  # 공통 마스킹이 없는 상태를 재현
+    with pytest.raises(SystemExit, match="allow-fallback-mask"):
+        resolve_mask(allow_fallback=False)
+    fn, source = resolve_mask(allow_fallback=True)
+    assert source == "fallback" and fn("010-1234-5678") == "[전화번호_1]"
+
+
+def test_main_without_masking_and_flag_stops(tmp_path, monkeypatch):
+    import sys
+
+    import training.interest.prepare as prepare
+
+    monkeypatch.setitem(sys.modules, "app.masking", None)
+    with pytest.raises(SystemExit):
+        prepare.main(["--out-dir", str(tmp_path / "x")])
+    assert not (tmp_path / "x").exists()
+
+
+def test_guidance_phrase_is_not_a_promise():
+    # "안내해 드리겠습니다" 뒤에 안내 내용이 바로 이어지면 괜찮다.
+    sample, reason = build_sample(qa("납부 방법을 안내해 드리겠습니다. 납부일에 맞춰 입금해 주세요."), identity)
+    assert reason is None
+
+
+def test_tone_ok_shared_with_evaluate():
+    from training.interest import evaluate, prepare
+
+    assert evaluate.tone_ok is prepare.tone_ok
+
+
+# --- 수동 샘플(manual/qNN.json) 병합 ----------------------------------------------------
+
+
+def test_main_with_manual_adds_train_only_records(tmp_path, monkeypatch):
+    import training.interest.manual_data as manual_data
+    import training.interest.prepare as prepare
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    manual = tmp_path / "manual"
+    manual.mkdir()
+    row = {"no": 1, "customer": "C002", "question": "이번 달 이자 얼마야?", "check": "", "v03_answer": "", "note": "",
+           "source": "ok", "answer": "{{loan_label}}의 다음 납부일은 {due}이고, 납부하실 이자는 {{interest_due}}입니다.", "train": True}
+    (manual / "q01.json").write_text(json.dumps(row, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(prepare, "RAW_DIR", raw)
+    monkeypatch.setattr(prepare, "SPLIT_FILE", tmp_path / "none.json")
+    monkeypatch.setattr(prepare, "REVIEWS_FILE", tmp_path / "none2.json")
+    monkeypatch.setattr(manual_data, "MANUAL_DIR", manual)
+    out = tmp_path / "05"
+
+    prepare.main(["--with-manual", "--allow-fallback-mask", "--out-dir", str(out)])
+
+    train = [json.loads(line) for line in (out / "train.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(train) == 3 and {r["origin"] for r in train} == {"manual"}
+    assert (out / "val.jsonl").read_text(encoding="utf-8") == ""
+    stats = json.loads((out / "stats.json").read_text(encoding="utf-8"))
+    assert stats["with_manual"] is True and stats["by_origin"] == {"manual": 3}
