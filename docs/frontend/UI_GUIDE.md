@@ -43,8 +43,29 @@
 ## 컴포넌트
 ### 말풍선
 ```
-봇:   max-w-[80%] rounded-lg bg-stone-100 px-4 py-3 text-sm text-stone-800
-고객: max-w-[80%] rounded-lg bg-stone-900 px-4 py-3 text-sm text-white ml-auto
+봇:   max-w-[80%] rounded-lg bg-stone-100 px-4 py-3 text-sm text-stone-800 whitespace-pre-line
+고객: max-w-[80%] rounded-lg bg-stone-900 px-4 py-3 text-sm text-white ml-auto whitespace-pre-line
+오류: 봇 말풍선과 같고 글자색만 text-red-700 (#b91c1c)
+```
+- 치환된 슬롯 조각은 `font-semibold tabular-nums`다. 여러 줄 슬롯 값(예: 거래내역)도 같다.
+- 선택지 버튼은 그 봇 말풍선 바로 아래에 둔다.
+
+### 입력 중 표시
+```
+봇 말풍선 자리에 점 3개(•), 각 점 animate-pulse — 스크린리더용 텍스트 "답변 작성 중"
+```
+
+### 첫 화면 안내 문구
+```
+대화 영역 가운데, text-sm text-stone-500 — 말풍선 아님
+문구: "잔액·거래내역, 대출, 이자·연체 문의를 입력해 주세요."
+```
+
+### 데모 고객 선택
+```
+라벨 "데모 고객" text-sm text-stone-500
+select: rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 focus:border-teal-700 focus:outline-none disabled:opacity-40
+항목 텍스트: C001 · C002 · C003
 ```
 
 ### 선택지 버튼
@@ -59,10 +80,11 @@ rounded-md border border-teal-700 px-3 py-1.5 text-sm text-teal-700 hover:bg-tea
 ```
 
 ## 레이아웃
-- 대화 영역 너비: `max-w-2xl mx-auto`, 화면 높이를 채우고 대화 목록만 스크롤한다
+- 대화 영역 너비: `max-w-2xl mx-auto`, 화면 높이(`h-dvh`)를 채우고 대화 목록만 스크롤한다. 입력창은 아래에 고정된다
 - 봇은 좌측, 고객은 우측 정렬
 - 간격: 말풍선 사이 `space-y-3`, 선택지 버튼 사이 `gap-2`
-- 상단: 서비스 이름(텍스트) + 데모 고객 선택 드롭다운
+- 상단: 서비스 이름(텍스트 "은행 상담") + 데모 고객 선택 드롭다운
+- `<html lang="ko">`, 메타데이터 제목도 "은행 상담"
 
 ## 타이포그래피
 | 용도 | 스타일 |
@@ -72,8 +94,8 @@ rounded-md border border-teal-700 px-3 py-1.5 text-sm text-teal-700 hover:bg-tea
 | 금액(치환된 슬롯) | `font-semibold tabular-nums` |
 
 ## 애니메이션
-- 새 말풍선 fade-in (0.2s)
-- 입력 중 표시: 점 3개 깜빡임
+- 새 말풍선 fade-in (0.2s) — Tailwind 4에는 기본 fade-in이 없으므로 `globals.css`의 `@theme`에 `--animate-fade-in`과 `@keyframes`를 정의해 `animate-fade-in`으로 쓴다
+- 입력 중 표시: 점 3개 깜빡임(`animate-pulse`)
 - 그 외 애니메이션 금지
 
 ## 아이콘
