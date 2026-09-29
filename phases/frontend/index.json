@@ -8,15 +8,78 @@
     "docs/frontend/ADR.md"
   ],
   "steps": [
-    { "step": 0, "name": "project-setup", "status": "pending" },
-    { "step": 1, "name": "fill-slots", "status": "pending" },
-    { "step": 2, "name": "api-client", "status": "pending" },
-    { "step": 3, "name": "option-buttons", "status": "pending" },
-    { "step": 4, "name": "message-bubble", "status": "pending" },
-    { "step": 5, "name": "customer-picker", "status": "pending" },
-    { "step": 6, "name": "chat-window", "status": "pending" },
-    { "step": 7, "name": "chat-page", "status": "pending" },
-    { "step": 8, "name": "manual-check", "status": "pending", "type": "human" },
-    { "step": 9, "name": "review", "status": "pending" }
-  ]
+    {
+      "step": 0,
+      "name": "project-setup",
+      "status": "completed",
+      "started_at": "2026-09-29T09:39:08+0900",
+      "summary": "create-next-app@16.3.6 --empty 스캐폴드(next 16.3.6·react 19.2.8·tailwind 4.3.3·typescript 5.9.3·eslint 9.39.5) + vitest 5.0.2·vite 8.3.1·jsdom 29.1.1·RTL 16·@types/node 24, next.config.ts(rewrites→:8000·proxyTimeout 120_000·agentRules false), vitest.config.ts·src/test/setup.ts, types/chat.ts, layout.tsx(lang=ko·제목 '은행 상담'), tsconfig의 @/* alias 제거",
+      "cost_usd": 0.8806,
+      "num_turns": 22,
+      "completed_at": "2026-09-29T09:41:06+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/.gitignore",
+        "frontend/eslint.config.mjs",
+        "frontend/next.config.ts",
+        "frontend/package-lock.json",
+        "frontend/package.json",
+        "frontend/postcss.config.mjs",
+        "frontend/src/app/globals.css",
+        "frontend/src/app/layout.tsx",
+        "frontend/src/app/page.tsx",
+        "frontend/src/test/setup.ts",
+        "frontend/src/types/chat.ts",
+        "frontend/tsconfig.json",
+        "frontend/vitest.config.ts"
+      ]
+    },
+    {
+      "step": 1,
+      "name": "fill-slots",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "api-client",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "option-buttons",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "message-bubble",
+      "status": "pending"
+    },
+    {
+      "step": 5,
+      "name": "customer-picker",
+      "status": "pending"
+    },
+    {
+      "step": 6,
+      "name": "chat-window",
+      "status": "pending"
+    },
+    {
+      "step": 7,
+      "name": "chat-page",
+      "status": "pending"
+    },
+    {
+      "step": 8,
+      "name": "manual-check",
+      "status": "pending",
+      "type": "human"
+    },
+    {
+      "step": 9,
+      "name": "review",
+      "status": "pending"
+    }
+  ],
+  "created_at": "2026-09-29T09:39:08+0900"
 }
