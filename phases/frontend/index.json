@@ -234,7 +234,18 @@
     {
       "step": 14,
       "name": "chat-restyle",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T11:16:50+0900",
+      "summary": "표시 컴포넌트 3개 클래스만 UI_GUIDE로 교체(props·마크업·문구·라벨·테스트 무변경) — MessageBubble: 공통 BUBBLE에서 rounded-lg 빼고 봇 rounded-[18px] rounded-bl-md bg-bubble text-ink(오류는 text-red-700)·고객 rounded-[18px] rounded-br-md bg-ink text-white ml-auto, whitespace-pre-line·animate-fade-in·슬롯 font-semibold tabular-nums 유지 | OptionButtons: rounded-full border-[1.5px] border-accent-blue px-4 py-1.5 text-sm font-medium text-accent-blue hover:bg-accent-blue/10 disabled:opacity-40 | CustomerPicker: 라벨 text-sm text-ink-soft, select rounded-full border border-ink/20 bg-white px-3 py-1.5 text-sm text-ink focus:border-accent-blue focus:outline-none disabled:opacity-40 | teal·stone·hex·arbitrary 색·금지 패턴 없음, 빌드 CSS에서 rounded-[18px]이 rounded-b[lr]-md보다 앞에 출력돼 꼬리 모서리 적용 확인 | AC 전부 통과(대상 3파일 16케이스, 전체 8파일 82케이스, lint·tsc·build·grep, 테스트 파일 diff 없음)",
+      "cost_usd": 0.9209,
+      "num_turns": 19,
+      "completed_at": "2026-09-29T11:18:05+0900",
+      "ac_verified": true,
+      "files": [
+        "frontend/src/components/CustomerPicker.tsx",
+        "frontend/src/components/MessageBubble.tsx",
+        "frontend/src/components/OptionButtons.tsx"
+      ]
     },
     {
       "step": 15,
