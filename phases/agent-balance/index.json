@@ -34,7 +34,21 @@
     {
       "step": 2,
       "name": "resolve-typed",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T14:36:19+0900",
+      "summary": "resolve.choose_account(accounts, mask_map, masked_text)로 시그니처 변경 + 규칙 4(masked_text에 별칭·끝 4자리가 든 본인 계좌가 정확히 1개면 그 계좌, 규칙 3 뒤·5 앞) 추가, agent.handle()은 req.masked_text를 넘기도록 호출만 수정. test_resolve.py 기존 호출에 masked_text 인자 추가 + 규칙 4 예·C001 생활비(규칙 5)·본인 아닌 번호 우선(규칙 3)·두 계좌 동시 매칭 되묻기, test_agent.py에 J9 2턴(되묻기 → '생활비 계좌 잔액 알려줘' → A003 잔액, 모델 1회) 추가. ARCHITECTURE·PRD의 3차 표시 제거. AC 53 passed, backend 전체 267 passed",
+      "cost_usd": 1.2288,
+      "num_turns": 24,
+      "completed_at": "2026-09-29T14:38:10+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/app/agents/balance/agent.py",
+        "backend/app/agents/balance/resolve.py",
+        "backend/tests/balance/test_agent.py",
+        "backend/tests/balance/test_resolve.py",
+        "docs/agent-balance/ARCHITECTURE.md",
+        "docs/agent-balance/PRD.md"
+      ]
     },
     {
       "step": 3,
