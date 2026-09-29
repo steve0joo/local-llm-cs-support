@@ -8,6 +8,8 @@ def classify_intent(question: str) -> str:
         word in question for word in LOOKUP_WORDS
     ):
         return "general"
-    if any(word in question for word in TRANSACTION_WORDS):
+    # '입출금'은 계좌 별칭이라 '출금'으로 세지 않는다
+    without_alias = question.replace("입출금", "")
+    if any(word in without_alias for word in TRANSACTION_WORDS):
         return "transactions"
     return "balance"

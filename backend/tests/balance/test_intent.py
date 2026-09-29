@@ -15,6 +15,11 @@ from app.agents.balance.resolve import find_clicked
         ("잔액을 어떻게 보여줘?", "balance"),
         ("입금 내역 알려줘", "transactions"),
         ("출금 내역", "transactions"),
+        ("입출금 계좌 잔액 알려줘", "balance"),
+        ("입출금 ****6789", "balance"),
+        ("입출금 내역 보여줘", "transactions"),
+        ("출금 내역 보여줘", "transactions"),
+        ("어제 출금된 거 뭐예요?", "transactions"),
     ],
 )
 def test_classify_intent(question: str, expected: str) -> None:
