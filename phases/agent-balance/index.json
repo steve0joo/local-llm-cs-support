@@ -86,7 +86,17 @@
     {
       "step": 5,
       "name": "prepare-filter",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T14:59:30+0900",
+      "summary": "prepare.build_sample에 BAL-009 콜센터식 정답 제외 추가(기존 is_valid·상품명 규칙 뒤, 마스킹 뒤 output에만 적용): 비공개 정규식 _ASKS_PERSONAL_INFO(성함·생년월일·계좌 ?번호·비밀번호·주민(등록)번호·카드 ?번호 뒤 같은 문장 25자 안 알려·말씀해·입력해·눌러)·_PROMISES_ACTION(보내·전송해·발급해·조치해·정정해·처리해 + ' ?드리겠/드리니'), 헬퍼 _call_center_answer. 공개 시그니처 그대로, random 없음. test_prepare.py에 12개 추가(빠질 예문 7 parametrize → None, 남길 예문 4 parametrize → 정답 그대로, answer·follow_up에만 규칙 표현이 있는 QA는 남는지 1), 먼저 7 failed red 확인. deviation: 없음(ARCHITECTURE 단어 목록·예문 그대로, 문서 미수정). 실제 AI Hub 데이터로 실행 안 함. AC 36 passed, backend 전체 303 passed",
+      "cost_usd": 1.0346,
+      "num_turns": 14,
+      "completed_at": "2026-09-29T15:01:01+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/prepare.py"
+      ]
     },
     {
       "step": 6,
