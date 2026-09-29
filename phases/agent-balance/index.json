@@ -148,7 +148,17 @@
     {
       "step": 9,
       "name": "synth-widen",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-09-29T21:49:37+0900",
+      "summary": "prepare.py에 사용자 검토 문장 그대로 MASKED_BALANCE_QUESTIONS·MASKED_TRANSACTION_QUESTIONS(각 5, {account_no} 자리표시자)·GENERAL_SYNTH(범주 5: 조회 방법 질문5·응답3, 조회 오류·수수료/금리/한도·발급/변경·모르는 입금 각 질문4·응답3) 추가, synth_samples에 두 종류 추가(기존 슬롯 샘플 그대로): 가상 계좌번호는 템플릿 인덱스 i마다 mock 계좌(C001~C003 순서) account_no를 넣고 app.masking.mask()로 [계좌번호_1] 변환 → build_messages([], 질문, 의도) × 그 의도 슬롯 응답 전체, general은 범주마다 build_messages([], 질문, 'general') × 범주 응답 전체, 분할은 i % 10 규칙(비공개 _synth_split로 세 곳 공용). 분할별 합성 샘플 train 261(슬롯 192·가상 계좌번호 18+18·general 33)·val 51(24·6+6·15)·test 51(24·6+6·15). test_prepare.py: _synth_counts를 종류별 리터럴 SYNTH_COUNTS 합으로 바꾸고 7개 추가(가상 계좌번호 [계좌번호_1]·원번호 부재·자기 의도 2, 가상 계좌번호 인덱스 규칙 2, general 의도·_rejected 안전망 필터(is_valid·MAX_CHARS 포함)·범주 크기 1, general 인덱스 규칙 1, 종류×분할 수·결정성 1), 기존 mock 값 부재 테스트에 [계좌번호_1] 포함 확인 추가. 먼저 12 failed red 확인. intent.py·app/·training/common 미수정. deviation: 없음(문서 미수정). AC 122 passed, backend 전체 376 passed",
+      "cost_usd": 1.7386,
+      "num_turns": 21,
+      "completed_at": "2026-09-29T21:52:50+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/prepare.py"
+      ]
     },
     {
       "step": 10,
