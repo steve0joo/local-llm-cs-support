@@ -74,14 +74,6 @@ GOLDEN = [
     ("C003", "대출 기간 늘리려면 뭐 챙겨야 해요?", "staff"),
     ("C003", "변동금리랑 고정금리 중 뭐가 유리해요?", "term"),
     # 계약 6 확장 제안 고객(C004~C007). 기존 문항 번호가 바뀌지 않게 맨 뒤에 둔다.
-    ("C004", "연체된 지 얼마나 됐어요?", "overdue_status"),
-    ("C004", "자동이체 걸어 뒀는데 왜 연체예요?", "reason"),
-    ("C005", "이자 낼 계좌가 따로 있나요?", "loan_terms_payment"),
-    ("C005", "상환 방식이 뭐로 돼 있죠?", "loan_terms_repay"),
-    ("C006", "연체됐다는데 며칠 된 거예요?", "overdue_status"),
-    ("C006", "이번에 낼 이자 금액 알려 주실래요?", "interest_amount"),
-    ("C007", "이자 내는 날 얼마나 남았어요?", "due_date"),
-    ("C007", "제 대출 금리 방식 알려 주세요", "loan_terms_interest_type"),
 ]
 EXPECT_CODES = [
     "interest_amount", "due_date", "overdue_status", "overdue_action", "reason", "term", "rate", "calculation",

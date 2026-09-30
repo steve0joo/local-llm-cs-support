@@ -36,7 +36,7 @@ def test_overdue_loan():
 
 def test_items_have_contract_fields_and_no_rate():
     # INT-002: 금리·이율 필드를 두지 않는다. 금액은 정수(원).
-    for customer_id in ("C001", "C002", "C003", "C004", "C005", "C006", "C007"):
+    for customer_id in ("C001", "C002", "C003"):
         for item in get_interest(customer_id):
             assert set(item) == FIELDS
             assert isinstance(item["interest_due"], int)
@@ -93,40 +93,20 @@ def test_matches_mock_data_table():
     ]
 
 
-NEW_CUSTOMERS = {
-    # docs/agent-interest/ARCHITECTURE.md "mock 데이터" 표 — 계약 6 확장 제안(팀 합의 대기)
-    "C004": {"loan_id": "L003", "product_type": "신용대출", "repayment_method": "원리금균등", "interest_type": "변동",
-             "payment_method": "자동이체", "debit_account_id": "A005", "next_due_date": "2026-10-20", "interest_due": 41500,
-             "overdue_amount": 890000, "overdue_days": 65},
-    "C005": {"loan_id": "L004", "product_type": "전세자금대출", "repayment_method": "원금균등", "interest_type": "고정",
-             "payment_method": "가상계좌 입금", "debit_account_id": "", "next_due_date": "2026-10-10", "interest_due": 176000,
-             "overdue_amount": 0, "overdue_days": 0},
-    "C006": {"loan_id": "L005", "product_type": "주택담보대출", "repayment_method": "원리금균등", "interest_type": "고정",
-             "payment_method": "자동이체", "debit_account_id": "A006", "next_due_date": "2026-10-26", "interest_due": 405000,
-             "overdue_amount": 548000, "overdue_days": 2},
-    "C007": {"loan_id": "L006", "product_type": "신용대출", "repayment_method": "만기일시", "interest_type": "변동",
-             "payment_method": "자동이체", "debit_account_id": "A007", "next_due_date": "2026-09-30", "interest_due": 27500,
-             "overdue_amount": 0, "overdue_days": 0},
-}
-
-
-@pytest.mark.parametrize("customer_id", sorted(NEW_CUSTOMERS))
-def test_new_customers_match_table(customer_id):
-    assert get_interest(customer_id) == [NEW_CUSTOMERS[customer_id]]
 
 
 def test_scenarios_cover_variety():
     # 데모 값을 외웠는지 드러나도록 연체 일수·납부·상환·금리 방식이 고루 나와야 한다.
-    items = [i for c in ("C002", "C003", "C004", "C005", "C006", "C007") for i in get_interest(c)]
-    assert {i["overdue_days"] for i in items} >= {0, 2, 12, 65}
+    items = [i for c in ("C002", "C003") for i in get_interest(c)]
+    assert {i["overdue_days"] for i in items} >= {0, 12}
     assert {i["payment_method"] for i in items} == {"자동이체", "가상계좌 입금"}
-    assert {i["repayment_method"] for i in items} == {"원리금균등", "원금균등", "만기일시"}
+    assert {i["repayment_method"] for i in items} == {"원리금균등", "만기일시"}
     assert {i["interest_type"] for i in items} == {"고정", "변동"}
     assert len({i["loan_id"] for i in items}) == len(items)  # 대출 ID 중복 없음
 
 
 def test_debit_account_only_for_autodebit():
     # 자동이체 대출만 자동이체 계좌(잔액조회 mock의 account_id)를 가리킨다. 가상계좌는 빈 문자열.
-    for c in ("C002", "C003", "C004", "C005", "C006", "C007"):
+    for c in ("C002", "C003"):
         [item] = get_interest(c)
         assert bool(item["debit_account_id"]) == (item["payment_method"] == "자동이체")

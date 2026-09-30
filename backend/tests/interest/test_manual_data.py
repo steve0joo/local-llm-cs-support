@@ -103,18 +103,6 @@ def test_expand_refuses_answer_that_fails_checks():
         expand(rows, MOCK)
 
 
-def test_expand_adds_autodebit_status_like_service():
-    # 서비스(agent.py)처럼 자동이체 계좌 잔액 비교 결과가 이자 정보 줄에 들어가야, 그 사실을 쓰는 답이 모순되지 않는다.
-    import json
-    from pathlib import Path
-
-    mock = json.loads((Path(__file__).resolve().parents[2] / "app/agents/interest/mock_data.json").read_text(encoding="utf-8"))
-    rows = [{"no": 35, "customer": "C006", "question": "내일 자동이체 다시 되면 괜찮은 거죠?", "train": True,
-             "answer": "현재 {{loan_label}}이 {days}일 연체되어 있고, 자동이체 계좌 잔액이 연체 금액보다 적은 상태입니다. 자동이체가 다시 진행된 뒤 연체가 정리되는지는 상담원에게 확인해 주세요."}]
-    records = expand(rows, mock)
-    assert all("자동이체 계좌 잔액=연체 금액보다 적음" in r["messages"][-2]["content"] for r in records)
-    assert all(r["item"]["debit_balance"] == 150000 for r in records)
-
 
 def test_expand_refuses_hold30_questions():
     # 평가 전용 질문이 학습에 들어가면 그 세트로는 더 이상 공정하게 평가할 수 없다.

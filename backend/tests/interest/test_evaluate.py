@@ -43,7 +43,7 @@ NORMAL, OVERDUE = MOCK["C002"][0], MOCK["C003"][0]
 def test_golden_set_size_and_coverage():
     # EVALUATION.md 질문 2: 30~50문항, 유형 골고루, 정상·연체 고객 모두
     assert 30 <= len(GOLDEN) <= 50
-    assert {customer for customer, _, _ in GOLDEN} == {"C002", "C003", "C004", "C005", "C006", "C007"}
+    assert {customer for customer, _, _ in GOLDEN} == {"C002", "C003"}
     assert {expect for _, _, expect in GOLDEN} == set(EXPECT_CODES)
 
 

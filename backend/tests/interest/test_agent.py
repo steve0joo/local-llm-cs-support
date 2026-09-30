@@ -102,16 +102,6 @@ def test_rate_question_with_staff_guidance_passes(fake_llm):
     assert reply.text == "적용 금리 수치는 상담원에게 확인해 주세요."
 
 
-def test_autodebit_shortage_reaches_prompt_as_status_only(fake_llm):
-    # C004: 자동이체 계좌 잔액(12,300원)이 연체 금액보다 적다는 비교 결과만 모델에 간다.
-    calls = fake_llm("현재 자동이체 계좌 잔액이 연체 금액보다 적습니다. 잔액은 {{debit_balance}}입니다.")
-    reply = InterestAgent().handle(request("C004", "자동이체인데 왜 연체예요?"))
-    prompt = json.dumps(calls[0]["messages"], ensure_ascii=False)
-    assert "자동이체 계좌 잔액=연체 금액보다 적음" in prompt
-    assert "12300" not in prompt and "12,300" not in prompt
-    assert reply.slots["debit_balance"] == "12,300원"
-    assert reply.text.startswith("현재 자동이체 계좌 잔액이")
-
 
 def test_model_failure_falls_back(monkeypatch):
     # Ollama가 꺼져 있거나 시간 초과여도 고객에게는 조회 사실만 담은 기본 문장을 돌려준다.

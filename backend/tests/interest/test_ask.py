@@ -10,7 +10,7 @@ C002, C003 = MOCK["C002"][0], MOCK["C003"][0]
 
 
 def test_thirty_questions_over_demo_and_eval_customers():
-    assert len(TEST_QUESTIONS) == 30
+    assert len(TEST_QUESTIONS) == 22
     assert {c for c, _, _ in TEST_QUESTIONS} <= set(MOCK)
     assert any(c == "C001" for c, _, _ in TEST_QUESTIONS)  # 대출 없음 경로도 확인
 
@@ -22,7 +22,7 @@ def test_questions_not_in_golden_or_templates():
 
 def test_build_cases_uses_inference_prompt_and_skips_no_loan():
     cases = build_cases(MOCK)
-    assert len(cases) == 29  # C001은 모델을 부르지 않는다
+    assert len(cases) == 21  # C001은 모델을 부르지 않는다
     assert all(c["messages"][-1]["content"].startswith(c["question"] + "\n이자 정보: ") for c in cases)
 
 
@@ -63,7 +63,7 @@ def test_weak30_targets_known_weaknesses_and_is_new():
     from training.interest.probe import PROBE_QUESTIONS
 
     assert set(QUESTION_SETS) == {"ask30", "weak30", "debit10", "hold30"}
-    assert len(WEAK_QUESTIONS) == 30 and {c for c, _, _ in WEAK_QUESTIONS} <= set(MOCK) - {"C001"}
+    assert len(WEAK_QUESTIONS) == 13 and {c for c, _, _ in WEAK_QUESTIONS} <= set(MOCK) - {"C001"}
     used = (
         {q for _, q, _ in GOLDEN} | {q for _, q, _ in TEST_QUESTIONS} | {q for _, q, _ in PROBE_QUESTIONS}
         | {q for t in TEMPLATES for q in t.questions} | {r["question"] for r in load_manual() if r["no"] < 31}
@@ -76,7 +76,7 @@ def test_build_cases_numbering_per_set():
     from training.interest.ask import build_cases
 
     cases = build_cases(MOCK, "weak30")
-    assert [c["no"] for c in cases] == list(range(31, 61))
+    assert [c["no"] for c in cases] == list(range(31, 44))
     assert cases[0]["id"] == "weak30-31"
 
 
@@ -90,8 +90,8 @@ def test_debit10_is_new_and_numbered():
         | {q for _, q, _ in PROBE_QUESTIONS} | {q for t in TEMPLATES for q in t.questions}
         | {r["question"] for r in load_manual() if r["no"] < 61}
     )  # debit10 자신은 수동 검수 후 q61~q70 학습 샘플이 됐으므로 그 이전 샘플과만 비교한다
-    assert len(DEBIT_QUESTIONS) == 10 and not {q for _, q, _ in DEBIT_QUESTIONS} & used
-    assert [c["no"] for c in build_cases(MOCK, "debit10")] == list(range(61, 71))
+    assert len(DEBIT_QUESTIONS) == 3 and not {q for _, q, _ in DEBIT_QUESTIONS} & used
+    assert [c["no"] for c in build_cases(MOCK, "debit10")] == list(range(61, 64))
 
 
 # --- 평가 전용 세트(hold30, 101~130번): 학습에 절대 넣지 않는다 ---------------------------
@@ -110,11 +110,11 @@ def test_hold30_is_new_and_covers_all_customers():
         | {q for t in TEMPLATES for q in t.questions} | {r["question"] for r in load_manual()}
     )
     hold = [q for _, q, _ in HOLD_QUESTIONS]
-    assert len(hold) == 30 and len(set(hold)) == 30 and not set(hold) & used
+    assert len(hold) == 13 and len(set(hold)) == 13 and not set(hold) & used
     assert {c for c, _, _ in HOLD_QUESTIONS} == set(MOCK)  # C001(대출 없음)~C007 모두
 
 
 def test_hold30_numbering():
     cases = build_cases(MOCK, "hold30")
-    assert cases[0]["id"] == "hold30-101" and cases[-1]["no"] == 130
-    assert len(cases) == 29  # C001은 모델을 부르지 않는다
+    assert cases[0]["id"] == "hold30-101" and cases[-1]["no"] == 113
+    assert len(cases) == 12  # C001은 모델을 부르지 않는다

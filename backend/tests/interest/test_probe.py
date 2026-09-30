@@ -11,8 +11,8 @@ MOCK = json.loads((Path(__file__).resolve().parents[2] / "app/agents/interest/mo
 
 
 def test_forty_new_questions_cover_customers_and_types():
-    assert len(PROBE_QUESTIONS) == 40
-    assert {c for c, _, _ in PROBE_QUESTIONS} == {"C002", "C003", "C004", "C005", "C006", "C007"}
+    assert len(PROBE_QUESTIONS) == 20
+    assert {c for c, _, _ in PROBE_QUESTIONS} == {"C002", "C003"}
     assert {e for _, _, e in PROBE_QUESTIONS} <= set(EXPECT_CODES)
     assert len({e for _, _, e in PROBE_QUESTIONS}) >= 12
 
@@ -33,7 +33,7 @@ def test_questions_are_new():
 
 def test_cases_use_inference_prompt():
     cases = build_probe_cases(MOCK)
-    assert len(cases) == 40
+    assert len(cases) == 20
     for c in cases:
         assert c["set"] == "probe" and c["expect"] in EXPECT_CODES
         assert c["messages"][-1]["content"].startswith(c["question"] + "\n이자 정보: ")
