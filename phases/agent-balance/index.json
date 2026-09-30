@@ -178,8 +178,9 @@
     {
       "step": 11,
       "name": "train-export",
-      "status": "pending",
-      "type": "human"
+      "status": "completed",
+      "type": "human",
+      "summary": "재작성: 1차 시범 30건 판독 → 규칙 보강 step 10 → 재시범 → 전체 --jobs 4(누락 16건 재실행), 캐시 4,137건, cost_usd 합 22.93. prepare train 7,359·val 525·test 536(재작성 없음 0), valid 24건 판독 후 사용자 결정으로 학습 진행. Qwen3-4B-Instruct-2507(cdbee75) 4bit MLX, 목표 답 최대 98토큰, 7,400회(1 epoch) 학습, valid 0.872·test 0.886(--mask-prompt). 16bit 원본 병합(BAL-006 보강, 토크나이저·config 원본 복원) → GGUF Q4_K_M 2.5GB → ollama create cs-balance 성공, 존댓말·슬롯 응답 0.4~0.7초. MAC_TRAINING에 변환 절차·HF 스냅샷 오류·train test 마스킹 차이 기록"
     },
     {
       "step": 12,

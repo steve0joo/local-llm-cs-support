@@ -71,6 +71,7 @@ main `7466702`의 게이트웨이(`/api/chat` 처리 순서) 위에 이 브랜�
   4. `models/balance/Modelfile`(SYSTEM이 `SYSTEM_PROMPT`와 같은지 테스트로 고정) → 학습 → GGUF 변환 → `ollama create cs-balance`(BAL-006, `MAC_TRAINING.md`)
   5. 아래 "자체 점검 셋"과 사용자 여정 J1~J12를 실제 `/api/chat`으로 확인
   - 실행 계획은 `phases/agent-balance/`(Harness, `python3 scripts/execute.py agent-balance`)에 있다. 대응: 0 → step 0 `main-merge`(사람), 1 → step 1 `intent-alias`, 2 → step 2 `resolve-typed`, 3 → step 3 `train-prepare` + step 5 `prepare-filter`·step 6 `prepare-filter-widen`·step 7 `rewrite`·step 8 `prepare-rewrite`·step 9 `synth-widen`(train-export valid 점검에서 추가, BAL-009·BAL-010)·step 10 `rewrite-rules`(재작성 시범 판독에서 추가, BAL-010 보강), 4 → step 4 `modelfile` + step 11 `train-export`(사람), 5 → step 12 `self-check`(사람), 마지막 step 13 `review`. 사람 step이 아닌 것은 모두 모델 없이 TDD로 한다.
+  - cs-balance 첫 학습 (2026-09-30, step 11): 재작성 `claude-haiku-4-5`·Claude Code 2.1.284·`cost_usd` 합 22.93(참고값, 버린 1차 시범 0.15 제외) / 베이스 `Qwen/Qwen3-4B-Instruct-2507` `cdbee75`·MLX LM 0.31.3 / 샘플 train 7,359(AI Hub 첫 턴 3,543·이어진 턴 3,555·합성 261)·val 525(235·239·51)·test 536(241·244·51) / 7,400회(1 epoch, rank 8·8층·lr 1e-5, 최대 메모리 4.1GB) / valid loss 0.872·test loss 0.886(`--mask-prompt`) / 16bit 원본 병합 → Q4_K_M 2.5GB, `ollama create` 성공, 응답 0.4~0.7초
 - 끝났다
   - 프론트엔드의 슬롯 값 속 줄바꿈(`{{recent_transactions}}`) 표시 — main의 frontend가 `whitespace-pre-line`으로 처리한다(`docs/frontend/ARCHITECTURE.md` "화면 동작 규칙", main 기준)
 - 미룬다

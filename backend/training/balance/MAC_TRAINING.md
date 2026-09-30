@@ -32,7 +32,7 @@ backend/.venv-train/bin/python -m pip install -r backend/training/balance/requir
 backend/.venv-train/bin/python -m mlx_lm convert --hf-path Qwen/Qwen3-4B-Instruct-2507 --mlx-path backend/data/models/qwen3-4b-instruct-2507-4bit -q --q-bits 4
 ```
 
-베이스 출처·리비전·MLX LM 버전을 실행 기록에 적는다. 공통 베이스가 결정되면 해당 Hugging Face 모델로 위 변환을 다시 수행한다. 학습 전에 `config.json`의 `quantization` 존재를 확인한다. 양자화 베이스가 아니면 일반 LoRA가 되어 이 계획의 QLoRA가 아니다.
+`huggingface_hub` 1.x에서는 변환이 저장 단계에서 `IncompleteSnapshotError`로 멈출 수 있다. `mlx_lm`이 받지 않는 `.gitattributes`·`LICENSE`·`README.md` 때문이다. 이 세 파일만 같은 리비전으로 받은 뒤(`hf_hub_download`) 같은 명령을 다시 실행한다(2026-09-30, 리비전 `cdbee75f17c01a7cc42f958dc650907174af0554`). 베이스 출처·리비전·MLX LM 버전을 실행 기록에 적는다. 공통 베이스가 결정되면 해당 Hugging Face 모델로 위 변환을 다시 수행한다. 학습 전에 `config.json`의 `quantization` 존재를 확인한다. 양자화 베이스가 아니면 일반 LoRA가 되어 이 계획의 QLoRA가 아니다.
 
 학습 명령은 `backend/`에서 실행한다. 먼저 소규모 반복으로 메모리와 loss를 확인하고, 학습 반복 수·길이는 결과를 보고 정한다. 학습 결과는 `backend/training/balance/outputs/adapters/`에 저장한다.
 
@@ -44,20 +44,39 @@ cd backend
 
 ## Ollama 내보내기·평가 게이트
 
-MLX LM의 Qwen GGUF 직접 export는 지원되지 않는다. 우선 어댑터를 양자화 베이스와 병합하고 비양자화한 모델을 만든다. 그 결과를 로컬 llama.cpp `convert_hf_to_gguf.py`로 변환하는 **호환성 시험**을 한다. 아래 명령은 변환 경로가 통과하는지 확인하는 절차이며, 아직 이 프로젝트의 산출물로 검증된 명령은 아니다.
+MLX LM의 Qwen GGUF 직접 export는 지원되지 않는다. 그래서 어댑터를 **16bit 원본 베이스**(`Qwen/Qwen3-4B-Instruct-2507`, 같은 리비전, HF 캐시)에 병합한다. 4bit 베이스에 `--dequantize`로 병합하면 4bit 반올림 오차가 남은 채로 Q4_K_M을 한 번 더 거친다(BAL-006 보강). 병합 결과를 로컬 llama.cpp `convert_hf_to_gguf.py`로 변환한다. 아래 명령은 2026-09-30에 이 절차대로 검증했다.
+
+llama.cpp는 팀원B 기록(`origin/feat-agent-interest:backend/training/interest/export.md`)처럼 `~/llama.cpp`에 둔다. 변환 전용 가상환경을 쓰고 학습 환경에는 설치하지 않는다. 변환 requirements가 transformers 4.x를 고정하기 때문이다. cmake가 없으면 같은 가상환경에 설치한다.
 
 ```bash
-.venv-train/bin/python -m mlx_lm fuse --model data/models/qwen3-4b-instruct-2507-4bit --adapter-path training/balance/outputs/adapters --save-path training/balance/outputs/fused --dequantize
-.venv-train/bin/python /path/to/llama.cpp/convert_hf_to_gguf.py training/balance/outputs/fused --outfile training/balance/outputs/balance-f16.gguf --outtype f16
-/path/to/llama.cpp/build/bin/llama-quantize training/balance/outputs/balance-f16.gguf training/balance/outputs/balance-q4_k_m.gguf Q4_K_M
+git clone --depth 1 https://github.com/ggml-org/llama.cpp ~/llama.cpp   # 검증: 19e28a2
+cd ~/llama.cpp && uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python cmake -r requirements/requirements-convert_hf_to_gguf.txt --index-strategy unsafe-best-match
+PATH="$HOME/llama.cpp/.venv/bin:$PATH" cmake -B build -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release && PATH="$HOME/llama.cpp/.venv/bin:$PATH" cmake --build build --config Release -j 6 --target llama-quantize
 ```
 
-변환이나 Ollama 로딩에 실패하면 GGUF 생성 절차를 확정하지 않는다. 성공하면 `balance-q4_k_m.gguf`를 `backend/models/balance/cs-balance.gguf`로 복사하고(`Modelfile`이 `FROM ./cs-balance.gguf`로 가리킨다) `ollama create cs-balance -f backend/models/balance/Modelfile`을 실행한다. GGUF와 모델 가중치는 커밋하지 않는다.
+`backend/`에서 실행한다. `mlx_lm fuse`는 학습 환경의 transformers 5로 토크나이저·`config.json`을 다시 저장한다. 그러면 llama.cpp 변환기(transformers 4.x)가 `extra_special_tokens` 목록을 읽지 못하고, `eos_token_id`·pre_tokenizer 표기도 원본과 달라진다. LoRA는 토크나이저를 바꾸지 않으므로 이 파일들을 원본 스냅샷 것으로 되돌린다. 가중치 파일은 그대로 둔다.
+
+```bash
+.venv-train/bin/python -m mlx_lm fuse --model Qwen/Qwen3-4B-Instruct-2507 --adapter-path training/balance/outputs/adapters --save-path training/balance/outputs/fused
+B=$(ls -d ~/.cache/huggingface/hub/models--Qwen--Qwen3-4B-Instruct-2507/snapshots/cdbee75*)
+for f in config.json tokenizer_config.json tokenizer.json vocab.json merges.txt; do cp -L "$B/$f" training/balance/outputs/fused/; done
+rm training/balance/outputs/fused/chat_template.jinja   # 원본 tokenizer_config.json의 chat_template과 같다
+~/llama.cpp/.venv/bin/python ~/llama.cpp/convert_hf_to_gguf.py training/balance/outputs/fused --outfile training/balance/outputs/balance-f16.gguf --outtype f16
+~/llama.cpp/build/bin/llama-quantize training/balance/outputs/balance-f16.gguf training/balance/outputs/balance-q4_k_m.gguf Q4_K_M
+```
+
+변환이나 Ollama 로딩에 실패하면 GGUF 생성 절차를 확정하지 않는다. 성공하면 `balance-q4_k_m.gguf`를 `backend/models/balance/cs-balance.gguf`로 복사하고(`Modelfile`이 `FROM ./cs-balance.gguf`로 가리킨다) `ollama create cs-balance -f backend/models/balance/Modelfile`을 실행한다. GGUF와 모델 가중치는 커밋하지 않는다. 터미널이 아닌 곳(스크립트·에이전트)에서 `ollama run cs-balance "잔액 알려줘"`를 부르면 표준 입력을 기다리며 멈춘다. 그럴 때는 `</dev/null`을 붙인다.
 
 `test` 분할은 최종 단계에서만 열어 MLX LM test loss/perplexity를 확인한다.
 
 ```bash
 .venv-train/bin/python -m training.balance.train test --model data/models/qwen3-4b-instruct-2507-4bit --data data/processed/balance
+```
+
+`train test`는 `--mask-prompt` 없이 `mlx_lm lora --test`를 부른다. 그래서 system·user 토큰까지 loss에 들어가, 학습 중 valid loss와 비교할 수 없다(2026-09-30: 2.501). 학습과 같은 기준의 값은 `mlx_lm lora`를 직접 불러 잰다(같은 날 0.886).
+
+```bash
+.venv-train/bin/python -m mlx_lm lora --model data/models/qwen3-4b-instruct-2507-4bit --adapter-path training/balance/outputs/adapters --data data/processed/balance --test --test-batches -1 --batch-size 1 --max-seq-length 1024 --mask-prompt
 ```
 
 Ollama의 실제 `/api/chat` 경로에서 PM 고정 질문 10건 중 9건 이상, 숫자·상품명 환각 0건, 모델 응답의 필수 슬롯, 마스킹 로그, 첫 응답 시간 기준을 검사한다. Mac 평가가 통과하면 동일 GGUF의 Windows 로컬 추론도 공통 인수 기준에 따라 확인한다.
