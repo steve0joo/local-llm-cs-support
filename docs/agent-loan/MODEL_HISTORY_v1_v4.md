@@ -20,7 +20,7 @@
 - 학습 데이터에서 AI Hub 답변을 쓰지 않는다. AI Hub는 **질문 공급원**으로만 쓰고(`prepare.py --mode replace`), 정답은 수동 시드 164건(×3 복제) + 교체 문장(서류·조건 125건, 금리 126건, 6종 문장 + 마무리 4종)으로 붙였다.
 - 출력 검증기 보강(`validate.py`): 없는 채널·못 지키는 약속·서류명을 막는다(LN-004).
 - 답변 슬롯 방식: 금액·연장 여부는 `{{principal_remaining}}`, `{{extendable_status}}`, `{{loan_label}}`로만 쓰고 만기일만 숫자로 쓴다.
-- 학습 743행 / 검증 133행, 141스텝, 약 25분, eval_loss 약 0.12, 정확도 0.96. 데이터가 쉬워 loss는 판단 근거가 되지 못했다.
+- 학습 743행 / 검증 133행, 141스텝, 약 25분, eval_loss 약 0.12 → 0.05, 정확도 0.96 → 0.98(W&B 그래프의 첫 epoch → 마지막 epoch 값; 이전에는 첫 epoch 값만 적혀 있었다). 데이터가 쉬워 loss는 판단 근거가 되지 못했다.
 
 **결과** (Golden Set 57문항, 온도 0)
 - 검증기 통과 57/57, 서류·금리·수수료 질문에 지어낸 절차·약속이 사라졌다(v1은 새 검증기 기준 약 69%).
@@ -76,16 +76,22 @@
 2. loss는 판단 근거가 아니다(v2~v4 모두 val loss가 낮았지만 행동 결함은 평가에서 드러났다).
 3. 여러 변경을 한 번에 넣어서 어느 변경이 효과를 냈는지 분리하지 못한다(LN-008 트레이드오프).
 4. 채점 규칙도 결함이 있을 수 있어서, 사전 등록 결과(strict)와 사후 조정 결과를 항상 따로 표시한다.
-5. 현재 상태에서 세 모델의 우열은 단정하지 않는다. v3와 v4는 전체 통과율이 비슷하고 강점·약점이 다르다. 채택은 팀 공식 평가(공용틀, Base 대비 회귀 5%p, Judge, 사람 블라인드)를 보고 정한다.
+5. (2026-09-30 이후 갱신: 팀 공식 평가를 마쳤고 **최종 모델은 v4**로 확정했다. 아래는 그 전의 서술이다.) 그 전 시점에는 세 모델의 우열을 단정하지 않았다. v3와 v4는 전체 통과율이 비슷하고 강점·약점이 다르다. 채택은 팀 공식 평가(공용틀, Base 대비 회귀 5%p, Judge, 사람 블라인드)를 보고 정한다.
 
 ## 파일 위치
 | 무엇 | 어디 |
 |---|---|
-| 결정 기록 | `docs/agent-loan/ADR.md` (LN-007, LN-008) |
+| 결정 기록 | `docs/agent-loan/ADR.md` (LN-007, LN-008, LN-009 최종 모델 v4) |
+| 팀 공용틀 평가 | `docs/agent-loan/EVALUATION.md`, `MANUAL_REVIEW_CRITERIA.md`, 도구 `backend/training/loan/evaluate.py` |
 | v3·v4 평가 기준 | `docs/agent-loan/EVAL_CRITERIA_v3.md`, `EVAL_CRITERIA_v4.md` |
 | v4 평가 결과 | `docs/agent-loan/EVAL_RESULT_v4.md` |
 | 진행 상태·다음 할 일 | `docs/agent-loan/HANDOFF_v4.md` |
 | 시드 | `backend/training/loan/manual_seed.jsonl`(v3), `manual_seed_v4.jsonl`(v4) |
 | 시드 생성 | `make_manual_seed.py`(v3 기본), `seed_v4.py`(`--version v4`) |
 | 학습·평가 | `train.py`, `night_v4.sh`, `eval_v4_run.py`, `eval_v4_score.py` |
-| 모델 파일 | 이 컴퓨터의 `backend/training/loan/outputs_v2/`, `outputs_v3/`, `outputs_v4/` (git에 없음) |
+| 모델 파일 | 이 컴퓨터의 `~/models/cs-loan-v{1..4}-q4_k_m.gguf`(v4 sha256 `5a4aa0f723c5…83f`)와 Base `base-qwen3-4b-instruct-2507-q4_k_m.gguf`. 가중치는 git에 없고 팀원에게 따로 전달한다(`HANDOFF_v4.md` 0절) |
+
+## 최종 선택: v4 (2026-09-30, 팀 공용틀 평가 후)
+- 사용자가 v4를 최종 모델로 확정했다. 주된 이유는 v3에 남아 있던 지어내는 것(지어낸 사실, 처리 약속)을 v4가 고쳤기 때문이다(`ADR.md` LN-009).
+- 서비스 설정(온도 0.3) 5회 반복에서 지어낸 사실 v3 4건 대 v4 0건, 뒤집힌 거절 문형 24~41건 대 1건이다. 대신 v4는 조건 + 해당 여부 질문(K06)과 낯선 날짜 표현(D10)에 한계가 있고, Judge 합계와 온도 0 규칙 준수율은 v3가 근소하게 높다.
+- 근거의 약점: 공식 블라인드 사람 평가(1차)는 v4 5 / Base 5였고 2차(비블라인드)가 6 / 0 / 4이며, Judge는 사람과의 일치가 6/10이라 참고 자료다. 자세한 것은 `EVALUATION.md` 9-6, 9-7절.

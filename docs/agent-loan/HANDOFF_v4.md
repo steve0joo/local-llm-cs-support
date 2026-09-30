@@ -2,6 +2,21 @@
 
 다른 컴퓨터(교육용)에서 이어받는 Claude Code가 "무엇이 바뀌었고, 어디까지 했고, 무엇이 남았는지" 파악하기 위한 문서다. 작업 브랜치는 `feat-agent-loan`이고 **v4 관련 변경은 대부분 아직 커밋되지 않았다**(아래 4절). 내용이 코드·테스트와 다르면 코드·테스트가 맞다.
 
+
+## 0. 최신 상태 (2026-09-30 저녁, 이 절이 아래 절들보다 우선한다)
+
+- **최종 모델은 v4로 확정했다**(`ADR.md` LN-009, `EVALUATION.md` 9-7절). 팀 공용틀 평가(Base, v1~v4, GPT-5 Mini Judge, 사람 평가)와 W&B 1단계 판정을 이 컴퓨터에서 끝냈다. 아래 3절의 "아직 안 한 것"과 3-1절의 공식 평가 준비는 **이미 끝난 일**이다.
+- 이 컴퓨터의 Ollama `cs-loan`을 v4로 바꿨다(`ollama cp cs-loan-v4 cs-loan`). 서비스(`agent.py`)는 `cs-loan`을 부르므로 코드 수정 없이 v4로 답한다. 이전 `cs-loan`(v1)은 `cs-loan-test`로 남아 있다.
+- **main에는 반영하지 않는다(사용자 결정).** 모든 변경은 `feat-agent-loan` 브랜치에만 있다.
+- **모델 전달(팀원에게 따로)**: 가중치는 git에 넣지 않는다. 파일은 `~/models/cs-loan-v4-q4_k_m.gguf`(약 2.5GB, sha256 `5a4aa0f723c53ac06b3ec1ab0049b4cb470dc07a051cc053e421e9fba113583f`)이고 팀 내부 공유(USB, 팀 드라이브)로만 보낸다(팀 밖 제공 금지). 받은 사람은 파일을 확인(`sha256sum`)한 뒤 등록한다.
+  ```bash
+  cd local-llm-cs-support
+  sed "s#^FROM .*#FROM /받은/절대경로/cs-loan-v4-q4_k_m.gguf#" backend/models/loan/Modelfile > /tmp/Modelfile.v4
+  ollama create cs-loan -f /tmp/Modelfile.v4
+  ```
+- 평가 도구·기준·결과: `EVALUATION.md`(도구 `backend/training/loan/evaluate.py`, 테스트 `tests/loan/test_evaluate.py`). Judge는 `backend/.env`의 `OPENAI_API_KEY`(gitignore)가 있어야 하고 호출 전 확인을 받는다.
+- **남은 일 없음**(평가 기준). 다음 후보(하지 않기로 함): v5 시드, 사람 평가 재실시. 알려진 한계(K06, D10, 문장이 딱딱함)는 `EVAL_CRITERIA_v4.md` 5절과 `EVALUATION.md` 9-7절에 있다.
+
 ## 1. 한 줄 요약
 
 대출문의 에이전트 모델(Qwen3-4B-Instruct-2507 → QLoRA → GGUF Q4_K_M → Ollama)을 v1→v2→v3까지 만들고 사전 등록 기준으로 평가했더니 v3가 기준 미달이었다. 그 결함을 고치는 **v4 학습 데이터(시드)를 확정·해시 고정**했고, 야간 학습 스크립트와 평가 자료(문항·기준)를 준비했다. 학습은 사용자가 WSL에서 직접 돌린다(Claude는 명령만 안내, 로그 폴링 금지).
@@ -61,12 +76,12 @@ for w in train val; do .venv/bin/python -m training.loan.prepare --raw data/raw 
 
 - **학습 완료(2026-09-30)**: val loss 0.1394 → 0.1080 → 0.1058(epoch 1~3), train_loss 0.2172, 학습 46분. STATUS 전 단계 OK, `cs-loan-v4` 등록, 스모크 통과. wandb 프로젝트 `cs-loan` 런 `outputs_v4`로 기록됨.
 - **자체 평가 완료**: 결과와 해석은 `docs/agent-loan/EVAL_RESULT_v4.md`에 있다. 요약: 정상 질문 통과율 316/320(기준 100% **미달**, D10 한 문항의 과다 거절), final-v4는 온도 0에서 통과, v3의 뒤집힌 거절 문형(80→1건)·조건 슬롯 누락·수수료↔금리는 개선, 다만 v4에서 새로 일본어 혼입 5샘플과 K06형 조건 질문 실패가 나왔다. 전체 통과율은 v3와 비슷하다.
-- **아직 안 한 것**: 팀 공식 평가(`EVALUATION_공용틀.md`: Base 대비 회귀 5%p, Judge GPT-5 Mini, 사람 블라인드 10문항)는 교육용 컴퓨터에서 진행한다. Base GGUF 등록과 Judge API 키가 필요하다.
-- **사용자 결정 대기**: EVAL_RESULT_v4.md 4절의 다음 후보(검증기 비한글 차단 / v5 시드 / 이대로 공식 평가).
+- ~~아직 안 한 것: 팀 공식 평가~~ → **완료(2026-09-30, 위 0절과 `EVALUATION.md`)**. Base GGUF는 `cs-loan-base`로 등록했고 Judge 키는 `backend/.env`를 쓴다.
+- ~~사용자 결정 대기~~ → **결정 완료**: 검증기 비한글 차단(커밋됨), v5는 하지 않음, 공식 평가 후 v4 확정.
 - 평가 코드는 `backend/training/loan/eval_v4_run.py`, `eval_v4_score.py`(커밋 대상, 데이터는 gitignored)다. 원문 응답(`backend/data/derived/eval_v4/`)은 이 컴퓨터에만 있다.
 - 나중 후보: 검증기에 `확인해 드리겠` 패턴 추가(오탐 확인 뒤 별도 커밋), 연장 불가 꼬리 개선, `wandb_backfill.py`.
 
-## 3-1. 교육용 컴퓨터에서 할 일 (순서대로)
+## 3-1. 교육용 컴퓨터에서 할 일 (순서대로) — 공식 평가(4~7)는 이 컴퓨터에서 이미 완료, 모델 등록 방법은 0절 참고
 
 1. `git checkout feat-agent-loan && git pull origin feat-agent-loan`. 이 문서, `EVAL_CRITERIA_v3.md`, `EVAL_CRITERIA_v4.md`, `EVAL_RESULT_v4.md`를 읽는다. 내용이 코드·테스트와 다르면 코드·테스트가 맞다.
 2. 환경 확인: `cd backend`, venv 준비, `.venv/bin/python -m pytest tests/loan -q`(1,194건 통과가 기준), Ollama 실행.
