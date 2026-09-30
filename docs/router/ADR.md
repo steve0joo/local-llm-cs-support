@@ -32,8 +32,9 @@
 |------|------|----------|
 | 분할 | TL 상담은 전부 train. VL 상담은 주제별로 `source_id`를 정렬한 뒤 번갈아 val/test. 양쪽에 있는 상담은 train. 무작위를 쓰지 않는다 | `training/common/split.py` → `data/processed/split.json` |
 | 라벨 | `consulting_topic`(계약 2)을 쓴다. 같은 QA의 `qa_topic`이 다르면 학습에서 뺀다 | 각 영역 `prepare.py` |
-| 금액 정규화 | 원본에서 가려진 금액 `●●●원`을 `[금액_n]`으로 바꾼 뒤 `mask()`를 적용한다 | 각 영역 `prepare.py` |
+| 금액 정규화 | `mask()`를 적용한 뒤, 원본에서 가려진 금액 `●●●원`을 이어지는 번호의 `[금액_n]`으로 바꾼다(번호 충돌 방지). 날짜 가림(`●월 ●일`)은 그대로 둔다 | 각 영역 `prepare.py` |
 | 불균형 | 주제별 상한 3,000건으로 샘플링한다 | `training/router/prepare.py` |
+| 첫 발화만 | 상담의 첫 QA(`qa_id`가 `_001`)만 쓰고, "고객님"이 든 문장(상담원 발화)은 뺀다. 라우터는 고객의 첫 메시지를 분류하며, 중간 턴은 문장만으로 주제를 알 수 없다. 전체 턴으로 학습·평가한 1차 모델은 test 69.5%, 첫 QA만 보면 78.5%였다(2026-09-29) | `training/router/prepare.py` |
 
 **이유**:
 - 분할: `split.json`은 gitignore라 팀원이 각자 만든다. 무작위가 없어야 모두 같은 파일을 얻는다(ADR-008). AI Hub의 TL/VL 구분을 살리고 VL만 반으로 나누면 규칙이 단순해 손으로 검산할 수 있다.
@@ -52,5 +53,12 @@
 | `qa_topic`에만 있는 라벨 | `기타(은행)` 179건 |
 | `●` 금액이 든 질문 | TL 3,056건 |
 | 주제 비율 | 대출 29.6%, 이자/연체 22.1% |
-| 질문 길이 | 중앙값 74자, 99%가 167자 이하 → 시퀀스 길이 256으로 충분 |
+| 질문 길이 | 중앙값 74자, 99%가 167자 이하 → 시퀀스 길이 512(최대 335토큰) |
 | 상담당 `consulting_topic` 수 | 전부 1개(위반 0건) |
+
+### RT-006: 라우터 베이스는 Qwen3-1.7B로 시작하고, thinking 모드는 학습·추론 양쪽에서 끈다 (2026-09-29)
+**결정**: `cs-router`는 `Qwen/Qwen3-1.7B`를 QLoRA(NF4 4bit, LoRA r=16·α=32, 7개 projection, lr 2e-4, 유효 배치 16, 시퀀스 512, 3 epoch)로 학습한다. 학습은 TRL prompt-completion 형식으로 손실을 주제 코드 토큰에만 준다. Qwen3 채팅 템플릿이 assistant 앞에 넣는 빈 think 블록(`<think>\n\n</think>\n\n`)을 그대로 두고, 추론은 `llm.generate()`가 항상 `think: false`를 보낸다. LoRA 병합 → llama.cpp f16 → Q4_K_M → `models/router/Modelfile`(`export.py`가 생성·등록) → `ollama create cs-router`. Modelfile은 `FROM`과 `PARAMETER`만 두고 `TEMPLATE`을 쓰지 않는다. GGUF에 든 Qwen3 채팅 템플릿(학습 때와 동일, `enable_thinking=false`면 빈 think 블록을 넣는 분기 포함)을 Ollama가 그대로 쓰는 것을 확인했다.
+**이유**: 9개 코드 중 하나만 내는 분류라 1.7B로 충분하고, Q4_K_M 약 1.1GB라 4개 모델 동시 적재(8GB)가 되는 유일한 크기다(ADR-005). 같은 장비에서 QLoRA·GGUF·Ollama까지 검증된 모델이다. thinking을 안 끄면 답이 `thinking` 필드로 가고 `content`가 비어 온다(실제 호출로 확인). 학습 때 본 빈 think 블록과 추론 때 Ollama가 채우는 블록이 같아 토큰 순서가 일치한다. `think: false`는 thinking 미지원 모델(팀원들의 Instruct 베이스)에서는 무시된다.
+**구현 메모 (2026-09-30)**: (1) TRL 0.24는 transformers 5에서 `apply_chat_template(tokenize=True)`가 dict를 돌려주는 것을 리스트로 보아 prompt 길이를 2로 세고, 그 결과 손실이 completion이 아니라 프롬프트 전체에 걸린다(경고 "Mismatch between tokenized prompt…"). `train.tokenize()`가 직접 `input_ids`·`completion_mask`를 만들어 넘겨 우회한다(TRL은 `input_ids`가 있으면 다시 토큰화하지 않는다). 2026-09-29의 두 학습(78.5%, 60.1%)은 이 버그 상태에서 돌았다. (2) 시스템 프롬프트는 코드 목록만 둔다(74토큰). 라벨·설명을 붙이면 170~340토큰이 되어 step당 시간이 3배 늘고, 파인튜닝된 분류기에는 이득이 없었다. (3) 상한 500·첫 QA 데이터에서 1 epoch 80.5% → 3 epoch 81.9%(에이전트 단위), macro-F1 0.711 → 0.740이라 기본 epoch을 3으로 둔다(2026-09-30).
+
+**트레이드오프**: 4B급보다 한국어 이해가 약할 수 있다. 벤치마크(ADR-005) 결과 정확도 90% 미만이거나 팀 베이스가 바뀌면 `train.BASE_MODEL`만 바꿔 재학습한다. 1 epoch 결과 val 손실 0.34·토큰 정확도 91%였으나 이는 주제 단위 정확도가 아니므로 `evaluate.py`로 다시 잰다.

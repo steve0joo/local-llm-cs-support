@@ -22,8 +22,14 @@ backend/
 ├── tests/{gateway,masking,llm,router}/
 ├── training/
 │   ├── common/                 # 은행 필터 + source_id 분할 → data/processed/split.json
-│   └── router/                 # 라우터 학습 데이터 생성 + QLoRA 학습
-└── models/router/Modelfile
+│   └── router/
+│       ├── prepare.py          # 학습 데이터 생성 → data/processed/router/{train,val,test}.jsonl (RT-005)
+│       ├── train.py            # QLoRA 학습 → training/router/outputs/<run>/adapter (gitignore)
+│       ├── export.py           # 병합 → GGUF → models/router/{cs-router.gguf, Modelfile} → ollama create
+│       └── outputs/            # gitignore
+└── models/router/
+    ├── Modelfile               # export.py가 생성. 커밋
+    └── cs-router.gguf          # Q4_K_M 약 1.1GB. gitignore, Mac에는 복사
 ```
 
 ## TDD 착수점
@@ -95,6 +101,18 @@ POST /api/chat
 ```
 - 주제에 관한 표는 전부 `app/router/topics.py`에 둔다: 코드↔라벨 원문(`TOPIC_LABELS`), 지원 주제(`SUPPORTED`), 되묻기 표시명(`DISPLAY_NAMES`), 키워드(`KEYWORDS`), 시스템 프롬프트(`SYSTEM_PROMPT`). 게이트웨이와 학습 스크립트(`training/router/prepare.py`)가 여기서 import한다.
 - `SYSTEM_PROMPT`는 학습 데이터와 추론이 글자 단위로 같아야 한다. 프롬프트 문구를 바꾸면 라우터를 다시 학습한다.
+
+### 학습·배포 절차 (`training/router/`, Windows/WSL2 학습 노트북)
+```bash
+cd backend
+python -m training.common.split                  # split.json (1회)
+python -m training.router.prepare                # train 22,615 · val 2,497 · test 2,473 건 (2026-09-29)
+python -m training.router.train                  # 1 epoch, 20~40분 → outputs/<시각>/adapter (스모크는 MAX_STEPS=20으로 바꿔서)
+python -m training.router.export training/router/outputs/<시각>/adapter   # 병합 → GGUF → Modelfile → ollama create
+```
+- 설정값은 `train.py` 상단 상수(`BASE_MODEL`, `EPOCHS`, `MAX_STEPS`, `MAX_LENGTH`)와 `SFTConfig`에 있다. 스모크는 `MAX_STEPS = 20`으로 바꿔 돌린다.
+- `export.py`는 llama.cpp를 `LLAMA_CPP_DIR`(기본 `~/qlora_ft_ex/llama.cpp`)에서 찾는다. 변환에는 `sentencepiece`·`protobuf`가 필요하다(`training/requirements.txt`).
+- 등록 확인은 서버를 띄워 `/api/chat`에 키워드 없는 문장(예: "환전하고 싶은데요")을 보내 `topic`에 코드가 실리는지 본다. 서버는 이 모델이 등록되는 순간 키워드 폴백에서 모델 분류로 바뀐다.
 
 ## 제공하는 인터페이스
 - `app.masking.mask(text) -> MaskResult` — 학습 스크립트도 이 함수를 import한다
