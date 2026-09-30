@@ -47,11 +47,15 @@ for w in train val; do .venv/bin/python -m training.loan.prepare --raw data/raw 
   - `golden_set_final_v4.jsonl` F01~F10(사용자 작성, 원문 수정 금지): 온도 0에서 9/10 이상. 온도 0.3 ×5는 안정성 보고(지어낸 사실은 별도 표시).
   - `golden_set_v4_compare.jsonl` K01~K20: 비교용 새 문항.
   - v3 결함별 개선 보고(판정 제외).
-- 알려진 한계(이번에 고치지 않음, v5 후보): 연장 불가 고객의 정상 답변 끝에 연장 언급이 없어도 "자세한 사항은 상담원에게 확인해 주세요."가 붙는다.
+- 알려진 한계(이번에 고치지 않음, **v5는 하지 않기로 함**, 자세한 내용은 `EVAL_CRITERIA_v4.md` 5절):
+  - 연장 불가 고객의 정상 답변 끝에 연장 언급이 없어도 "자세한 사항은 상담원에게 확인해 주세요."가 붙는다.
+  - **D10**: "마지막 상환일이 며칠이에요?" 같은 낯선 날짜 표현을 거절한다(5회 중 4회). 사전 등록 기준 미달의 원인.
+  - **K06**: 조건 + 해당 여부 질문에 연장 여부(`{{extendable_status}}`)를 빼먹고 거절문만 답한다(5/5).
+  - 일본어·한자 혼입(v4 5샘플)은 검증기가 차단해 fallback으로 대체한다(모델 출력은 그대로).
 - 채점 코드 정의는 `EVAL_CRITERIA_v3.md`, 문항은 `golden_set.jsonl`·`golden_set_v3.jsonl`·`golden_set_risk.jsonl`(커밋됨)에 있다.
 
 ### 2-6. 테스트
-`cd backend && .venv/bin/python -m pytest tests/loan -q` → 1,194 통과(2026-09-30 기준). 새 테스트: `test_manual_seed_v4.py`(개수·금지 문형·겹침 0.75·v3 재현·v4 해시 고정·날짜 확인), `test_golden_set_final_v4.py`, `test_golden_set_v4_compare.py`, `test_train_args.py`.
+`cd backend && .venv/bin/python -m pytest tests/loan -q` → 1,209 통과(2026-09-30 기준, 일본어·한자 차단 테스트 12건 포함. 그 전에는 1,197). 새 테스트: `test_manual_seed_v4.py`(개수·금지 문형·겹침 0.75·v3 재현·v4 해시 고정·날짜 확인), `test_golden_set_final_v4.py`, `test_golden_set_v4_compare.py`, `test_train_args.py`.
 
 ## 3. 진행 상태와 남은 일
 
