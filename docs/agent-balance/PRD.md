@@ -72,13 +72,14 @@ main `7466702`의 게이트웨이(`/api/chat` 처리 순서) 위에 이 브랜�
   5. 아래 "자체 점검 셋"과 사용자 여정 J1~J12를 실제 `/api/chat`으로 확인
   - 실행 계획은 `phases/agent-balance/`(Harness, `python3 scripts/execute.py agent-balance`)에 있다. 대응: 0 → step 0 `main-merge`(사람), 1 → step 1 `intent-alias`, 2 → step 2 `resolve-typed`, 3 → step 3 `train-prepare` + step 5 `prepare-filter`·step 6 `prepare-filter-widen`·step 7 `rewrite`·step 8 `prepare-rewrite`·step 9 `synth-widen`(train-export valid 점검에서 추가, BAL-009·BAL-010)·step 10 `rewrite-rules`(재작성 시범 판독에서 추가, BAL-010 보강), 4 → step 4 `modelfile` + step 11 `train-export`(사람), 5 → step 12 `self-check`(사람), 마지막 step 13 `review`. 사람 step이 아닌 것은 모두 모델 없이 TDD로 한다.
   - cs-balance 첫 학습 (2026-09-30, step 11): 재작성 `claude-haiku-4-5`·Claude Code 2.1.284·`cost_usd` 합 22.93(참고값, 버린 1차 시범 0.15 제외) / 베이스 `Qwen/Qwen3-4B-Instruct-2507` `cdbee75`·MLX LM 0.31.3 / 샘플 train 7,359(AI Hub 첫 턴 3,543·이어진 턴 3,555·합성 261)·val 525(235·239·51)·test 536(241·244·51) / 7,400회(1 epoch, rank 8·8층·lr 1e-5, 최대 메모리 4.1GB) / valid loss 0.872·test loss 0.886(`--mask-prompt`) / 16bit 원본 병합 → Q4_K_M 2.5GB, `ollama create` 성공, 응답 0.4~0.7초
+    - 후속 후보(자체 점검 결과를 보고 정한다): ① 학습 목표에 "확인해 드리겠습니다" 약속이 train 0.5% 남아 있다. 모델이 이 말을 하면 BAL-009 행동 약속 동사에 `확인해`를 더하는 step을 추가한다 ② 금리 질문에 "정기예금 긴리는" 오타가 한 번 나왔다 ③ `train.py test`에 `--mask-prompt`가 없어 학습 때와 다른 loss가 나온다(MAC_TRAINING). 고치려면 TDD step이 필요하다 ④ 같은 GGUF의 Windows 로컬 추론 확인(BAL-006)
 - 끝났다
   - 프론트엔드의 슬롯 값 속 줄바꿈(`{{recent_transactions}}`) 표시 — main의 frontend가 `whitespace-pre-line`으로 처리한다(`docs/frontend/ARCHITECTURE.md` "화면 동작 규칙", main 기준)
 - 미룬다
-  - PM 고정 질문 9/10 인수 — 모델(`cs-balance`)이 있어야 판정할 수 있다
+  - PM 고정 질문 9/10 인수 — `cs-balance`는 2026-09-30에 등록됐다. 자체 점검(step 12)을 먼저 하고, PM 확정본이 오면 판정한다
   - 직전에 고른 계좌 이어가기(J10)
 
-Mac 학습 환경·실행 절차와 현재 선행 조건은 `backend/training/balance/MAC_TRAINING.md`에 기록한다. 이 절차가 생겨도 실제 데이터 전처리·학습·모델 평가는 아직 완료되지 않았다.
+Mac 학습 환경·실행 절차와 현재 선행 조건은 `backend/training/balance/MAC_TRAINING.md`에 기록한다. 데이터 전처리·재작성·학습·GGUF 변환·Ollama 등록은 2026-09-30에 끝났다(step 11). 모델 평가(자체 점검 셋·사용자 여정·PM 고정 질문)는 남았다.
 
 ## 영역 간 요청 (기록만, 아직 전달 안 함)
 사용자 여정을 돌리다 발견한, balance 밖에서 고쳐야 하는 문제다. 다른 영역 문서는 고치지 않았다.
@@ -89,6 +90,7 @@ Mac 학습 환경·실행 절차와 현재 선행 조건은 `backend/training/ba
 | R2 | router (gateway) | 주제 없음 되묻기는 `pending`을 남기지 않아서, "잔액조회"를 누르면 원래 질문 대신 "잔액조회"가 질문이 된다. 거래내역 질문이 잔액 답변으로 바뀐다 | J3 |
 | R3 | router (masking) | 하이픈 없는 계좌번호(`11034567890`)와 점으로 이은 번호(`110.3456.7890`)는 마스킹되지 않아 원본이 모델 입력·로그에 들어간다(공통 ADR-006 트레이드오프의 실제 사례). balance는 이런 입력을 계좌번호로 인식하지 못해 되묻는다 | 2026-09-29 `mask()` 확인 |
 | R4 | frontend (예시 칩, 담당 나) | 예시 칩에 거래내역 문의가 없다. R1이 풀린 뒤 "최근 거래내역 보여줘" 칩을 검토한다 | J3 |
+| R5 | 공통 (`CLAUDE.md`, `docs/PRD.md`, `docs/frontend/PRD.md`) | 데이터·가중치 커밋 금지의 근거로 "제3자 제공 금지"를 적었는데, 사용자가 잘못된 정보라고 정정했다(BAL-010). 커밋 금지 규칙은 그대로 두고 근거 표현만 고친다. `CLAUDE.md` 기술 스택의 "학습: … PEFT(QLoRA) + TRL"에도 잔액조회 MLX 예외(BAL-006)가 없다 | BAL-010, BAL-006 |
 
 ## 자체 점검 셋 (PM 고정 질문 형식, 2026-09-29 작성)
 PM 고정 질문이 오기 전에 담당자가 `cs-balance` 품질을 미리 보는 셋이다. 라우터 영향을 빼려고 `POST /api/chat`에 `"choice": "balance"`를 넣어 보낸다(게이트웨이는 `choice`가 있으면 라우팅을 건너뛴다). 통과 = ① 주제 적합 ② 지어내지 않음(금리·상품명·서류 요건·수수료·기간을 지어내면 불합격) ③ 존댓말 상담 톤. 기준은 공통 PRD와 같이 9/10이다.

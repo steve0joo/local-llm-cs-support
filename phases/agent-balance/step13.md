@@ -19,6 +19,7 @@
 
 - 잔액·거래 금액 원본(`1234567`, `1,234,567`, `2400000` 등)과 전체 계좌번호가 프롬프트·history·합성 샘플 어디에도 들어가지 않는가? mock 값은 `slots`로만 나가는가?
 - 출력 검증(BAL-002)을 거치지 않고 모델 출력이 `AgentReply.text`로 나가는 경로가 없는가?
+- 재작성(BAL-010): `rewrite.py`가 `claude` CLI로 보내는 텍스트가 모두 `mask_fields`를 거치는가? `prepare.py`가 원문 `answer`·`output`을 학습 정답이나 history로 쓰지 않는가? 테스트가 실제 CLI를 부르지 않는가? `REWRITE_SYSTEM` 규칙 5·7·10·11의 예문이 테스트로 고정돼 있는가?
 - 테스트가 핵심 규칙을 깨는 입력을 재현하는가: `입출금` 오분류, 본인 아닌 계좌번호 + 별칭, 두 계좌가 함께 걸리는 입력, 숫자·서류·상품명이 든 학습 정답 제외, 개인정보 요구·행동 약속 학습 정답 제외와 상담원 연결 안내 유지(BAL-009), 합성 샘플의 mock 값 부재, Modelfile SYSTEM 일치. 스모크 테스트만 있으면 ❌
 - 수정 범위가 `backend/app/agents/balance/`, `backend/tests/balance/`, `backend/training/balance/`, `backend/models/balance/`, `docs/agent-balance/`, `phases/agent-balance/` 안에 있는가? 아래 알려진 예외 밖의 파일 변경은 ❌
   - 알려진 예외(보고만, 막지 않는다): `backend/tests/router/test_base.py`·`backend/tests/gateway/test_api.py`(ARCHITECTURE "알려진 한계"), `backend/README.md`·`backend/training/requirements.txt`·`.gitignore`·`docs/ADR.md`·`docs/ARCHITECTURE.md`·`docs/PRD.md`(BAL-006 Mac 학습 안내 — 공통 문서라 팀 합의 필요로 보고), `phases/index.json`
