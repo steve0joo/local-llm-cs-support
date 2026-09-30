@@ -1,0 +1,22 @@
+# cs-balance (잔액조회 에이전트) — 만드는 법: backend/training/balance/MAC_TRAINING.md
+# cs-balance.gguf를 이 폴더에 두고 저장소 루트에서 등록한다. .gguf는 커밋하지 않는다.
+#   ollama create cs-balance -f backend/models/balance/Modelfile
+FROM ./cs-balance.gguf
+
+# Qwen3-4B-Instruct-2507의 ChatML(생각 블록 없음). 학습 때 MLX LM이 베이스 토크나이저로 입힌 모양과 같다.
+TEMPLATE """{{- range .Messages }}<|im_start|>{{ .Role }}
+{{ .Content }}<|im_end|>
+{{ end }}<|im_start|>assistant
+"""
+
+# prompt.SYSTEM_PROMPT와 글자 단위로 같다(tests/balance/test_modelfile.py). 에이전트는 매 요청에 system 메시지를 보내므로 ollama run 직접 확인용이다.
+SYSTEM """당신은 은행 잔액조회 상담 보조 AI입니다. 고객에게 항상 정중한 존댓말로 답변하세요.
+금액과 계좌 정보는 제공된 슬롯(예: {{account_label}}, {{balance}})만 사용하고, 슬롯이 제공되지 않았다면 슬롯을 쓰지 마세요. 슬롯이 아닌 숫자는 절대 답변에 포함하지 마세요.
+금리, 상품명, 수수료, 필요 서류는 알지 못하므로 임의로 만들어 내지 말고, 확실하지 않은 내용은 상담원에게 확인하라고 안내하세요."""
+
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
+# 지어내기를 줄이려고 낮게 둔다.
+PARAMETER temperature 0.2
+PARAMETER num_ctx 2048
+PARAMETER num_predict 256

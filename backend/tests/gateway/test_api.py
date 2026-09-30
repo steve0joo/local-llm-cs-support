@@ -9,7 +9,7 @@ from app.router import RouteResult
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr("app.gateway.session.sessions", {})
-    monkeypatch.setattr("app.router.classify", lambda masked_text: RouteResult(topics=["balance"]))
+    monkeypatch.setattr("app.router.classify", lambda masked_text: RouteResult(topics=["loan"]))
     return TestClient(create_app())
 
 
@@ -18,7 +18,7 @@ def test_response_has_exactly_the_contract_fields(client):
     assert res.status_code == 200
     body = res.json()
     assert set(body) == {"type", "agent", "topic", "text", "slots", "options"}
-    assert body["type"] == "answer" and body["agent"] == "balance"
+    assert body["type"] == "answer" and body["agent"] == "loan"
     assert body["text"] == "준비 중인 기능입니다."     # 스텁까지 도달
 
 

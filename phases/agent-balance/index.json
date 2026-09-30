@@ -1,0 +1,207 @@
+{
+  "project": "local-llm-cs-support",
+  "phase": "agent-balance",
+  "guardrail_docs": [
+    "docs/ARCHITECTURE.md",
+    "docs/ADR.md",
+    "docs/agent-balance/ARCHITECTURE.md",
+    "docs/agent-balance/ADR.md"
+  ],
+  "steps": [
+    {
+      "step": 0,
+      "name": "main-merge",
+      "status": "completed",
+      "type": "human",
+      "summary": "origin/main(7466702)을 머지 커밋 cb892a6으로 병합. 충돌 4개는 BAL-005대로 해소(__init__.py·test_base.py·training/requirements.txt는 ours, README는 Mac 안내 뒤 main 구동 절차), test_api.py는 classify를 loan으로 옮김(세 번째 예외). backend pytest 253 passed"
+    },
+    {
+      "step": 1,
+      "name": "intent-alias",
+      "status": "completed",
+      "started_at": "2026-09-29T14:34:09+0900",
+      "summary": "intent.classify_intent가 거래내역 키워드 검사 때만 질문에서 '입출금'을 지우도록 수정(J8, 단어 상수 그대로), test_intent.py에 입출금 3예문·출금 회귀 2예문 추가, ARCHITECTURE 의도 판단 절·알려진 한계 (b) 갱신. AC 26 passed, verify.sh 통과(frontend npm ci 후 lint·98 passed, backend 258 passed)",
+      "cost_usd": 1.5586,
+      "num_turns": 20,
+      "completed_at": "2026-09-29T14:36:16+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/app/agents/balance/intent.py",
+        "backend/tests/balance/test_intent.py",
+        "docs/agent-balance/ARCHITECTURE.md"
+      ]
+    },
+    {
+      "step": 2,
+      "name": "resolve-typed",
+      "status": "completed",
+      "started_at": "2026-09-29T14:36:19+0900",
+      "summary": "resolve.choose_account(accounts, mask_map, masked_text)로 시그니처 변경 + 규칙 4(masked_text에 별칭·끝 4자리가 든 본인 계좌가 정확히 1개면 그 계좌, 규칙 3 뒤·5 앞) 추가, agent.handle()은 req.masked_text를 넘기도록 호출만 수정. test_resolve.py 기존 호출에 masked_text 인자 추가 + 규칙 4 예·C001 생활비(규칙 5)·본인 아닌 번호 우선(규칙 3)·두 계좌 동시 매칭 되묻기, test_agent.py에 J9 2턴(되묻기 → '생활비 계좌 잔액 알려줘' → A003 잔액, 모델 1회) 추가. ARCHITECTURE·PRD의 3차 표시 제거. AC 53 passed, backend 전체 267 passed",
+      "cost_usd": 1.2288,
+      "num_turns": 24,
+      "completed_at": "2026-09-29T14:38:10+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/app/agents/balance/agent.py",
+        "backend/app/agents/balance/resolve.py",
+        "backend/tests/balance/test_agent.py",
+        "backend/tests/balance/test_resolve.py",
+        "docs/agent-balance/ARCHITECTURE.md",
+        "docs/agent-balance/PRD.md"
+      ]
+    },
+    {
+      "step": 3,
+      "name": "train-prepare",
+      "status": "completed",
+      "started_at": "2026-09-29T14:38:13+0900",
+      "summary": "training/balance/prepare.py 구현(TOPIC·OUT_DIR=data/processed/balance·SPLIT_FILES, load_qas·normalize_amounts·build_sample·synth_samples·build_dataset·main --split/--out-dir/--zip, app.masking.mask 직접 import·random 없음) + tests/balance/test_prepare.py 20개(tmp_path 합성 zip·split.json: 분할·라벨 필터·마스킹 원본 부재·제외 4종·허용/입력 상품명 유지·합성 의도/is_valid/모양·mock 값 부재·check_dataset·결정성·CLI). 합성 질문 잔액 20·거래내역 20, 응답 각 6 → 합성 샘플 train 192·val 24·test 24. 상품명 허용 목록 상수 GENERIC_PRODUCT_NAMES. ARCHITECTURE·MAC_TRAINING의 3차/미구현 표시 제거. deviation: 없음(인터페이스 절에 main 옵션·GENERIC_PRODUCT_NAMES 이름·● 금액 정규식 모양만 보강). AC 24 passed, backend 전체 287 passed",
+      "cost_usd": 2.3667,
+      "num_turns": 21,
+      "completed_at": "2026-09-29T14:44:23+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/MAC_TRAINING.md",
+        "backend/training/balance/prepare.py",
+        "docs/agent-balance/ARCHITECTURE.md"
+      ]
+    },
+    {
+      "step": 4,
+      "name": "modelfile",
+      "status": "completed",
+      "started_at": "2026-09-29T14:44:26+0900",
+      "summary": "backend/models/balance/Modelfile 작성(머리 주석에 MAC_TRAINING.md·ollama create cs-balance 명령, FROM ./cs-balance.gguf, Qwen3-4B-Instruct-2507 ChatML TEMPLATE(생각 블록 없음), SYSTEM = prompt.SYSTEM_PROMPT 글자 단위 일치, stop <|im_end|>·<|endoftext|>, temperature 0.2, num_ctx 2048, num_predict 256) + tests/balance/test_modelfile.py 4개(SYSTEM 일치·FROM·stop im_end·TEMPLATE ChatML에 <think> 없음, 먼저 red 확인). ARCHITECTURE 디렉토리 구조의 '3차 예정'과 'Modelfile (3차)' 제목 표시 제거. .gguf 생성·ollama create 안 함. AC 32 passed, gguf/safetensors 추적 0, backend 전체 291 passed",
+      "cost_usd": 0.8912,
+      "num_turns": 15,
+      "completed_at": "2026-09-29T14:45:43+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/models/balance/Modelfile",
+        "backend/tests/balance/test_modelfile.py",
+        "docs/agent-balance/ARCHITECTURE.md"
+      ]
+    },
+    {
+      "step": 5,
+      "name": "prepare-filter",
+      "status": "completed",
+      "started_at": "2026-09-29T14:59:30+0900",
+      "summary": "prepare.build_sample에 BAL-009 콜센터식 정답 제외 추가(기존 is_valid·상품명 규칙 뒤, 마스킹 뒤 output에만 적용): 비공개 정규식 _ASKS_PERSONAL_INFO(성함·생년월일·계좌 ?번호·비밀번호·주민(등록)번호·카드 ?번호 뒤 같은 문장 25자 안 알려·말씀해·입력해·눌러)·_PROMISES_ACTION(보내·전송해·발급해·조치해·정정해·처리해 + ' ?드리겠/드리니'), 헬퍼 _call_center_answer. 공개 시그니처 그대로, random 없음. test_prepare.py에 12개 추가(빠질 예문 7 parametrize → None, 남길 예문 4 parametrize → 정답 그대로, answer·follow_up에만 규칙 표현이 있는 QA는 남는지 1), 먼저 7 failed red 확인. deviation: 없음(ARCHITECTURE 단어 목록·예문 그대로, 문서 미수정). 실제 AI Hub 데이터로 실행 안 함. AC 36 passed, backend 전체 303 passed",
+      "cost_usd": 1.0346,
+      "num_turns": 14,
+      "completed_at": "2026-09-29T15:01:01+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/prepare.py"
+      ]
+    },
+    {
+      "step": 6,
+      "name": "prepare-filter-widen",
+      "status": "completed",
+      "started_at": "2026-09-29T21:35:59+0900",
+      "summary": "prepare.build_sample 제외 규칙 확장(마스킹 뒤 output에만, 기존 규칙 뒤): _ASKS_PERSONAL_INFO 동사에 제공해 추가, _PROMISES_ACTION을 동사 14개 × 어미 드리겠·드리니·드립니다·드릴 수(띄어쓰기 유무, '드릴 수 ?없' 제외) + 즉시·바로 ?진행하겠·처리하겠로 확장, 새 비공개 정규식 _CLAIMS_LOOKUP(조회·확인 (한|해 본|해 보니|해 드린)? ?결과, 뒤가 는·를이면 제외 / 확인한 바에 따르면 / 확인되었습니다)·_DEID_MARK(★·●·○·OO). 공개 시그니처 그대로, random 없음. test_prepare.py에 21개 추가(콜센터 빠질 예문 9·남길 1을 기존 parametrize에, 조회 단정 빠질 4·남길 3, 비식별 빠질 3, 입력 쪽 ★★·OO·●·조회 단정 표현이 있어도 남는지 1), 먼저 16 failed red 확인. deviation: 없음(ARCHITECTURE 단어 목록·예문 그대로, 문서 미수정). 실제 AI Hub 데이터로 실행 안 함. AC 57 passed, backend 전체 324 passed",
+      "cost_usd": 1.2924,
+      "num_turns": 15,
+      "completed_at": "2026-09-29T21:38:17+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/prepare.py"
+      ]
+    },
+    {
+      "step": 7,
+      "name": "rewrite",
+      "status": "completed",
+      "started_at": "2026-09-29T21:38:20+0900",
+      "summary": "prepare.py에 캐시 공용부 추가(REWRITE_PATH=OUT_DIR/rewrites.jsonl·MAX_CHARS=200, mask_fields·qa_key(source_id+네 필드를 \\x1f로 이은 sha256 앞 32자)·load_rewrites(없으면 {}, 중복 키는 마지막 줄)), build_sample은 mask_fields를 쓰도록만 바꿈(동작 동일). 새 training/balance/rewrite.py: MODEL=claude-haiku-4-5·CHUNK=20·REWRITE_SYSTEM(한국어, 규칙 1~10 + key 그대로 반환, MAX_CHARS·DOCUMENT_KEYWORDS를 상수에서 채움)·OUTPUT_SCHEMA·build_prompt·build_command(--bare 없음)·parse_envelope·run_claude(빈 임시 폴더 cwd, 예외·시간 초과·0 아닌 종료 코드면 '')·split_qas·run_all(캐시 키 건너뛰기·key 중복 제거, ThreadPoolExecutor, 캐시 쓰기는 메인 스레드·묶음당 한 번, 묶음마다 진행 줄 출력)·main(--limit·--chunk·--jobs·--model, 보낼 것 없으면 안내 후 종료). 표준 라이브러리만 사용. 테스트 먼저 작성해 red 확인(prepare 11 failed, rewrite import 실패): test_prepare.py에 11개(상수·mask_fields·qa_key 안정성/필드별 변화 5/경계·load_rewrites 2), 새 test_rewrite.py 25개(상수·REWRITE_SYSTEM·build_command·build_prompt·parse_envelope 정상/실패 4/필터/비용 기본값·run_claude stdin·빈 cwd/실패 2/시간 초과·run_all 순서 무관 key 저장/줄 모양/캐시 건너뛰기/누락 집계·재전송/호출 실패/jobs=2·split_qas·main 3, 가짜 run·sys.executable만 쓰고 claude CLI 미호출). deviation: 없음(문서 미수정). claude CLI·rewrite 실행 안 함. AC 93 passed, backend 전체 360 passed",
+      "cost_usd": 2.0103,
+      "num_turns": 20,
+      "completed_at": "2026-09-29T21:42:59+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/tests/balance/test_rewrite.py",
+        "backend/training/balance/prepare.py",
+        "backend/training/balance/rewrite.py"
+      ]
+    },
+    {
+      "step": 8,
+      "name": "prepare-rewrite",
+      "status": "completed",
+      "started_at": "2026-09-29T21:43:02+0900",
+      "summary": "prepare.build_sample(qa) → build_samples(qa, rewrite): rewrite가 None이면 [], mask_fields로 question·follow_up, 다시 쓴 answer·output에 mask(), 첫 턴 build_messages([], question, general)+answer·이어진 턴 build_messages([question, answer], follow_up, general)+output 순서, 원문 answer·output 미사용. 안전망 필터 1~6을 비공개 _rejected(target, inputs)로 모아 목표마다 따로 적용(상품명 입력은 첫 턴 (question,)·이어진 턴 (question, answer, follow_up), 길이 > MAX_CHARS 제외), _call_center_answer는 _rejected로 흡수. build_dataset에 rewrites_path=REWRITE_PATH 추가(load_rewrites + qa_key로 조회, 캐시에 없는 QA는 뺌, 반환 모양 그대로), 비공개 _build_dataset이 (분할별 수, 재작성 없음 QA 수)를 한 번에 세고 main은 --rewrites를 받아 '재작성 없음으로 빠진 QA N건'을 출력. 합성 샘플·rewrite.py 그대로, prepare는 rewrite를 import하지 않음. test_prepare.py: 기존 build_sample 테스트 전부 build_samples + 재작성 dict로 옮김(제외 예문은 다시 쓴 output에 넣어 이어진 턴이 빠지고 첫 턴만 남는지), output-only 두 테스트는 answer 탈락 시 이어진 턴만 남고 history에 그대로 있는지(2)·입력 규칙 표현 무판정(1)으로 교체, 새로 재작성 없음 [](1)·턴별 상품명 입력(1)·200/201자(2)·캐시 누락 QA 제외(1)·캐시 없으면 합성만(1)·원문 answer·output 파일 부재(1)·main 기본 REWRITE_PATH(1), build_dataset·main 테스트는 캐시 경로를 넘기고 전화번호 든 다시 쓴 answer의 마스킹·누락 수 출력 확인. 64 → 73개(순증 9), 먼저 54 failed red 확인. deviation: 없음(문서 미수정). 실제 AI Hub 데이터·캐시로 실행 안 함. AC 102 passed, backend 전체 369 passed",
+      "cost_usd": 2.6495,
+      "num_turns": 25,
+      "completed_at": "2026-09-29T21:49:34+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/prepare.py"
+      ]
+    },
+    {
+      "step": 9,
+      "name": "synth-widen",
+      "status": "completed",
+      "started_at": "2026-09-29T21:49:37+0900",
+      "summary": "prepare.py에 사용자 검토 문장 그대로 MASKED_BALANCE_QUESTIONS·MASKED_TRANSACTION_QUESTIONS(각 5, {account_no} 자리표시자)·GENERAL_SYNTH(범주 5: 조회 방법 질문5·응답3, 조회 오류·수수료/금리/한도·발급/변경·모르는 입금 각 질문4·응답3) 추가, synth_samples에 두 종류 추가(기존 슬롯 샘플 그대로): 가상 계좌번호는 템플릿 인덱스 i마다 mock 계좌(C001~C003 순서) account_no를 넣고 app.masking.mask()로 [계좌번호_1] 변환 → build_messages([], 질문, 의도) × 그 의도 슬롯 응답 전체, general은 범주마다 build_messages([], 질문, 'general') × 범주 응답 전체, 분할은 i % 10 규칙(비공개 _synth_split로 세 곳 공용). 분할별 합성 샘플 train 261(슬롯 192·가상 계좌번호 18+18·general 33)·val 51(24·6+6·15)·test 51(24·6+6·15). test_prepare.py: _synth_counts를 종류별 리터럴 SYNTH_COUNTS 합으로 바꾸고 7개 추가(가상 계좌번호 [계좌번호_1]·원번호 부재·자기 의도 2, 가상 계좌번호 인덱스 규칙 2, general 의도·_rejected 안전망 필터(is_valid·MAX_CHARS 포함)·범주 크기 1, general 인덱스 규칙 1, 종류×분할 수·결정성 1), 기존 mock 값 부재 테스트에 [계좌번호_1] 포함 확인 추가. 먼저 12 failed red 확인. intent.py·app/·training/common 미수정. deviation: 없음(문서 미수정). AC 122 passed, backend 전체 376 passed",
+      "cost_usd": 1.7386,
+      "num_turns": 21,
+      "completed_at": "2026-09-29T21:52:50+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_prepare.py",
+        "backend/training/balance/prepare.py"
+      ]
+    },
+    {
+      "step": 10,
+      "name": "rewrite-rules",
+      "status": "completed",
+      "started_at": "2026-09-29T22:41:14+0900",
+      "summary": "rewrite.REWRITE_SYSTEM 규칙 5(나중에 해 줄 일 약속 금지 + 예문 2)·7(원문 사실도 옮기지 않기, 수수료·한도 유무·기간·휴일 처리·자동 해제·규정 변경 금지, 조회 결과를 일반 설명으로 바꾸지 않기 + 예문 6)·10(일반 안내 범위 정의 + 괄호 예시 4, 7은 일반 안내 아님)을 ARCHITECTURE 문구 그대로 바꾸고 규칙 11(items끼리 내용 섞지 않기)을 10과 '출력:' 줄 사이에 추가. 규칙 1~4·6·8·9·출력 줄·MAX_CHARS/DOCUMENT_KEYWORDS 상수 채움·MODEL·CHUNK·OUTPUT_SCHEMA·함수는 그대로. test_rewrite.py에 parametrize 테스트 1개(14케이스: 규칙 5 예문 2·7 예문 6·10 예시 4·11 문장 2) 추가, 먼저 13 failed red 확인(10의 '앱을 최신 버전으로…'는 기존 문구에 있어 통과). claude CLI·rewrite 실행 안 함, prepare.py·app/·training/common·캐시 미수정. deviation: 없음(문서 미수정). AC 119 passed, backend 전체 390 passed",
+      "cost_usd": 1.0109,
+      "num_turns": 11,
+      "completed_at": "2026-09-29T22:42:29+0900",
+      "ac_verified": true,
+      "files": [
+        "backend/tests/balance/test_rewrite.py",
+        "backend/training/balance/rewrite.py"
+      ]
+    },
+    {
+      "step": 11,
+      "name": "train-export",
+      "status": "completed",
+      "type": "human",
+      "summary": "재작성: 1차 시범 30건 판독 → 규칙 보강 step 10 → 재시범 → 전체 --jobs 4(누락 16건 재실행), 캐시 4,137건, cost_usd 합 22.93. prepare train 7,359·val 525·test 536(재작성 없음 0), valid 24건 판독 후 사용자 결정으로 학습 진행. Qwen3-4B-Instruct-2507(cdbee75) 4bit MLX, 목표 답 최대 98토큰, 7,400회(1 epoch) 학습, valid 0.872·test 0.886(--mask-prompt). 16bit 원본 병합(BAL-006 보강, 토크나이저·config 원본 복원) → GGUF Q4_K_M 2.5GB → ollama create cs-balance 성공, 존댓말·슬롯 응답 0.4~0.7초. MAC_TRAINING에 변환 절차·HF 스냅샷 오류·train test 마스킹 차이 기록"
+    },
+    {
+      "step": 12,
+      "name": "self-check",
+      "status": "completed",
+      "type": "human",
+      "summary": "cs-balance Q4_K_M + 백엔드(cs-router 없음, 키워드 폴백)로 Q1~Q10 choice=balance 9/10(Q10 '오늘 들어온 돈' → 잔액, 알려진 한계 (e), 단어 보강 후보 들어온·들어왔), 기본 문장 대체 1회(Q10, 로그 입력 재생으로 확인), 워밍업 뒤 0.4~0.7초, 마스킹 grep 0건(로그 69줄 전체). J1·J2·J4·J5·J7·J8·J9 PRD대로, UI에서 금액 형식·{{ 없음·거래내역 줄 표시 확인(J3은 R1이라 '잔액 말고 거래내역 보여줘'로 대체), J6은 curl C999. J12는 Ollama 종료가 취소돼 OLLAMA_URL 닫힌 포트로 같은 실패 경로 확인. 결과는 PRD 자체 점검 셋·사용자 여정 아래에 기록"
+    },
+    {
+      "step": 13,
+      "name": "review",
+      "status": "completed",
+      "started_at": "2026-09-30T10:47:38+0900",
+      "summary": "리뷰 7항목 모두 ✅(origin/main 7466702 대비 51파일, 코드 수정 없음)\n| 항목 | 결과 | 비고 |\n|------|------|------|\n| 아키텍처 준수 | ✅ | agents/balance 7모듈·training/balance·models/balance가 영역 ARCHITECTURE 구조와 일치, handle() 1~9 흐름·계약 3 export(agent·mock_router) |\n| 기술 스택 준수 | ✅ | FastAPI·pytest·Ollama Modelfile(Qwen3-4B ChatML), MLX LM 학습(BAL-006)·claude CLI 재작성(BAL-010, 표준 라이브러리 subprocess), 런타임 requirements 추가 없음 |\n| 테스트 존재 | ✅ | 구현 10개(mock_api·resolve·intent·prompt·validate·agent·prepare·rewrite·train·Modelfile) 모두 test_<모듈>.py 있음 |\n| CRITICAL 규칙 | ✅ | 모델 호출은 llm.generate 한 곳, 모델 출력은 항상 validate_output 경유(우회 경로 없음), 프롬프트는 masked_text·history·슬롯 이름만, mock 금액은 slots로만, rewrite 입력은 mask_fields만, prepare는 원문 answer·output을 정답·history에 안 씀 |\n| 검증 통과 | ✅ | AC pytest 390 passed, 민감 파일 추적 0, verify.sh(frontend lint·98 passed, backend 390 passed) |\n| 핵심 규칙 테스트 | ✅ | 입출금 오분류·본인 아닌 번호+별칭·두 계좌 동시 매칭·모든 모델 호출의 입력 원본 부재·누출 출력 대체·BAL-009 빠질/남길 예문·조회 단정·비식별·200자·합성 mock 값 부재·REWRITE_SYSTEM 예문 14개·Modelfile SYSTEM 일치, CLI는 가짜 run·sys.executable만 |\n| 커밋 위생 | ✅ | gguf·safetensors·data·logs·scripts·.ouroboros 추적 0, gitlink 0, 비밀키·로컬 경로 0, 커밋 메시지 모두 conventional |\n알려진 예외(보고만): tests/router/test_base.py(AREAS에서 balance 제외)·tests/gateway/test_api.py(스텁 도달 검사를 loan으로), backend/README.md·training/requirements.txt·.gitignore(.venv-train/)·docs/ADR.md·docs/ARCHITECTURE.md·docs/PRD.md(BAL-006 Mac 학습, 공통 문서라 팀 합의 필요), phases/index.json\n권고(막지 않음): ① C002 '최근 입출금 내역 보여줘'는 규칙 4 별칭 매칭으로 되묻지 않고 A002 거래내역을 보여 줌 — 알려진 한계에 없으니 기록하거나 테스트로 고정 ② CLAUDE.md·docs/PRD.md·.gitignore 주석의 '제3자 제공 금지'가 BAL-010(사용자 정정)과 어긋나고, PRD '국외 클라우드 학습 금지'를 학습에만 적용하는 해석(외부 API 재작성)도 영역 ADR에만 있음 → 공통 문서 반영·팀 합의 ③ origin/main이 docs 커밋 3개(PR #6·#2) 앞서 있으나 merge-tree 충돌 없음",
+      "cost_usd": 1.9346,
+      "num_turns": 22,
+      "completed_at": "2026-09-30T10:50:39+0900",
+      "ac_verified": true
+    }
+  ],
+  "created_at": "2026-09-29T14:34:09+0900",
+  "completed_at": "2026-09-30T10:50:42+0900",
+  "total_cost_usd": 17.7162
+}
