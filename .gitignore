@@ -26,3 +26,6 @@ backend/training/**/outputs/
 
 # ouroboros local state
 .ouroboros/artifacts/
+
+# 비밀 키 (Judge API 등)
+.env
