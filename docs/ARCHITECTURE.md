@@ -33,7 +33,8 @@
     ├── requirements.txt           # 런타임 의존성(fastapi·uvicorn·pytest 등) — 팀원C, 추가는 PR로
     ├── tests/                     # pytest — gateway·masking·llm·router(팀원C), balance, loan, interest
     ├── training/
-    │   ├── requirements.txt       # 학습 의존성(torch·transformers·peft·trl 등) — Windows 학습 장비 전용, Mac 데모에는 설치하지 않음
+    │   ├── requirements.txt       # Windows 학습 의존성(torch·transformers·peft·trl 등)
+    │   ├── balance/requirements-mac.txt # 잔액조회만 Mac MLX LM 학습
     │   ├── common/                # 은행 데이터 필터 + source_id 기준 분할 — 팀원C
     │   └── {router,balance,loan,interest}/   # 영역별 전처리·학습 스크립트
     ├── models/{router,balance,loan,interest}/Modelfile   # Ollama Modelfile은 커밋, .gguf는 커밋 금지
@@ -164,6 +165,8 @@ AI Hub 원본(backend/data/raw)
   → LoRA 병합 → GGUF 변환(Q4_K_M) → models/<영역>/Modelfile → ollama create cs-<영역>
   → 같은 .gguf를 Mac에 복사해 ollama create (Mac에서도 로컬 추론)
 ```
+잔액조회 에이전트만 Mac M4 Pro에서 Hugging Face 베이스 모델 + MLX LM으로 데이터 전처리·QLoRA 학습·평가한다. 자세한 명령과 GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. 나머지 영역의 Windows 파이프라인은 그대로다.
+
 원본 데이터는 아직 받지 않았다. 문서에 적은 폴더 구조와 필드명(`consulting_topic`, `qa_data[].input.question` 등)은 가정이다. 팀원C가 `training/common`을 시작할 때 실제 파일로 확인하고, 다르면 이 문서와 영역 문서를 고친다.
 
 ## 코드·테스트 규칙 (공통, 팀 합의 대기)
@@ -192,5 +195,5 @@ AI Hub 원본(backend/data/raw)
 - 스캐폴드(`backend/pyproject.toml`, `app/__init__.py`, frontend `package.json` 등)가 아직 없어서 나는 import·실행 실패도 red로 인정한다. 이때 실행은 생략하거나 pyproject에 적을 설정을 명령줄로 넘겨 확인한다.
 
 ### 다음 라운드 체크리스트
-- [ ] 팀원C 스텁(통합 순서 1단계) 병합 후 에이전트 3개 영역(balance·loan·interest) 재드라이런
-- [ ] 실제 팀원 착수 검증
+- [ ] [PR #4](https://github.com/steve0joo/local-llm-cs-support/pull/4)(통합 순서 1단계) 머지 후 main 커밋 하나에서 에이전트 3개 영역(balance·loan·interest)을 같은 스냅샷으로 재드라이런(실행 시 SHA 기록)
+- [ ] 실제 팀원 착수 검증(사후 드라이런, 위 판정 규칙 적용) — https://github.com/steve0joo/local-llm-cs-support/issues/5

@@ -9,6 +9,8 @@ FastAPI 게이트웨이 + 라우터 + 전문 에이전트 3개 + mock API, 학�
 | 대출문의 에이전트 | 팀원A | `feat-agent-loan` | `docs/agent-loan/` |
 | 이자/연체 에이전트 | 팀원B | `feat-agent-interest` | `docs/agent-interest/` |
 
+잔액조회 에이전트의 Mac 데이터 전처리·Hugging Face 베이스 모델 학습·Ollama 평가는 [`training/balance/MAC_TRAINING.md`](training/balance/MAC_TRAINING.md)를 따른다. 다른 영역의 Windows 학습 의존성과 분리되어 있다.
+
 ## 구동 절차
 
 모델과 에이전트가 아직 없어도 서버는 뜬다. 라우터는 Ollama 호출이 실패하면 키워드 규칙으로 분류하고(`docs/router/ADR.md` RT-002), 에이전트 자리에는 "준비 중인 기능입니다."를 돌려주는 스텁이 있다.
