@@ -1,4 +1,4 @@
-# cs-interest (이자/연체 에이전트) — 만드는 법: backend/training/interest/export.md
+# cs-interest v07 (이자/연체 에이전트) — 만드는 법: backend/training/interest/export.md
 # cs-interest.gguf(LoRA 병합 + Q4_K_M)를 이 폴더에 두고 실행한다. .gguf는 커밋하지 않는다.
 #   ollama create cs-interest -f backend/models/interest/Modelfile
 # 사용한 학습 버전 이름은 같은 폴더 VERSION 파일에 적는다(버전 목록: training/interest/outputs/runs/index.jsonl).
