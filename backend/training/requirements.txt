@@ -8,3 +8,8 @@ trl==0.24.0
 bitsandbytes==0.49.2
 datasets==4.3.0
 accelerate==1.14.0
+
+# 평가 도구(training/loan/evaluate.py --judge, GPT-5 Mini Judge) 전용. GPU 불필요. API 키는 backend/.env(gitignore)에 둔다.
+# 설치: uv pip install --python backend/.venv/bin/python openai==3.22.1 python-dotenv==1.2.3
+openai==3.22.1
+python-dotenv==1.2.3
