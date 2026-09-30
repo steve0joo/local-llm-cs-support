@@ -44,6 +44,9 @@ _SLOT_PATTERN = re.compile(r"\{\{\s*([^{}]*?)\s*\}\}")
 # 계약 4의 마스킹 토큰. 모델이 되풀이해도 원본 값이 아니므로 숫자 검사에서 제외한다(LN-004 a)
 _MASK_TOKEN = re.compile(r"\[(?:주민번호|카드번호|계좌번호|전화번호|주소|금액)_\d+\]")
 _SENTENCE_SPLIT = re.compile(r"[.!?\n]+")
+# 한글 답변에 섞이면 안 되는 일본어·한자(2026-09-30 v4 실측: "확인できません" 등). 한글·영문·기호는 막지 않는다.
+# CJK 기호·히라가나·가타카나(3000-30FF), 한자(3400-4DBF, 4E00-9FFF, F900-FAFF), 반각 가타카나(FF66-FF9F)
+_NON_KOREAN_CJK = re.compile(r"[\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]")
 
 
 def _strip_allowed_numbers(text: str, maturity_date: str) -> str:
@@ -55,6 +58,10 @@ def _strip_allowed_numbers(text: str, maturity_date: str) -> str:
 
 def is_valid_output(text: str, *, maturity_date: str, extendable: bool) -> bool:
     if not text.strip():
+        return False
+
+    # 0. 일본어·한자 혼입
+    if _NON_KOREAN_CJK.search(text):
         return False
 
     # a. 프롬프트에 준 만기일 표기와 마스킹 토큰 외에 숫자가 있으면 금액·퍼센트·다른 날짜·기간을 지어낸 것으로 본다

@@ -192,3 +192,33 @@ def test_more_document_names_are_rejected(text):
 )
 def test_counselor_referral_is_not_blocked(text):
     assert valid(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "{{extendable_status}} 사유가 무엇인지는 제가 확인できません. 상담원에게 문의해 주세요.",  # v4 실측(히라가나)
+        "고객님의 {{loan_label}}은 {{extendable_status}} 결과는 제가 안내したとおりです.",  # v4 실측(히라가나)
+        "연장 여부만으로 유리한지 판단するのは 어렵습니다. 상담원에게 확인해 주세요.",  # v4 실측
+        "{{extendable_status}} 다만 유불리에 대한判断은 제가 안내드리기 어렵습니다.",  # v4 실측(한자)
+        "確認해 주세요.",  # 한자만
+        "カタカナ 안내입니다.",  # 가타카나
+        "ｶﾀｶﾅ 안내입니다.",  # 반각 가타카나
+        "확인해 주세요。",  # 전각 마침표는 한글 답변에 쓰지 않는다
+    ],
+)
+def test_japanese_and_hanja_are_rejected(text):
+    assert valid(text) is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "{{loan_label}}의 만기일은 2027-03-31이고, 남은 원금은 {{principal_remaining}}입니다. {{extendable_status}}",
+        "네, 맞습니다. 만기일은 2027-03-31입니다.",
+        "제공된 정보로는 알 수 없어 상담원에게 확인해 주세요. (OK) ~ - · …",  # 영문·기호는 막지 않는다
+        "'안내'와 “확인”은 가능합니다. ‘상담원’ 문의 부탁드립니다.",  # 따옴표류
+    ],
+)
+def test_korean_answers_with_ascii_and_punctuation_are_not_rejected(text):
+    assert valid(text) is True
