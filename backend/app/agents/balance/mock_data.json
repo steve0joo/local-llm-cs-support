@@ -1,0 +1,68 @@
+{
+  "accounts": {
+    "C001": [
+      {
+        "account_id": "A001",
+        "account_no": "110-1234-5678",
+        "alias": "입출금",
+        "balance": 1234567
+      }
+    ],
+    "C002": [
+      {
+        "account_id": "A002",
+        "account_no": "110-2345-6789",
+        "alias": "입출금",
+        "balance": 850000
+      },
+      {
+        "account_id": "A003",
+        "account_no": "110-3456-7890",
+        "alias": "생활비",
+        "balance": 2400000
+      }
+    ],
+    "C003": [
+      {
+        "account_id": "A004",
+        "account_no": "110-4567-8901",
+        "alias": "입출금",
+        "balance": 320000
+      }
+    ]
+  },
+  "transactions": {
+    "A001": [
+      { "date": "2026-09-28", "description": "이체입금", "amount": 150000, "balance_after": 1234567 },
+      { "date": "2026-09-20", "description": "편의점", "amount": -8000, "balance_after": 1084567 },
+      { "date": "2026-09-15", "description": "통신요금", "amount": -65000, "balance_after": 1092567 },
+      { "date": "2026-09-10", "description": "관리비", "amount": -180000, "balance_after": 1157567 },
+      { "date": "2026-09-05", "description": "카드대금", "amount": -450000, "balance_after": 1337567 },
+      { "date": "2026-08-30", "description": "급여", "amount": 2600000, "balance_after": 1787567 }
+    ],
+    "A002": [
+      { "date": "2026-09-27", "description": "이체입금", "amount": 90000, "balance_after": 850000 },
+      { "date": "2026-09-19", "description": "편의점", "amount": -6500, "balance_after": 760000 },
+      { "date": "2026-09-14", "description": "통신요금", "amount": -52000, "balance_after": 766500 },
+      { "date": "2026-09-08", "description": "관리비", "amount": -160000, "balance_after": 818500 },
+      { "date": "2026-09-03", "description": "카드대금", "amount": -420000, "balance_after": 978500 },
+      { "date": "2026-08-28", "description": "급여", "amount": 2100000, "balance_after": 1398500 }
+    ],
+    "A003": [
+      { "date": "2026-09-25", "description": "이체입금", "amount": 120000, "balance_after": 2400000 },
+      { "date": "2026-09-18", "description": "편의점", "amount": -7500, "balance_after": 2280000 },
+      { "date": "2026-09-13", "description": "통신요금", "amount": -48000, "balance_after": 2287500 },
+      { "date": "2026-09-09", "description": "관리비", "amount": -145000, "balance_after": 2335500 },
+      { "date": "2026-09-02", "description": "카드대금", "amount": -380000, "balance_after": 2480500 },
+      { "date": "2026-08-27", "description": "급여", "amount": 2900000, "balance_after": 2860500 }
+    ],
+    "A004": [
+      { "date": "2026-09-27", "description": "이체입금", "amount": 80000, "balance_after": 320000 },
+      { "date": "2026-09-21", "description": "편의점", "amount": -5000, "balance_after": 240000 },
+      { "date": "2026-09-16", "description": "통신요금", "amount": -49000, "balance_after": 245000 },
+      { "date": "2026-09-11", "description": "관리비", "amount": -155000, "balance_after": 294000 },
+      { "date": "2026-09-04", "description": "카드대금", "amount": -390000, "balance_after": 449000 },
+      { "date": "2026-08-29", "description": "급여", "amount": 1950000, "balance_after": 839000 }
+    ]
+  }
+}

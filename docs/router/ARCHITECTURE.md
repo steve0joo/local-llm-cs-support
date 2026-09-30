@@ -22,8 +22,14 @@ backend/
 ├── tests/{gateway,masking,llm,router}/
 ├── training/
 │   ├── common/                 # 은행 필터 + source_id 분할 → data/processed/split.json
-│   └── router/                 # 라우터 학습 데이터 생성 + QLoRA 학습
-└── models/router/Modelfile
+│   └── router/
+│       ├── prepare.py          # 학습 데이터 생성 → data/processed/router/{train,val,test}.jsonl (RT-005)
+│       ├── train.py            # QLoRA 학습 → training/router/outputs/<run>/adapter (gitignore)
+│       ├── export.py           # 병합 → GGUF → models/router/{cs-router.gguf, Modelfile} → ollama create
+│       └── outputs/            # gitignore
+└── models/router/
+    ├── Modelfile               # export.py가 생성. 커밋
+    └── cs-router.gguf          # Q4_K_M 약 1.1GB. gitignore, Mac에는 복사
 ```
 
 ## TDD 착수점
@@ -46,6 +52,18 @@ POST /api/chat
  4. reply = agents[target].handle(AgentRequest(...)) → type=answer
  5. session.history에 {"role": "user", "content": 에이전트에 넘긴 masked_text}, {"role": "assistant", "content": reply.text} 추가 (계약 3) → 응답 반환
 ```
+
+### 게이트웨이 구현 결정 (`app/gateway/`, `app/main.py`)
+- 파일: `session.py`(`Session`, 모듈 dict `sessions`, `get_session()`; 되묻기 대기 질문은 `MaskResult`를 그대로 보관), `dispatch.py`(`AGENTS`, 안내 문구 상수, `dispatch(session_id, customer_id, message, choice) -> dict`), `api.py`(pydantic `ChatRequest`·`ChatResponse`·`ChatOption`, `POST /api/chat`), `main.py`(`create_app()`이 `/api/chat`과 세 패키지의 `mock_router`를 prefix 없이 등록).
+- 안내 문구: 지원 주제 2개 이상 "어느 쪽을 먼저 도와드릴까요?", 주제 없음 "어떤 업무를 도와드릴까요?", 미지원 "해당 주제는 아직 지원하지 않습니다. 상담원 연결을 도와드릴까요?"
+- 되묻기 선택지는 `topics.SUPPORTED` 순서, 라벨은 `topics.DISPLAY_NAMES`.
+- `topic` 값: answer = 에이전트 코드, unsupported = 모델이 낸 첫 코드(인수 기준 1 판정 근거), clarify = null. `agent`는 answer에서만 채운다.
+- `choice`가 지원 에이전트가 아니면 422가 아니라 unsupported 응답이다. pending이 없는 `choice`(계좌 선택 등)는 현재 메시지를 그대로 에이전트에 넘긴다.
+- history에는 answer 턴만 쌓는다. clarify·unsupported 문장은 게이트웨이가 만든 것이라 모델 문맥이 아니다. 에이전트에는 이번 턴 이전까지의 history 복사본을 넘긴다.
+- `dispatch()`는 dict를 돌려주고 스키마 클래스는 `api.py`에만 둔다. `classify`는 `router.classify()`로 불러 테스트가 `app.router.classify` 한 곳만 바꾼다.
+- 모델이 없어도 서버는 뜬다: `classify()`가 Ollama 호출 실패를 키워드 폴백으로 처리하고, 에이전트는 스텁이 답한다.
+- `choice` 없는 새 메시지가 오면 `session.pending`을 비운다. 되묻기 뒤 버튼 대신 타이핑한 경우 이전 되묻기는 무효이며, 그 뒤 계좌 선택 `choice`에 옛 질문이 딸려가지 않는다.
+- 에이전트의 모델 호출 실패(`httpx.HTTPError`: Ollama 없음·모델 미등록·타임아웃)는 게이트웨이가 잡아 answer 타입으로 "지금은 답변을 드릴 수 없습니다. 상담원 연결을 도와드릴까요?"를 돌려준다(500 아님). 이 문장은 history에 넣지 않는다. 그 밖의 예외(코드 버그)는 그대로 올려 500이 되게 한다.
 
 ## 마스킹 규칙 (초안 — 테스트로 확정)
 | 종류 | 토큰 | 예시 입력 |
@@ -83,6 +101,18 @@ POST /api/chat
 ```
 - 주제에 관한 표는 전부 `app/router/topics.py`에 둔다: 코드↔라벨 원문(`TOPIC_LABELS`), 지원 주제(`SUPPORTED`), 되묻기 표시명(`DISPLAY_NAMES`), 키워드(`KEYWORDS`), 시스템 프롬프트(`SYSTEM_PROMPT`). 게이트웨이와 학습 스크립트(`training/router/prepare.py`)가 여기서 import한다.
 - `SYSTEM_PROMPT`는 학습 데이터와 추론이 글자 단위로 같아야 한다. 프롬프트 문구를 바꾸면 라우터를 다시 학습한다.
+
+### 학습·배포 절차 (`training/router/`, Windows/WSL2 학습 노트북)
+```bash
+cd backend
+python -m training.common.split                  # split.json (1회)
+python -m training.router.prepare                # train 22,615 · val 2,497 · test 2,473 건 (2026-09-29)
+python -m training.router.train                  # 1 epoch, 20~40분 → outputs/<시각>/adapter (스모크는 MAX_STEPS=20으로 바꿔서)
+python -m training.router.export training/router/outputs/<시각>/adapter   # 병합 → GGUF → Modelfile → ollama create
+```
+- 설정값은 `train.py` 상단 상수(`BASE_MODEL`, `EPOCHS`, `MAX_STEPS`, `MAX_LENGTH`)와 `SFTConfig`에 있다. 스모크는 `MAX_STEPS = 20`으로 바꿔 돌린다.
+- `export.py`는 llama.cpp를 `LLAMA_CPP_DIR`(기본 `~/qlora_ft_ex/llama.cpp`)에서 찾는다. 변환에는 `sentencepiece`·`protobuf`가 필요하다(`training/requirements.txt`).
+- 등록 확인은 서버를 띄워 `/api/chat`에 키워드 없는 문장(예: "환전하고 싶은데요")을 보내 `topic`에 코드가 실리는지 본다. 서버는 이 모델이 등록되는 순간 키워드 폴백에서 모델 분류로 바뀐다.
 
 ## 제공하는 인터페이스
 - `app.masking.mask(text) -> MaskResult` — 학습 스크립트도 이 함수를 import한다

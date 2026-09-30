@@ -15,6 +15,7 @@ phases/**/step*-output.json
 __pycache__/
 *.pyc
 .venv/
+.venv-train/
 .pytest_cache/
 
 # AI Hub 데이터·모델 가중치·로그 — 커밋 금지 (데이터셋 이용조건: 제3자 제공 금지)

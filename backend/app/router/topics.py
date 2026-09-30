@@ -26,6 +26,5 @@ KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 # cs-router 시스템 프롬프트. 학습 데이터(training/router/prepare.py)와 추론이 같은 문구를 써야 한다.
-SYSTEM_PROMPT = "고객 문의를 다음 코드 중 하나로 분류하고 코드만 출력하세요.\n" + "\n".join(
-    f"{code}: {label}" for code, label in TOPIC_LABELS.items()
-)
+# 파인튜닝된 분류기라 코드 목록만 있으면 된다. 라벨·설명을 붙이면 프롬프트가 170~340토큰이 되어 학습이 2~4배 느려진다.
+SYSTEM_PROMPT = "고객 문의의 주제 코드를 출력하세요: " + ", ".join(TOPIC_LABELS)

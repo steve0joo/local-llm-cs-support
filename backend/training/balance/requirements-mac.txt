@@ -1,0 +1,4 @@
+# Apple Silicon의 잔액조회 에이전트 학습 전용. 공통 Windows requirements.txt와 분리한다.
+# backend/.venv/bin/python -m venv backend/.venv-train
+# backend/.venv-train/bin/python -m pip install -r backend/training/balance/requirements-mac.txt
+mlx-lm[train]==0.31.3
