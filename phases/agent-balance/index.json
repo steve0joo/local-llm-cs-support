@@ -185,8 +185,9 @@
     {
       "step": 12,
       "name": "self-check",
-      "status": "pending",
-      "type": "human"
+      "status": "completed",
+      "type": "human",
+      "summary": "cs-balance Q4_K_M + 백엔드(cs-router 없음, 키워드 폴백)로 Q1~Q10 choice=balance 9/10(Q10 '오늘 들어온 돈' → 잔액, 알려진 한계 (e), 단어 보강 후보 들어온·들어왔), 기본 문장 대체 1회(Q10, 로그 입력 재생으로 확인), 워밍업 뒤 0.4~0.7초, 마스킹 grep 0건(로그 69줄 전체). J1·J2·J4·J5·J7·J8·J9 PRD대로, UI에서 금액 형식·{{ 없음·거래내역 줄 표시 확인(J3은 R1이라 '잔액 말고 거래내역 보여줘'로 대체), J6은 curl C999. J12는 Ollama 종료가 취소돼 OLLAMA_URL 닫힌 포트로 같은 실패 경로 확인. 결과는 PRD 자체 점검 셋·사용자 여정 아래에 기록"
     },
     {
       "step": 13,
