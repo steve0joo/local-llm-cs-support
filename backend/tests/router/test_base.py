@@ -13,7 +13,7 @@ from fastapi import APIRouter
 
 from app.agents.base import Agent, AgentReply, AgentRequest
 
-AREAS = ["balance", "loan", "interest"]
+AREAS = ["balance", "loan"]
 
 
 def _field_names(cls) -> list[str]:
