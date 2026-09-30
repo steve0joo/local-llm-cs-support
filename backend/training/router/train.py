@@ -13,10 +13,14 @@ from training.router.prepare import OUT_DIR as DATA_DIR
 
 BASE_MODEL = "Qwen/Qwen3-1.7B"
 OUT_DIR = Path(__file__).resolve().parent / "outputs" / datetime.now().strftime("%Y%m%d-%H%M%S")
-NO_THINK = "<think>\n\n</think>\n\n"     # Qwen3 템플릿이 assistant 앞에 넣는 빈 생각 블록. 추론(think:false)과 같아야 한다
-EPOCHS = 1
-MAX_STEPS = -1                          # 스모크는 20 (epoch 대신 이 step 수만)
-MAX_LENGTH = 256
+NO_THINK = "<think>\n\n</think>\n\n"
+EPOCHS = 3
+LEARNING_RATE = 2e-4
+LORA_R = 16
+LORA_DROPOUT = 0.05
+WARMUP_STEPS = 50
+MAX_STEPS = -1
+MAX_LENGTH = 512
 
 
 def load_rows(path: Path) -> list[dict]:
@@ -25,30 +29,34 @@ def load_rows(path: Path) -> list[dict]:
     return [{"prompt": r["messages"][:-1], "completion": r["messages"][-1:]} for r in records]
 
 
-def check_template(tokenizer, row: dict) -> str:
-    """템플릿이 completion 앞에 빈 think 블록을 넣는지 확인하고 completion 문자열을 돌려준다. 다르면 학습 전에 멈춘다."""
+def tokenize(tokenizer, row: dict, max_length: int = MAX_LENGTH) -> dict:
+
     prompt = tokenizer.apply_chat_template(row["prompt"], tokenize=False, add_generation_prompt=True)
     full = tokenizer.apply_chat_template(row["prompt"] + row["completion"], tokenize=False)
-    completion = full[len(prompt):]
-    if not full.startswith(prompt) or not completion.startswith(NO_THINK):
-        raise RuntimeError(f"템플릿이 RT-006과 다르다: {completion[:40]!r}")
-    return completion
+    if not full.startswith(prompt) or not full[len(prompt):].startswith(NO_THINK):
+        raise RuntimeError(f"템플릿이 RT-006과 다르다: {full[len(prompt):][:40]!r}")
+    prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+    ids = tokenizer(full, add_special_tokens=False)["input_ids"]
+    if ids[:len(prompt_ids)] != prompt_ids:
+        raise RuntimeError("토큰 단위로 prompt가 full의 접두사가 아니다")
+    ids = ids[:max_length]
+    return {"input_ids": ids, "completion_mask": [0] * len(prompt_ids) + [1] * (len(ids) - len(prompt_ids))}
 
 
 def load_model():
     # 베이스를 NF4 4bit로 GPU에 올리고 LoRA r=16 설정
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
-        quantization_config=BitsAndBytesConfig(load_in_4bit=True, 
+        quantization_config=BitsAndBytesConfig(load_in_4bit=True,
                                                bnb_4bit_quant_type="nf4",
-                                               bnb_4bit_use_double_quant=True, 
+                                               bnb_4bit_use_double_quant=True,
                                                bnb_4bit_compute_dtype=torch.bfloat16),
         device_map={"": 0},
     )
     model.config.use_cache = False
     model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     return get_peft_model(model, LoraConfig(
-        r=16, lora_alpha=32, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
+        r=LORA_R, lora_alpha=LORA_R * 2, lora_dropout=LORA_DROPOUT, bias="none", task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     ))
 
@@ -58,13 +66,14 @@ def main() -> None:
     val_rows = load_rows(DATA_DIR / "val.jsonl")               # epoch 끝 val 손실: 실험 간 비교용. 주제 정확도는 evaluate.py
 
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-    check_template(tokenizer, train_rows[0])
+    train_data = Dataset.from_list([tokenize(tokenizer, r) for r in train_rows])
+    val_data = Dataset.from_list([tokenize(tokenizer, r) for r in val_rows])
 
     trainer = SFTTrainer(
         model=load_model(),
         processing_class=tokenizer,
-        train_dataset=Dataset.from_list(train_rows),
-        eval_dataset=Dataset.from_list(val_rows),
+        train_dataset=train_data,
+        eval_dataset=val_data,
         args=SFTConfig(
             output_dir=str(OUT_DIR),
             num_train_epochs=EPOCHS,
@@ -73,9 +82,9 @@ def main() -> None:
             gradient_accumulation_steps=2,          # 유효 배치 16. 학습 전 `ollama stop cs-router`로 VRAM을 비울 것 (안 비우면 10배 느려진다)
             per_device_eval_batch_size=16,
             gradient_checkpointing=True,
-            learning_rate=2e-4,
+            learning_rate=LEARNING_RATE,
             lr_scheduler_type="cosine",
-            warmup_steps=50,
+            warmup_steps=WARMUP_STEPS,
             optim="paged_adamw_8bit",
             bf16=True,
             max_length=MAX_LENGTH,

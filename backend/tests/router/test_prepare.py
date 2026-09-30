@@ -55,6 +55,7 @@ def test_read_examples_keeps_only_bank_matching_label_known_topic_first_qa(tmp_p
         _doc("s4", "기타(은행)", "기타 문의"),                               # 계약 2에 없음 → 제외
         _doc("s5", FX, "환전 ●●●원 하고 싶어요"),
         _doc("s6", BAL, "그리고 절차는요?", qa_no=2),                          # 첫 QA가 아님 → 제외
+        _doc("s7", BAL, "고객님 계좌는 정상 조회됩니다", qa_no=1),           # 상담원 발화 → 제외
     ])
     examples = list(prepare.read_examples(z))
     assert [(e["source_id"], e["code"], e["question"]) for e in examples] == [

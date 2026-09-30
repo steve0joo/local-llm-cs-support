@@ -28,14 +28,20 @@ def test_load_rows_splits_prompt_and_completion(tmp_path):
 
 def test_base_model_follows_rt006():
     assert train.BASE_MODEL == "Qwen/Qwen3-1.7B"
-    assert train.MAX_LENGTH == 256
+    assert train.MAX_LENGTH == 512
 
 
-def test_qwen3_template_puts_empty_think_block_before_the_code():
+def test_tokenize_puts_loss_only_on_think_block_code_and_end_token():
+    """TRL 0.24 + transformers 5 조합에서 손실이 프롬프트 전체에 걸리던 버그를 막는다."""
     from transformers import AutoTokenizer
     try:
         tokenizer = AutoTokenizer.from_pretrained(train.BASE_MODEL, local_files_only=True)
     except OSError:
         pytest.skip("Qwen3-1.7B 토크나이저가 HF 캐시에 없다 (학습 노트북에서만 검사)")
-    completion = train.check_template(tokenizer, {"prompt": RECORD["messages"][:-1], "completion": RECORD["messages"][-1:]})
-    assert completion.startswith(train.NO_THINK + "balance")
+    out = train.tokenize(tokenizer, {"prompt": RECORD["messages"][:-1], "completion": RECORD["messages"][-1:]})
+    assert len(out["input_ids"]) == len(out["completion_mask"])
+    loss_tokens = [i for i, m in zip(out["input_ids"], out["completion_mask"]) if m]
+    text = tokenizer.decode(loss_tokens)
+    assert text.startswith(train.NO_THINK + "balance")             # 빈 think 블록 + 코드
+    assert text.rstrip("\n").endswith("<|im_end|>")                 # 종료 토큰까지
+    assert len(loss_tokens) < 12                                     # 프롬프트(수십 토큰)에는 손실이 없다

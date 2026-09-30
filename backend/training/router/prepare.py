@@ -41,7 +41,7 @@ def read_examples(zip_path: Path):
             for qa in doc["qa_data"]:
                 # 라벨 일치(두 라벨이 다르면 어느 쪽이 맞는지 알 수 없다) + 상담의 첫 QA만.
                 # 라우터는 고객의 첫 메시지를 분류한다. 중간 턴은 문장만으로 주제를 알 수 없어 학습·평가 잡음이 된다.
-                if qa.get("qa_topic") == topic and qa["qa_id"].endswith("_001"):
+                if qa.get("qa_topic") == topic and qa["qa_id"].endswith("_001") and "고객님" not in qa["input"]["question"]:   # "고객님"은 상담원 발화
                     yield {"source_id": doc["source"]["source_id"], "qa_id": qa["qa_id"],
                            "code": code, "question": mask_question(qa["input"]["question"])}
 
