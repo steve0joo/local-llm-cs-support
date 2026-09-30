@@ -1,0 +1,21 @@
+{
+  "C001": [],
+  "C002": [
+    {
+      "loan_id": "L001",
+      "product_type": "신용대출",
+      "principal_remaining": 12000000,
+      "maturity_date": "2027-03-31",
+      "extendable": true
+    }
+  ],
+  "C003": [
+    {
+      "loan_id": "L002",
+      "product_type": "주택담보대출",
+      "principal_remaining": 85000000,
+      "maturity_date": "2035-06-30",
+      "extendable": false
+    }
+  ]
+}
