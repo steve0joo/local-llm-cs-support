@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -12,8 +13,7 @@ MODEL_NAME = "cs-router"                                                        
 MODELS_DIR = Path(__file__).resolve().parents[2] / "models" / "router"
 LLAMA_CPP = Path(os.environ.get("LLAMA_CPP_DIR", "~/qlora_ft_ex/llama.cpp")).expanduser()
 
-# Ollama Modelfile. 채팅 템플릿은 GGUF 안에 든 Qwen3 템플릿(학습 때 쓴 것과 동일, think:false 처리 포함)을 Ollama가 자동으로 쓴다.
-MODELFILE = """FROM ./cs-router.gguf
+MODELFILE = """FROM ./{name}.gguf
 PARAMETER temperature 0
 PARAMETER num_predict 16
 """
@@ -36,20 +36,20 @@ def convert(merged: Path, f16: Path) -> None:
 def quantize(f16: Path, gguf: Path) -> None:
     subprocess.run([LLAMA_CPP / "build" / "bin" / "llama-quantize", f16, gguf, "Q4_K_M"], check=True)
 
-
-def main(adapter: Path) -> None:
+def main(adapter: Path, name: str = MODEL_NAME) -> None:
     run_dir = adapter.parent
-    merged, f16, gguf = run_dir / "merged", run_dir / f"{MODEL_NAME}-f16.gguf", MODELS_DIR / f"{MODEL_NAME}.gguf"
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = MODELS_DIR if name == MODEL_NAME else run_dir
+    merged, f16, gguf = run_dir / "merged", run_dir / f"{name}-f16.gguf", out_dir / f"{name}.gguf"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    if not (merged / "config.json").exists():
-        print("1/4 병합");     merge(adapter, merged)
+    print("1/4 병합");     merge(adapter, merged)
     print("2/4 GGUF f16");  convert(merged, f16)
     print("3/4 Q4_K_M");    quantize(f16, gguf)
-    print("4/4 Modelfile"); (MODELS_DIR / "Modelfile").write_text(MODELFILE, encoding="utf-8")
-    subprocess.run(["ollama", "create", MODEL_NAME, "-f", MODELS_DIR / "Modelfile"], check=True)
-    print(f"등록 완료: ollama run {MODEL_NAME}")
+    print("4/4 Modelfile"); (out_dir / "Modelfile").write_text(MODELFILE.format(name=name), encoding="utf-8")
+    subprocess.run(["ollama", "create", name, "-f", out_dir / "Modelfile"], check=True)
+    shutil.rmtree(merged); f16.unlink()                                # 중간 파일(약 7GB) 정리. 어댑터만 있으면 다시 만들 수 있다
+    print(f"등록 완료: ollama run {name}")
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]))
+    main(Path(sys.argv[1]), *sys.argv[2:3])

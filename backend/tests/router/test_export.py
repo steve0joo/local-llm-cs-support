@@ -6,7 +6,7 @@ from training.router import export     # noqa: E402
 
 
 def test_modelfile_loads_gguf_and_is_deterministic_without_overriding_template():
-    text = export.MODELFILE
+    text = export.MODELFILE.format(name="cs-router")
     assert text.startswith("FROM ./cs-router.gguf\n")
     assert "PARAMETER temperature 0" in text
     assert "TEMPLATE" not in text        # GGUF에 든 Qwen3 템플릿을 그대로 쓴다 (think:false 처리 포함)
