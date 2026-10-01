@@ -1,0 +1,11 @@
+{
+  "no": 1,
+  "customer": "C002",
+  "question": "이번 달 이자 얼마야?",
+  "check": "반말에도 존댓말, 이자 슬롯, 납부일",
+  "v03_answer": "{{loan_label}}의 다음 납부일은 2026-10-15이고, 납부하실 이자는 {{interest_due}}입니다.",
+  "note": "",
+  "source": "ok",
+  "answer": "{{loan_label}}의 다음 납부일은 {due}이고, 납부하실 이자는 {{interest_due}}입니다.",
+  "train": true
+}

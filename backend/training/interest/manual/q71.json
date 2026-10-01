@@ -1,0 +1,11 @@
+{
+  "no": 71,
+  "customer": "C002",
+  "question": "만기일시라면 원금은 언제 내나요?",
+  "check": "만기일시 방식만 안내, 정확한 일정은 상담원",
+  "v03_answer": "",
+  "note": "",
+  "source": "fix",
+  "answer": "현재 {{loan_label}}은 {repay} 방식으로 확인됩니다. 원금을 납부하는 정확한 일정과 조건은 상담원에게 확인해 주세요.",
+  "train": true
+}

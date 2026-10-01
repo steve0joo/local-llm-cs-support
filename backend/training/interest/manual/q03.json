@@ -1,0 +1,11 @@
+{
+  "no": 3,
+  "customer": "C002",
+  "question": "제가 밀린 돈 없죠?",
+  "check": "연체 없음",
+  "v03_answer": "현재 {{loan_label}}은 연체 없이 정상적으로 납부되고 있습니다. 다음 납부일은 2026-10-15입니다.",
+  "note": "",
+  "source": "ok",
+  "answer": "현재 {{loan_label}}은 연체 없이 정상적으로 납부되고 있습니다. 다음 납부일은 {due}입니다.",
+  "train": true
+}

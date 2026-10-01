@@ -1,0 +1,23 @@
+{
+  "model": "cs-interest",
+  "version": "v07-20260930-1034-v07-09",
+  "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+  "adapter_run": "training/interest/outputs/runs/v07-20260930-1034-v07-09",
+  "data_dir": "data/raw/09_interest_finetune",
+  "format": "GGUF",
+  "quantization": "Q4_K_M",
+  "filename": "cs-interest.gguf",
+  "size_bytes": 2497278816,
+  "sha256": "d076edc09338420fcd3aae5383d83253020bb1a5314fa076227dd3b03c8cf319",
+  "evaluation": {
+    "evaluator": "training/interest/evaluate.py",
+    "dataset": "data/raw/09_interest_finetune",
+    "golden_n": 34,
+    "golden_rule": 0.9411764705882353,
+    "test_q_n": 119,
+    "test_q_valid": 0.9915966386554622,
+    "test_q_slot": 1.0,
+    "test_q_forbidden_violation": 0.008403361344537815,
+    "test_q_tone": 1.0
+  }
+}

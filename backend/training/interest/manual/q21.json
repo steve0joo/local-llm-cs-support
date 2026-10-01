@@ -1,0 +1,11 @@
+{
+  "no": 21,
+  "customer": "C003",
+  "question": "연체 이자 좀 빼 주세요",
+  "check": "감면 약속 없음, 상담원 안내",
+  "v03_answer": "현재 12일 연체된 금액 {{overdue_amount}}이 있어 연체 이자가 붙었고, 이는 상담원 확인이 필요합니다.",
+  "note": "",
+  "source": "ok",
+  "answer": "현재 {days}일 연체된 금액 {{overdue_amount}}이 있어 연체 이자가 붙었고, 이는 상담원 확인이 필요합니다.",
+  "train": true
+}

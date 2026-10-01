@@ -1,0 +1,11 @@
+{
+  "no": 2,
+  "customer": "C002",
+  "question": "이자 출금일 알려 주세요",
+  "check": "2026-10-15 (날짜로 답함)",
+  "v03_answer": "{{loan_label}}의 다음 이자 납부일은 2026-10-15입니다.",
+  "note": "",
+  "source": "ok",
+  "answer": "{{loan_label}}의 다음 이자 납부일은 {due}입니다.",
+  "train": true
+}

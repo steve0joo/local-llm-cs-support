@@ -13,7 +13,7 @@ from fastapi import APIRouter
 
 from app.agents.base import Agent, AgentReply, AgentRequest
 
-AREAS = ["loan", "interest"]  # balance는 실제 구현으로 교체 — tests/balance/test_agent.py가 검사 (docs/agent-balance/ARCHITECTURE.md 알려진 한계)
+AREAS = []  # balance·loan·interest 모두 실제 구현으로 교체 — 각 영역 tests/<영역>/test_agent.py가 검사
 
 
 def _field_names(cls) -> list[str]:

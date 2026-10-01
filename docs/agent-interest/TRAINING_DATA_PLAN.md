@@ -1,0 +1,171 @@
+# 최종 학습 데이터 구성안: cs-interest
+
+> `cs-interest` QLoRA에 최종으로 넣을 데이터를 어떻게 모으고, 기록하고, 검수하고, 나눌지 정한다.
+> 형식과 모범 답변 기준은 `docs/agent-interest/TRAINING_DATA.md`를 따른다. 이 문서는 그 위에서 **무엇을 얼마나, 어떤 기록과 함께** 넣을지를 다룬다.
+> 참고 자료: "은행 이자·연체 안내 QLoRA 학습 데이터 필수 항목"(로컬 `backend/data/raw/etc/`, git 미포함). 아래 1절에 채택·제외 내용을 요약한다.
+
+## 1. 참고 자료에서 가져온 것과 뺀 것
+
+참고 자료는 "은행 공식 자료를 수집해 금리·연체 규정을 사실로 학습"하는 방식이다. 이 프로젝트는 반대로 **조회값은 슬롯·이자 정보 줄로 받고, 규정·금리는 답하지 않는다**(PRD 제약, ADR-005, INT-002, 인수 기준 4). 그래서 데이터 관리 방식만 가져온다.
+
+| 참고 자료 항목 | 판단 | 이유 / 이 프로젝트에서의 형태 |
+|---|---|---|
+| 공식 자료 수집(`bank_name`, `product_name`, `source_url`, 금리·수수료 원문) | **제외** | 데이터는 AI Hub 하나은행 부분만 쓴다(PRD). 실제 은행명·상품명·금리가 출력되면 즉시 불합격 |
+| 금리 구성, 연체이자율, 중도상환수수료 등 "반드시 수집할 금융 내용" | **제외** | 시간에 따라 바뀌는 정보는 답하지 않고 상담원 안내(ADR-005) |
+| 숫자로 이자·연체이자를 계산하는 질문과 계산 과정 답변 | **거절 유형으로만 채택** | 이자 계산 로직을 두지 않는다(INT-001). 계산을 요청받으면 조회값만 알리고 계산 기준은 상담원 안내 |
+| 답변에 정보 기준일 표시 | **제외** | 규정을 답하지 않으므로 기준일이 필요 없다. 날짜는 `이자 정보`의 다음 납부일만 쓴다 |
+| 시스템 프롬프트에 은행명·기준일 | **제외** | 시스템 프롬프트는 `prompt.SYSTEM_PROMPT` 하나로 고정(학습·추론 동일) |
+| 질문 유형 목록(용어, 비교, 상황, 조건 부족, 범위 밖, 최신 정보, 잘못된 전제, 확정 요청, 직원 확인) | **채택** | 3절 유형표에 합쳤다. 금리·규정에 닿는 유형은 "상담원 안내" 정답으로 만든다 |
+| `fact_id`로 같은 사실의 질문을 묶고, 한 사실에서 표현 3~5개 | **채택** | `group_id`(2절). 분할 단위로 쓴다 |
+| `category`, `reviewed`, `review_note` 기록 | **채택** | 2절 레코드 필드 |
+| 사람이 검수한 데이터만 학습 | **채택** | 5절 |
+| 80:10:10 분할, 같은 묶음은 같은 분할 | **채택** | 6절 |
+| 규모: 시험 100 → 프로토타입 500~1,000 | **채택** | 7절 |
+| 개인정보 제외 | **채택** | 마스킹 토큰으로 대체(계약 4) |
+
+## 2. 레코드 형식
+
+JSONL 한 줄 = 대화 1개. `train.py`는 `messages`만 쓰고, 나머지 필드는 관리·분할·검수용이다.
+
+```json
+{
+  "id": "synth-overdue_status-003-b",
+  "origin": "synth",
+  "source_id": "tpl-overdue_status-003",
+  "group_id": "tpl-overdue_status-003",
+  "category": "overdue_status",
+  "scenario": "overdue",
+  "reviewed": true,
+  "review_note": "",
+  "messages": [ ... TRAINING_DATA.md 1절 형식 ... ]
+}
+```
+
+| 필드 | 값 | 비고 |
+|---|---|---|
+| `id` | 레코드 고유 ID | |
+| `origin` | `aihub` \| `synth` | 합성 샘플은 팀 합의 전까지 학습에서 뺄 수 있게 구분 |
+| `source_id` | AI Hub `source_id` 또는 합성 템플릿 ID | 근거 추적(참고 자료의 `source_id`) |
+| `group_id` | 분할 단위. AI Hub는 `source_id`, 합성은 템플릿 ID | 참고 자료의 `fact_id`. 같은 상담·같은 템플릿은 같은 분할 |
+| `category` | 3절 유형 코드 | 비중 점검용 |
+| `scenario` | `normal` \| `overdue` | 정상·연체 균형 점검용 |
+| `reviewed` | 사람 검수 완료 여부 | `true`만 학습 |
+| `review_note` | 수정 내용·주의사항 | |
+| `messages` | 대화 | `prompt.build_messages()`로 생성 |
+
+## 3. 질문 유형(`category`)과 목표 비중
+
+`TRAINING_DATA.md` 2절 유형에 참고 자료의 질문 유형을 합쳤다. 비중은 합성 샘플 기준 목표이고, AI Hub 정제본은 분류만 붙인다.
+
+| 코드 | 유형 | 예시 질문 | 정답이 할 일 | 비중 |
+|---|---|---|---|---:|
+| `interest_amount` | 이자 금액 | "이번 달 이자 얼마예요?" | 종류, 다음 납부일, `{{interest_due}}` | 15% |
+| `due_date` | 납부일 | "이자 언제 빠져나가요?" | 다음 납부일 | 8% |
+| `overdue_status` | 연체 여부 | "연체된 거 있어요?" | 정상: 연체 없음 / 연체: 일수, `{{overdue_amount}}` | 15% |
+| `overdue_action` | 연체 대응 | "연체되면 어떻게 돼요?" | 연체 사실, 빠른 납부 권유, 구체 방법은 상담원 | 8% |
+| `reason` | 이유 | "이자가 왜 이렇게 많이 나왔어요?" | 조회 사실로만 설명, 계산은 상담원 | 8% |
+| `term` | 용어 의미·비교 (참고 자료) | "연체이자가 뭐예요?", "고정금리랑 변동금리 차이가 뭐예요?" | 수치·규정 없이 한두 문장 일반 설명 + 적용 기준은 상담원 | 6% |
+| `rate` | 금리·이율·최신 금리 (참고 자료) | "금리 몇 %예요?", "요즘 금리 올랐어요?" | 수치 없이 상담원 안내 | 12% |
+| `calculation` | 계산 요청 (참고 자료) | "하루 연체하면 이자 얼마 붙어요?" | 조회된 금액 슬롯만, 계산 기준은 상담원 | 6% |
+| `false_premise` | 잘못된 전제 (참고 자료) | (연체 없음인데) "연체 이자 왜 붙었어요?" / (12일인데) "30일 연체라던데요" | 조회값으로 바로잡음 | 6% |
+| `guarantee` | 확정·혜택 요청 (참고 자료) | "연체 기록 지워 주세요", "이자 깎아 줄 수 있죠?" | 보장·처리 불가, 상담원 안내. 처리했다고 말하지 않음 | 6% |
+| `missing_info` | 조건 부족·다른 상품 (참고 자료) | "다른 대출 이자는요?", "카드 연체도 봐 주세요" | 조회된 대출 기준으로만 안내, 그 밖은 상담원 | 5% |
+| `staff` | 직원 확인 필요 (참고 자료) | "납부일 바꿔 주세요", "필요 서류가 뭐예요?" | 할 수 없음을 알리고 상담원 안내 | 5% |
+| `loan_terms` | 상환·금리 방식·납부 방법 | "제 대출 상환 방식이 어떻게 돼요?", "이자는 어떻게 내는 거예요?" | 이자 정보의 상환 방식·금리 방식(수치 없이)·납부 방법으로 답함 | 8% |
+| `followup` | 후속 턴 | (앞 답변 뒤) "그럼 연체 금액은요?" | 이전 턴을 이어받아 짧게 | 선택 |
+
+- `term` 정답은 가장 위험한 유형이다. "연체이자는 납부일까지 내지 않은 금액에 붙는 이자입니다" 수준에서 멈추고, 이율·기준·예외는 쓰지 않는다. 검수 때 가장 먼저 본다.
+- `rate`·`calculation`·`guarantee`·`staff`·`missing_info`를 합쳐 약 3분의 1이다. 즉시 불합격 조건이 이 유형들에서 나온다.
+
+## 4. 출처별 준비 방법
+
+### AI Hub 정제본 (`origin: aihub`)
+- `prepare.py` 결과에 `origin`·`group_id`(= `source_id`)·`category`·`scenario`·`reviewed=false`를 붙인다.
+- 제외 규칙 보강(`prepare.py`): 이자 정보와 다른 상품명(청약 담보 대출, 소상공인 대출, 마이너스 통장 등), 처리 완료 주장(완료했습니다·적용되었습니다·등록되었습니다), 3인칭 요약체로 시작하는 답("고객님께서는 ~하고자 하셨습니다")은 제외하거나 검수 때 고친다.
+- 목표: 검수 후 250~300건.
+
+### 합성 샘플 (`origin: synth`, 팀 합의 후 학습에 포함)
+- 템플릿 1개 = 유형 1개 + 질문 표현 3~5개 + 정답 표현 2~3개 (참고 자료의 "한 사실에서 3~5개").
+- `이자 정보` 값(종류·납부일·연체 일수)은 템플릿마다 여러 조합으로 채운다. 한 템플릿에서 나온 레코드는 같은 `group_id`다.
+- 모든 정답은 생성 시 `validate.is_valid`로 확인하고, 통과하지 못하면 템플릿을 고친다.
+- 외부 사실(실제 금리·규정·상품명)을 넣지 않는다. 팀 합의의 근거가 된다.
+- 생성 코드: `training/interest/synth.py`(예정), 템플릿은 코드 안에 두어 리뷰로 검수한다.
+- 목표: 300~500건.
+
+## 5. 검수
+
+- 학습에는 `reviewed=true`만 쓴다(`prepare.py` 기본값). `--include-unreviewed`는 파이프라인 시험용이다.
+- 검수 결과 파일: `data/processed/interest/reviews.json` = `{"<id>": {"ok": true|false, "note": "...", "output": "고친 정답(선택)"}}`. 고친 정답도 `validate.is_valid`를 통과해야 한다(통과하지 못하면 `prepare.py`가 멈춘다). 이 파일은 데이터 파생물이라 git에 올리지 않는다.
+- 합성: 템플릿 단위로 검수한다(템플릿이 맞으면 거기서 나온 레코드가 맞다). 검수한 템플릿 ID를 `synth.py`의 `REVIEWED`에 넣는다(코드 리뷰로 남음). 생성 후 유형별 5건씩 무작위로 다시 읽는다.
+- AI Hub: 전체 250~300건을 사람이 한 번 읽는다(약 2시간). 고친 경우 `review_note`에 적는다.
+- 검수 체크리스트(참고 자료 8절을 이 프로젝트에 맞게 바꿈):
+  - [ ] 정답이 `이자 정보`·슬롯에 있는 사실만 쓴다
+  - [ ] 금리 %, 이율, 수수료, 서류, 은행·상품·앱 이름, 없는 시각·기간이 없다
+  - [ ] 처리했다·보장한다는 문장이 없다
+  - [ ] 정상 고객에게 연체를 말하지 않고, 연체 고객에게 연체 사실을 빠뜨리지 않는다
+  - [ ] 존댓말이고 질문에 바로 답한다
+  - [ ] 개인정보 원본이 없다(마스킹 토큰만)
+  - [ ] 같은 문장이 과도하게 반복되지 않는다
+
+## 6. 분할
+
+- AI Hub는 `group_id`(= 상담 `source_id`) 단위로 train 80 / val 10 / test 10. 공통 `split.json`(팀원C)이 나오면 그 분할을 따른다.
+- 합성은 전부 train에 넣는다. 템플릿 문장이 레코드마다 반복되어 val·test에 넣으면 성능이 실제보다 높게 나온다. 평가는 AI Hub val·test와 자체 점검 셋으로 한다.
+- 자체 점검 질문(PM 고정 질문 대비)은 어떤 분할에도 넣지 않는다. 합성 템플릿에 점검 질문과 같은 문장을 쓰지 않는다.
+- 결과 파일: `data/processed/interest/{candidates,train,val,test}.jsonl` (gitignore). `candidates.jsonl`은 검수 대상 전체, `stats.json`은 출처·유형·시나리오·제외 사유별 건수다.
+
+## 7. 규모와 단계
+
+| 단계 | 데이터 | 목적 |
+|---|---|---|
+| 1. 파이프라인 시험 | 검수된 100건 | 학습·변환·Ollama 등록까지 한 번에 돌려 본다(학습 약 5분) |
+| 2. 프로토타입 | 550~800건 (AI Hub 250~300 + 합성 300~500) | 베이스 모델 대비 개선 확인, PM 질문 대비 자체 점검 |
+| 3. 보강 | 점검에서 틀린 유형만 추가 | 기본 문장 대체가 잦은 유형, 지어낸 사실이 나온 유형 |
+
+참고 자료의 품질 개선 단계(2,000~5,000건)는 목표로 두지 않는다. 사실을 학습시키는 방식이 아니라 말투·안내 범위를 학습시키는 방식이라, 양보다 3절 비중과 5절 검수가 결과를 정한다.
+
+## 8. 할 일
+
+1. ~~`prepare.py` 제외 규칙 보강 + 레코드 필드 추가~~ (완료: AI Hub 후보 224건, 개인정보 요구 제외 포함)
+2. ~~`synth.py`와 유형별 템플릿 작성, 모든 정답 `is_valid` 통과 테스트~~ (완료: 템플릿 18개 검수 완료, 400건. 2026-09-29 자동이체·규정 질문 템플릿 3개 추가·검수 완료 → 21개)
+3. 합성 샘플은 **사용하는 것으로 진행**한다(2026-09-28 팀원B 결정). 팀에는 결과와 함께 공유한다(근거: 외부 사실 없음, mock 형식과 안내 문구만 사용)
+4. 검수 → `reviewed=true`만 모아 분할
+5. 1단계(100건)로 전 과정 시험 → 2단계 학습
+
+### 04 데이터 학습·평가 (완료: v03, 결과는 REPORT_v03.md)
+베이스 기준 평가(`base-golden`, `base-04`)까지 끝낸 상태에서 이어서 한다. 데이터: `data/raw/04_interest_finetune`(train 568 = AI Hub 168 검수 전 + 합성 400 검수 완료).
+
+```bash
+cd backend
+PY=training/interest/.venv/bin/python; D04=data/raw/04_interest_finetune
+$PY -m training.interest.train --data-dir $D04 --dry-run          # C. 답 앞에 <think> 없음·eos <|im_end|> 확인
+$PY -m training.interest.train --data-dir $D04 --tag 04            # D. 학습(1e-4·2 epoch) → outputs/runs/v03-...-04/
+R=$(ls -d training/interest/outputs/runs/v*-04 | tail -1)
+$PY -m training.interest.evaluate --name tuned-04 --data-dir $D04 --adapter $R/adapter   # E. 평가(결과 사본이 $R/eval/에도 남음)
+$PY -m training.interest.evaluate --compare base-04 tuned-04       # 베이스와 비교 → EVALUATION.md 기준으로 채택 판단
+```
+
+### v04: 07 데이터(06에서 AI Hub train 제외)로 학습 (진행 중, 방법과 명령은 FINETUNE.md 5절)
+06의 AI Hub train 57건(검수 전) 중 23건에 필터가 놓친 수수료·약속 표현이 있어 `--exclude-aihub-train`으로 뺀 `data/raw/07_interest_finetune`(train 607 = 합성 400 + 수동 207)을 쓴다.
+
+### 참고: 06 데이터 (v04에는 쓰지 않음)
+
+v03 약점(결과 보장·규정 단정·지어낸 절차/채널·약속)과 자동이체 잔액 질문을 보강한 데이터다.
+데이터: `data/raw/06_interest_finetune`(train 664 = 합성 400 + 수동 207 + AI Hub 57 / val 8 / test 10, 설명은 `_manifest.json`).
+
+학습 전 반영한 것(2026-09-29):
+- 출력 검증 강화(`validate.phrase_problems`). INT-004에 따라 학습 데이터도 같은 기준으로 다시 만들었다 → AI Hub 76건 추가 제외.
+- 합성 샘플: 자동이체 조회값에 잔액 비교 결과·`{{debit_balance}}` 슬롯, 템플릿 3개 추가.
+- 수동 샘플: q61~q70(자동이체 계좌 변경·잔액) 추가 → 69문항 207건.
+- 평가 채점(`evaluate.score`)의 금지 표현에 같은 기준 추가 → v03 이전 결과와 비교할 때는 같은 채점 코드로 다시 채점한다.
+
+주의: 답 필터를 거친 test.jsonl은 10건뿐이다. 회귀 평가는 test 분할 질문 전체(`test_questions.jsonl` 119건, `evaluate --test-questions`)로 하고 v03도 같은 문항으로 다시 평가한다. 사람 판정은 평가 전용 hold30으로 한다.
+
+### AI Hub 답 수정 (보류, 나중에 08 데이터 → v05)
+`fix_queue.jsonl`(227건)은 표현 문제로 빠진 train 답이다. 사람이 로컬에서 고치고, 고친 답이 학습 제외 규칙과 출력 검증을 통과하면 `reviews.json`에 저장된다. 다음 prepare 실행 때 train에 들어간다(`stats.json`의 `fixed`).
+```bash
+cd backend
+.venv/bin/python -m training.interest.review --fix --data-dir data/raw/06_interest_finetune --reasons invalid,promise,claim,call_context   # 94건
+.venv/bin/python -m training.interest.review --fix --data-dir data/raw/06_interest_finetune --reasons tone,summary,menu,document          # 133건
+.venv/bin/python -m training.interest.prepare --with-synth --with-manual --include-unreviewed --allow-fallback-mask --out-dir data/raw/08_interest_finetune
+```

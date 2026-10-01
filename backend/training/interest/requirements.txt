@@ -1,0 +1,11 @@
+# cs-interest 학습 환경 (학습 장비 전용, Mac 데모에는 설치하지 않음)
+# uv venv --python 3.12 backend/training/interest/.venv
+# uv pip install --python backend/training/interest/.venv/bin/python -r backend/training/interest/requirements.txt
+torch>=2.14
+transformers>=5.17
+peft>=0.21
+trl>=1.14
+bitsandbytes>=0.50
+accelerate>=1.15
+datasets>=5.0
+huggingface_hub[hf_xet]
