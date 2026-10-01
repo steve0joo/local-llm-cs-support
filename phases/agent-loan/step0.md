@@ -18,12 +18,12 @@
 
 먼저 실행 환경을 확인한다: `python3 -c "import fastapi, httpx, pytest"`가 실패하면 `blocked`로 표시한다(`blocked_reason`: "fastapi·httpx·pytest 미설치 — 팀원C 소유 backend/requirements.txt 기준으로 설치 필요"). 이 step에서 `backend/requirements.txt`를 만들거나 고치지 마라.
 
-1. `backend/tests/loan/test_mock_api_loan.py` — **테스트를 먼저** 작성한다(TDD 가드가 강제한다). 검증 내용:
+1. `backend/tests/loan/test_mock_api.py` — **테스트를 먼저** 작성한다(TDD 가드가 강제한다). 검증 내용:
    - `GET /mock/customers/C002/loans` → `[{"loan_id": "L001", "product_type": "신용대출", "principal_remaining": 12000000, "maturity_date": "2027-03-31", "extendable": true}]`
    - `C003` → `L002` / 주택담보대출 / 85000000 / `2035-06-30` / `extendable: false`
    - `C001`과 모르는 ID(`C999`)는 404가 아니라 `[]`
    - 응답의 어느 항목에도 금리·이율 관련 키가 없다
-   - `backend/app/agents/interest/mock_data.json`이 **존재할 때만**: 같은 `loan_id`의 `product_type`이 이 영역과 일치한다(없으면 `pytest.skip`)
+   - 이자/연체 mock과 공유하는 값은 계약 6을 기대값으로 확인한다: `C002`=`L001` 신용대출, `C003`=`L002` 주택담보대출. 이자/연체 모듈·데이터 파일은 import하거나 읽지 않는다
 2. `backend/app/agents/loan/mock_data.json` — `docs/agent-loan/ARCHITECTURE.md`의 mock 데이터 표 그대로. 키는 customer_id, 값은 대출 배열(`C001`은 `[]`).
 3. `backend/app/agents/loan/mock_api.py`
    ```python
@@ -36,7 +36,7 @@
 ## Acceptance Criteria
 
 ```bash
-cd backend && python -m pytest tests/loan/test_mock_api_loan.py -q
+cd backend && python -m pytest tests/loan/test_mock_api.py --import-mode=importlib -q
 ```
 
 ## 검증 절차
@@ -53,7 +53,7 @@ cd backend && python -m pytest tests/loan/test_mock_api_loan.py -q
 
 ## 금지사항
 
-- 테스트 파일 이름을 `test_mock_api.py`로 짓지 마라. 이유: 잔액조회 영역에도 같은 이름이 생기고, `tests/`에 `__init__.py`가 없으면 pytest가 basename 충돌로 수집에 실패한다. 영역 접미사(`_loan`)를 붙인다.
+- 테스트 파일 이름을 `test_<구현 모듈 파일명>.py`가 아닌 것으로 짓지 마라. 이유: TDD 훅이 이 이름으로 테스트를 찾고, 이름이 겹치는 문제는 pytest `--import-mode=importlib`와 `tests/loan/`에 `__init__.py`를 두지 않는 규칙(공통 ARCHITECTURE "코드·테스트 규칙")으로 해결한다.
 - `mock_data.json`에 금리·이율·연장 불가 사유 필드를 넣지 마라. 이유: 모델이 지어낼 근거를 데이터에서 없애는 것이 설계 원칙이다(LN-002, mock 데이터 절).
 - 실제 은행 상품명을 쓰지 마라. 이유: 계약 6 — 일반 명칭만 허용.
 - `backend/app/agents/base.py`, `backend/requirements.txt` 등 다른 영역 소유 파일을 만들거나 고치지 마라. 이유: 소유자가 팀원C다.

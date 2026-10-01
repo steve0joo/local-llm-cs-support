@@ -53,7 +53,7 @@
 
 ## 제약
 - 데이터: AI Hub 71926 금융분야 고객상담 데이터 중 은행(하나은행) 부분만 사용한다. 데이터와 가공본, 모델 가중치는 git에 올리지 않는다(제3자 제공 금지). 국외 클라우드 학습도 하지 않는다.
-- 학습 장비: 공용 Windows 노트북 1대(i7-13620H, RAM 32GB, RTX 4060 Laptop 8GB VRAM)에서 팀원이 순서대로 학습한다.
+- 학습 장비: 공용 Windows 노트북 1대(i7-13620H, RAM 32GB, RTX 4060 Laptop 8GB VRAM)에서 팀원이 순서대로 학습한다. **잔액조회 에이전트만 예외로 Mac M4 Pro 24GB에서 데이터 전처리·학습·평가한다**(`docs/agent-balance/ADR.md` BAL-006).
 - 데모 장비: 위 Windows 노트북과 Mac M4 Pro 24GB.
 
 ## 디자인

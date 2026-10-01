@@ -1,14 +1,5 @@
-from fastapi import APIRouter
+"""대출문의 에이전트. agent·mock_router export(계약 3)."""
+from app.agents.loan.agent import agent
+from app.agents.loan.mock_api import mock_router
 
-from app.agents.base import AgentReply, AgentRequest
-
-
-class _StubAgent:
-    name = "loan"
-
-    def handle(self, req: AgentRequest) -> AgentReply:
-        return AgentReply(text="준비 중인 기능입니다.", slots={}, options=[])
-
-
-agent = _StubAgent()
-mock_router = APIRouter()   # 비어 있음. /mock/... 라우트는 담당이 넣는다
+__all__ = ["agent", "mock_router"]

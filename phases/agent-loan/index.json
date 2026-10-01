@@ -8,12 +8,46 @@
     "docs/agent-loan/ADR.md"
   ],
   "steps": [
-    { "step": 0, "name": "mock-api", "status": "pending" },
-    { "step": 1, "name": "prompt-validate", "status": "pending" },
-    { "step": 2, "name": "agent-handle", "status": "pending" },
-    { "step": 3, "name": "train-prepare", "status": "pending" },
-    { "step": 4, "name": "train-model", "status": "pending", "type": "human" },
-    { "step": 5, "name": "manual-check", "status": "pending", "type": "human" },
-    { "step": 6, "name": "review", "status": "pending" }
+    {
+      "step": 0,
+      "name": "mock-api",
+      "status": "completed",
+      "summary": "backend/app/agents/loan/{mock_data.json,mock_api.py,__init__.py(빈 패키지)}와 tests/loan/test_mock_api.py 추가. get_loans(customer_id)->list[dict](deepcopy, 모르는 ID는 []), mock_router는 GET /mock/customers/{id}/loans. 계약 6 값 기대 테스트 포함. __init__의 agent export는 step 2."
+    },
+    {
+      "step": 1,
+      "name": "prompt-validate",
+      "status": "completed",
+      "summary": "agents/loan/validate.py: DOCUMENT_KEYWORDS=(증명서,등본,초본,재직,소득,신분증,인감,원천징수,사본; '서류' 제외 — LN-004 c), ALLOWED_SLOTS=(loan_label,principal_remaining), is_valid_output(text,*,maturity_date,extendable)->bool (허용 만기일 표기 제거 후 숫자 잔존·허용 밖/깨진 슬롯·서류 키워드·연장불가 모순 시 False, 빈 출력도 False[deviation: 스펙 a~d 외 추가]). prompt.py: NO_LOAN_TEXT, SYSTEM_PROMPT(숫자·퍼센트 없음), build_messages(history,masked_text,loan) [history 복사, 원금 숫자 미포함], build_slots(loan), fallback_text(loan). tests/loan/test_validate.py·test_prompt.py 43 passed. llm·agents.base·masking import 없음. 이후 LN-004 보강: 마스킹 토큰은 숫자 검사 제외, 연장불가 부정 표현은 문장 단위(62 passed)."
+    },
+    {
+      "step": 2,
+      "name": "agent-handle",
+      "status": "completed",
+      "summary": "0(선행): {{extendable_status}} 슬롯 도입 — prompt.py의 SYSTEM_PROMPT·build_messages·build_slots·fallback_text와 validate.py의 ALLOWED_SLOTS 갱신(값은 mock의 extendable에서 코드가 만듦, LN-004 d는 이중 검증으로 유지). agent.py: LoanAgent.handle() — get_loans → 대출 없음 고정 문구(모델 미호출) → slots 생성 → build_messages+llm.generate(\"cs-loan\") → is_valid_output 실패 시 fallback_text로 대체 → AgentReply. __init__.py를 팀원C 스텁에서 실제 구현으로 교체. tests/loan 81 passed(test_agent.py 신설). base.py는 계약 3과 일치(deviation 없음). 전체 tests 159 passed, 2 failed는 tests/router/test_base.py(팀원C 영역, [loan] 파라미터) — 그 테스트가 3개 영역 모두 아직 스텁이라고 가정해 고정 문구를 기대하는데, 이 영역이 실제 구현으로 교체되며 깨짐. 통합 순서 2단계(스텁→실구현 교체)의 예상된 결과이지 이 step의 버그가 아님. 팀원C에게 전달 필요."
+    },
+    {
+      "step": 3,
+      "name": "train-prepare",
+      "status": "completed",
+      "summary": "training/loan/prepare.py 신규. _extract_turns(raw)가 필드 어댑터(source.source_id, qa_data[0].{qa_id,qa_topic,input.question/answer/follow_up_question,output}) — 주제 필터는 qa_topic 사용(잠정, 팀 합의 전). iter_conversations(raw_dir,split_path,split)가 TL_은행.zip·VL_은행.zip을 qa_id로 중복 제거하며 순회. is_clean(item)은 output 기준 input(question+answer+follow_up_question 전체)에 없는 숫자(_NUM_PATTERN)·DOCUMENT_KEYWORDS·상품명(_PRODUCT_PATTERN, 허용 목록 신용대출/주택담보대출/전세자금대출)을 제외. infer_extendable(output,rng)은 문장 단위 긍정/연장불가 근거로 True/False/None(모호,제외)을 정하고 근거 없으면 rng(soure_id 시드)로 무작위 배정 — 목적은 사실 전달이 아니라 지어내지 않는 습관의 가벼운 보강(2026-09-29 재정의). NO_EXTEND_COPIES=2로 연장불가 근거 샘플만 train에서 2배 복제(만기일만 다름, val/test는 복제 없음). to_messages가 masking.mask()로 5턴(system+2턴+정보줄 붙인 user+목표 assistant) 구성, 슬롯 목록에 extendable_status 포함(step 2와 일치). manual_path(선택)로 직접 쓴 JSONL 샘플을 자동 추출분과 합쳐 같은 파이프라인을 통과시키며, 파일이 없어도 정상 동작. 기본 출력 backend/data/processed/loan_train.jsonl(gitignore). CLI: python -m training.loan.prepare --raw --split --out --which {train,val,test} [--limit] [--manual]. tests/loan/test_prepare.py 29 passed(합성 픽스처만 사용), tests/loan 전체 110 passed. 익명화 기호(●●●·★★·OO)는 미처리(계약 4 합의 대상). masking·training/common(split.py)은 그대로 import만 하고 수정하지 않음. 실제 데이터(팀원C의 split.py로 만든 split.json, 저장소 밖 심볼릭 링크로 연결한 원본)로 실행 확인: train 추출 13,010 -> 정제 통과 10,154(78%, 2026-09-28의 question만 본 개략치 6,225는 폐기) -> 모호 제외 71 -> 연장불가 근거 85(2배 복제) -> 최종 10,168행. val 738->552->10제외->542행. test 743->559->2제외->557행(둘 다 복제 없음)."
+    },
+    {
+      "step": 4,
+      "name": "train-model",
+      "status": "pending",
+      "type": "human"
+    },
+    {
+      "step": 5,
+      "name": "manual-check",
+      "status": "pending",
+      "type": "human"
+    },
+    {
+      "step": 6,
+      "name": "review",
+      "status": "pending"
+    }
   ]
 }

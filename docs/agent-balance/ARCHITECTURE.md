@@ -4,23 +4,24 @@
 ```
 backend/
 ├── app/agents/balance/
-│   ├── __init__.py        # agent, mock_router export (계약 3) — 1차 구현에서는 빈 파일
-│   ├── agent.py           # BalanceAgent.handle() — base.py 스텁 병합 뒤
+│   ├── __init__.py        # agent, mock_router export (계약 3)
+│   ├── agent.py           # BalanceAgent.handle() — cherry-pick 발판 위 (BAL-005)
 │   ├── resolve.py         # 라벨 클릭 확인 + 대상 계좌 결정 (plain dict 반환)
 │   ├── intent.py          # 의도 판단 3분기 (balance / transactions / general)
 │   ├── prompt.py          # 시스템 프롬프트 + 메시지·슬롯·기본 문장
 │   ├── validate.py        # 출력 검증
 │   ├── mock_api.py        # mock_router + get_accounts(), get_transactions()
 │   └── mock_data.json     # C001~C003 계좌·거래내역
-├── tests/balance/         # test_<모듈>.py
-├── training/balance/      # prepare.py(추출·마스킹·정제), train.py(QLoRA), export.md(GGUF 변환 절차)
-└── models/balance/Modelfile
+├── tests/balance/         # test_<모듈>.py (학습 진입점은 test_train.py)
+├── training/balance/      # train.py·requirements-mac.txt·MAC_TRAINING.md, prepare.py(BAL-008), rewrite.py(BAL-010)
+└── models/balance/Modelfile   # cs-balance 등록용. cs-balance.gguf는 같은 폴더에 두고 커밋하지 않는다(만드는 법: MAC_TRAINING, BAL-006)
 ```
 
 ## TDD 착수점
 - 첫 테스트: `tests/balance/test_mock_api.py` — `get_accounts(customer_id)`가 아래 mock 데이터대로 고객별 계좌를 돌려주는지 확인한다.
-- 이후 순서: `get_transactions` → `resolve` → `intent` → `prompt` → `validate`(1차 구현, 모델 없이 도는 순수 함수) → `handle()`(base.py 스텁 병합 뒤, 모델은 목). `agents/base.py` 스텁이 main에 오기 전이면 `handle()` 테스트는 import 실패 red로 시작한다.
-- 1차 구현(스텁 전) 테스트 명령: `cd backend && .venv/bin/python -m pytest tests/balance --import-mode=importlib -q`
+- 이후 순서: `get_transactions` → `resolve` → `intent` → `prompt` → `validate`(1차 구현, 모델 없이 도는 순수 함수) → `handle()`(`tests/balance/test_agent.py`, 모델은 목). `handle()`은 팀원C 커밋을 cherry-pick한 발판(`agents/base.py`·`llm`·스캐폴드) 위에서 만든다(BAL-005, 2026-09-29 변경).
+- 3차 순서(PRD "구현 진행", 실행 계획은 `phases/agent-balance/`): `intent`의 `입출금` 규칙 → `resolve.choose_account`의 별칭·끝 4자리 규칙 → `prepare.py`(`tests/balance/test_prepare.py`) → `Modelfile`(`tests/balance/test_modelfile.py`). 모두 모델 없이 테스트할 수 있다.
+- 테스트 명령: `cd backend && .venv/bin/python -m pytest` — backend 전체(발판의 `tests/router`·`tests/llm` 포함). importlib 모드 등은 `pyproject.toml`이 정한다.
 
 ## mock API
 | 메서드 | 경로 | 응답 |
@@ -52,7 +53,7 @@ backend/
    - 아니면 원래 질문 = masked_text. history가 빈 첫 턴은 라벨과 같아도 라벨 클릭으로 보지 않는다
 3. 의도 판단(원래 질문 기준) — intent.classify_intent(원래 질문) → "balance" | "transactions" | "general"
 4. general이면 계좌 결정·되묻기·슬롯을 건너뛰고 7로 간다. get_accounts는 2의 라벨 확인에 이미 썼고, 모델 입력에는 계좌 정보를 넣지 않는다
-5. 대상 계좌 결정 — 라벨 클릭 턴이면 2의 계좌. 아니면 resolve.choose_account(accounts, mask_map)
+5. 대상 계좌 결정 — 라벨 클릭 턴이면 2의 계좌. 아니면 resolve.choose_account(accounts, mask_map, masked_text)
    - 결과에 "text"가 있으면 모델을 부르지 않고 AgentReply(text, slots={}, options)로 바로 답한다 (아래 "대상 계좌 결정")
 6. slots = prompt.build_slots(intent, account, transactions)
    - transactions면 get_transactions(account_id)를 조회해 넘긴다
@@ -61,24 +62,27 @@ backend/
 9. AgentReply(text, slots, options=[])
 ```
 - 예: C002 "최근 거래내역 보여줘" → 되묻기 → 라벨 클릭 턴("생활비 ****7890")에서도 원래 질문으로 판단해 거래내역으로 답한다(테스트로 고정).
+- 모델 호출 실패: 7의 `llm.generate`가 `httpx.HTTPError`(Ollama 없음·모델 미등록·타임아웃)를 올리면 `handle()`은 잡지 않는다. 게이트웨이가 잡아 "지금은 답변을 드릴 수 없습니다. 상담원 연결을 도와드릴까요?"로 답하고 그 턴을 history에 넣지 않는다(`docs/router/ARCHITECTURE.md` "게이트웨이 구현 결정", main 기준, BAL-007). 5에서 바로 답하는 되묻기·계좌 없음·본인 아님 턴은 모델을 부르지 않으므로 모델 없이도 동작한다.
 
 ## 대상 계좌 결정 (`resolve.py`)
-계약 3 타입(`AgentReply`)을 쓰지 않고 plain dict를 돌려준다(BAL-005).
+계약 3 타입(`AgentReply`)을 쓰지 않고 plain dict를 돌려준다. `AgentReply` 포장은 `handle()` 안에서만 한다(BAL-005).
 - `account_label(account) -> str` — `"{alias} ****{account_no 끝 4자리}"`
 - `find_clicked(masked_text, history, accounts) -> dict | None` — 라벨 클릭 턴이면 `{"question": 원래 질문, "account": 계좌}`, 아니면 `None`
-- `choose_account(accounts, mask_map) -> dict` — 계좌를 정하면 `{"account": 계좌}`, 모델 없이 바로 답해야 하면 `{"text": 문구, "options": 선택지}`. 아래 순서로 첫 번째로 맞는 것:
+- `choose_account(accounts, mask_map, masked_text) -> dict` — 계좌를 정하면 `{"account": 계좌}`, 모델 없이 바로 답해야 하면 `{"text": 문구, "options": 선택지}`. 아래 순서로 첫 번째로 맞는 것:
   1. 계좌가 0개 → `{"text": "고객님 명의로 조회되는 계좌가 없습니다.", "options": []}`
   2. `mask_map`의 `[계좌번호_n]` 원본 중 숫자만 비교해(하이픈 무시) 본인 계좌 `account_no`와 같은 것이 있으면 → 그 계좌 (`n`이 작은 토큰 먼저)
   3. `[계좌번호_n]`이 있는데 본인 계좌와 하나도 맞지 않으면 → `{"text": "입력하신 계좌번호로 조회되는 계좌가 없습니다. 어느 계좌를 조회할까요?", "options": 본인 계좌 전체 선택지}` (계좌가 1개여도 선택지를 준다)
-  4. 계좌가 1개 → 그 계좌
-  5. 그 외 → `{"text": "어느 계좌를 조회할까요?", "options": 본인 계좌 전체 선택지}`
+  4. `masked_text`에 별칭(`alias`)이나 `account_no` 끝 4자리가 부분 문자열로 들어 있는 본인 계좌가 정확히 1개 → 그 계좌. 0개나 2개 이상이면 다음 규칙으로 간다
+  5. 계좌가 1개 → 그 계좌
+  6. 그 외 → `{"text": "어느 계좌를 조회할까요?", "options": 본인 계좌 전체 선택지}`
+- 규칙 4 예(C002): "생활비 계좌 잔액 알려줘" → A003, "7890 계좌 잔액" → A003, "입출금 계좌 잔액 알려줘" → A002, "잔액 알려줘" → 되묻기(규칙 6). 첫 턴에 라벨을 그대로 쳐도("생활비 ****7890") 규칙 4로 A003이 된다.
 - 선택지 = `[{"label": account_label, "choice": "balance"}, ...]`, accounts 순서. 되묻기 문구는 의도(잔액·거래내역)와 상관없이 하나다.
 - `mask_map`의 다른 토큰(`[전화번호_1]` 등)은 계좌 결정에 쓰지 않는다.
 
 ## 의도 판단 (`intent.py`)
 `classify_intent(question: str) -> str`. 원래 질문에 단어가 부분 문자열로 들어 있는지로 판단하고, 아래 순서로 첫 번째로 맞는 것을 돌려준다.
 1. `"general"` — 절차 표현(`어디서`·`어떻게`·`방법`·`절차`) 중 하나가 있고, 조회 요청 표현(`알려`·`보여`·`얼마`)이 하나도 없다
-2. `"transactions"` — 거래내역 키워드(`거래내역`·`내역`·`입금`·`출금`) 중 하나가 있다
+2. `"transactions"` — 질문에서 `입출금`을 모두 지운 뒤 거래내역 키워드(`거래내역`·`내역`·`입금`·`출금`) 중 하나가 있다. `입출금`은 계좌 별칭이라 `출금`으로 세지 않는다
 3. `"balance"` — 그 외
 
 | 원래 질문 | 의도 |
@@ -87,6 +91,9 @@ backend/
 | 최근 거래내역 보여줘 | `transactions` |
 | 잔액 조회는 어디서 해요? | `general` |
 | 거래내역은 어디서 봐요? | `general` |
+| 입출금 계좌 잔액 알려줘 | `balance` |
+| 입출금 ****6789 | `balance` |
+| 입출금 내역 보여줘 | `transactions` |
 
 단어 목록은 담당자가 자체 점검 셋으로 늘릴 수 있다. 늘리면 이 절과 테스트를 함께 고친다.
 
@@ -144,9 +151,178 @@ backend/
   - balance·transactions·general 각각에서 규칙 1~7 트리거를 하나씩 넣은 문장 → `validate_output`이 그 의도의 기본 문장을 돌려준다(general은 필수 슬롯 규칙 제외)
   - 규칙에 안 걸리는 문장은 그대로 돌려준다. 예: `"{{account_label}} 계좌의 현재 잔액은 {{balance}}입니다. 더 궁금하신 점이 있으시면 말씀해 주세요."`
   - 세 기본 문장은 각자의 의도로 검증해도 통과한다(기본 문장이 자기 검증에 걸리면 안 된다)
+- `test_agent.py` (2026-09-29 추가) — 순수 함수를 엮는 `handle()` 전체를 최종 `AgentReply`로 확인한다. `handle()`은 `from app import llm` 뒤 `llm.generate(...)`로 부르고, 테스트는 `monkeypatch.setattr("app.llm.generate", 가짜)` 한 곳만 패치한다. 순수 함수 세부 규칙은 위 모듈 테스트에 맡긴다
+  - export: `from app.agents.balance import agent, mock_router`가 되고, `mock_router is mock_api.mock_router`(라우트 있음), `agent`는 `BalanceAgent` 인스턴스, `agent.name == "balance"`
+  - 세 의도 정상 경로(모델 이름 `"cs-balance"`, `options == []`): C001 "잔액 알려줘" → slots `{"account_label": "입출금 ****5678", "balance": "1,234,567원"}` / C001 "최근 거래내역 보여줘" → slots `account_label`·`recent_transactions`(A001 거래 5건) / C002 "잔액 조회는 어디서 해요?" → 되묻기 없이 모델 호출, slots `{}`, messages에 계좌 별칭·라벨·계좌번호(하이픈 유무)·잔액·거래 금액 없음(`SYSTEM_PROMPT` 안의 슬롯 이름은 허용)
+  - 계좌번호 입력: C002 + mask_map `{"[계좌번호_1]": "110-3456-7890"}` → 되묻기 없이 A003 잔액 slots
+  - 모델 미호출(호출되면 바로 실패하는 가짜 generate): C002 "잔액 알려줘" 되묻기, 없는 고객 "잔액 알려줘"(계좌 0개), C001 + 본인 아닌 `[계좌번호_1]` — text·options는 "대상 계좌 결정"의 리터럴, slots `{}`
+  - 2턴 라벨 클릭: C002 "최근 거래내역 보여줘" → 되묻기 → "생활비 ****7890" 턴에서 A003 거래내역 slots / C002 "잔액 알려줘" → 되묻기 → "입출금 ****6789" 턴에서 A002 잔액 slots. transactions면 `get_transactions` 결과를 `build_slots`에 넘기는지는 이 slots로 확인한다(`build_slots`는 transactions에 `None`을 받지 않는다)
+  - 출력 검증: 가짜 generate가 금액(`1,234,567원`)·계좌번호(`110-1234-5678`)를 흘리면 text는 그 의도의 `fallback_text`
+  - 모델 입력: 모델을 부르는 모든 케이스에서 generate에 넘긴 messages에 잔액·거래 금액 원본과 전체 계좌번호가 없다
+- `test_train.py` (BAL-006) — MLX LM을 실제로 돌리지 않는다
+  - `check_dataset`: train 모드는 `train.jsonl`·`valid.jsonl`, test 모드는 `test.jsonl`만 본다. 마지막 메시지가 assistant가 아니거나 내용이 공백이면 거절한다
+  - `check_model`: `config.json`에 `quantization`이 없으면 거절한다(양자화 베이스만 QLoRA)
+  - `build_command`: train은 `--train --mask-prompt`, test는 `--test`만(`--train` 없음)
+- 3차에 추가할 테스트
+  - `test_intent.py`: 위 표의 `입출금` 세 예문
+  - `test_resolve.py`: 규칙 4 예 네 개. C001 + "생활비 계좌 잔액"은 A001(규칙 5), C002 + 본인 아닌 `[계좌번호_1]` + "생활비"는 본인 아님 안내(규칙 3이 먼저). 기존 케이스는 세 번째 인자로 masked_text를 넘긴다
+  - `test_agent.py`: 2턴 — C002 "잔액 알려줘" → 되묻기 → "생활비 계좌 잔액 알려줘" 턴에서 A003 잔액 slots(J9)
+  - `test_prepare.py`: 아래 "`prepare.py` 인터페이스" 규칙. 픽스처는 `tmp_path`에 합성 zip·`split.json`으로 만들고 실제 데이터를 쓰지 않는다
+    - 분할: val·test 상담이나 다른 `consulting_topic`, `qa_topic`이 다른 QA가 train 결과에 섞이지 않는다
+    - 마스킹: 입력에 계좌번호·전화번호·주민번호 원본을 넣으면 결과 파일 어디에도 원본 문자열이 없다
+    - 제외: 숫자가 든 `output`, 서류 키워드가 든 `output`, 입력에 없는 상품명(예: `○○자유통장`)이 든 `output`은 빠지고, 허용 목록 명칭(`체크카드`)만 든 `output`은 남는다
+    - 안전망 필터(BAL-009·BAL-010): 아래 "학습 데이터"의 빠질 예문은 모두 빠지고, 남길 예문은 모두 남는다
+    - 재작성 사용(BAL-010): 캐시에 없는 QA는 샘플이 없고, 캐시에 있으면 첫 턴·이어진 턴 샘플이 다시 쓴 답으로 만들어진다. 원문 `answer`·`output`은 결과 파일에 없다
+    - 합성: 모든 합성 질문의 `classify_intent`가 자기 의도, 모든 응답 템플릿이 그 의도의 `is_valid`와 안전망 필터 통과, 합성 샘플 전체 문자열에 mock 계좌번호(하이픈 유무)·잔액(원 단위 정수·쉼표 표기)이 없다. 가상 계좌번호 질문은 `[계좌번호_1]`로 바뀌어 들어간다
+  - `test_rewrite.py`: 가짜 `run` 함수로 실제 `claude` CLI를 부르지 않는다. 명령 모양(`-p`·모델·`--tools ""`·`--json-schema`·`--output-format json`), 마스킹된 입력과 key, 결과 JSON 파싱 실패·`is_error`·요청하지 않은 key·빈 문자열 처리, 캐시에 있는 키 건너뛰기, 묶음 크기, 누락 key 집계. `REWRITE_SYSTEM`에 규칙 5·7의 예문, 10의 괄호 안 예시, 11의 두 문장이 그대로 들어 있다(BAL-010 보강)
+    - 형식: 기록한 파일이 `training.balance.train.check_dataset(out_dir, "train")`과 `"test"` 모드를 통과한다
+  - `test_modelfile.py`: `Modelfile`의 `SYSTEM """..."""` 내용이 `prompt.SYSTEM_PROMPT`와 같고, `FROM ./cs-balance.gguf`와 `stop "<|im_end|>"`가 있다
+
+## 에러 처리·보안 (2026-09-29 점검)
+MVP 원칙: 데모에서 실제로 생기는 경우만 코드로 막고, 나머지는 여기에 기록만 한다.
+- 에러 처리 담당: 모델 호출 실패 → 게이트웨이 공통 문구(BAL-007), 모델의 이상한 출력 → 출력 검증 후 기본 문장(BAL-002), 코드 버그 → 게이트웨이가 500으로 올리고 프론트가 오류 말풍선을 보인다. 모델 호출 제한(`llm` 60초)이 프론트 프록시 제한(120초) 안에 있다. `handle()`에 따로 넣을 예외 처리는 없다.
+- 처리하지 않는 경우: 거래가 0건인 계좌(mock 데이터에 없다), `get_accounts`·`mock_data.json` 읽기 실패(서버가 뜰 때 드러난다).
+- 테스트로 막힌 보안 규칙: 모델 입력에 잔액·거래 금액 원본과 전체 계좌번호가 없다. `mask_map`은 계좌번호 비교에만 쓰고 프롬프트에 넣지 않는다. 본인 계좌가 아닌 번호는 조회하지 않는다.
+- 프롬프트 공격("숫자로 말해" 등): 모델은 원래 값을 받지 않고, 출력 검증이 숫자·마스킹 토큰을 막는다. 입력 문장과 상관없이 성립하므로 따로 방어 코드를 두지 않는다.
+- 학습 산출물: `backend/data/`, `backend/training/**/outputs/`, `*.gguf`, `*.safetensors`는 `.gitignore`로 제외된다. 합성 샘플에는 실제 값이 없어야 하고, `test_prepare.py`로 확인한다.
+- MVP에서 받아들이는 위험(기록만):
+  - `customer_id`를 클라이언트가 보내므로 누구나 아무 데모 고객을 조회할 수 있다. 실제 본인 인증은 공통 PRD 제외 사항이다.
+  - `/mock/customers/{id}/accounts`는 인증 없이 전체 계좌번호·잔액을 돌려준다. 데모·인수용 라우트다. 백엔드는 기본값(127.0.0.1)으로만 띄우고 `--host 0.0.0.0`으로 열지 않는다.
+  - 하이픈 없는 계좌번호는 마스킹되지 않는다(PRD 영역 간 요청 R3).
+
+## 알려진 한계 (2026-09-29)
+코드로 고치지 않고 기록만 한다.
+- (a) `find_clicked`는 "history에 user 메시지가 있고 masked_text가 라벨과 같음"만 본다. 되묻기 직후가 아니어도 라벨과 같은 입력은 라벨 클릭으로 친다. 프론트는 가장 최근 봇 메시지의 선택지만 누를 수 있으므로(`docs/frontend/ARCHITECTURE.md` 핵심 규칙) 고객이 라벨을 직접 타이핑할 때만 생긴다.
+- (b) 계약 3대로 gateway가 라벨 클릭 턴의 masked_text(라벨)를 history user로 넣으면, 그 뒤 다시 라벨 클릭으로 판단되는 턴에서는 직전 라벨이 "원래 질문"이 되어 의도가 라벨 문자열로 판단된다(`생활비 ****7890` → balance, `입출금 ****6789` → balance). 발생 조건은 (a)와 같다.
+- (c) 직전에 고른 계좌를 이어가지 않는다(J10). 잔액을 본 뒤 "거래내역도 보여줘"라고 하면 계좌 2개 고객에게 다시 되묻는다. history의 assistant 문장은 `{{슬롯}}` 그대로라 어느 계좌였는지 알 수 없고, 이어가려면 "다른 계좌는요?" 같은 표현 규칙도 필요해서 MVP에서는 하지 않는다.
+- (d) 되묻기 뒤 선택지를 누르지 않고 직접 입력하면(J9) 게이트웨이가 새 질문으로 라우팅하고, 에이전트도 원래 질문을 보지 않는다. 3차 규칙 4로 계좌는 정해지지만 의도는 새 입력으로 판단한다(원래 질문이 거래내역이어도 "생활비 계좌 잔액 알려줘"는 잔액). 라우터가 balance로 보내지 않는 입력("생활비 계좌요")은 규칙 4까지 오지 않는다.
+- (e) 의도 키워드가 놓치는 표현이 있다(J11 "이번 달 급여 들어왔어?" → balance). 자체 점검 셋에서 나온 표현만 단어 목록에 더한다(BAL-001).
+- (f) 3차 규칙 4의 별칭 매칭은 질문 속 `입출금`을 계좌 별칭으로도 읽는다. 계좌 2개 고객(C002)이 "최근 입출금 내역 보여줘"라고 하면, '입출금 내역'이라는 뜻이어도 되묻지 않고 입출금 계좌(A002)의 거래내역을 보여 준다. 본인 계좌의 거래내역이라 틀린 답은 아니어서 기록만 한다(2026-09-30 step 13 review 권고).
+- `tests/router/test_base.py` 예외: 팀원C 영역 파일(cherry-pick 발판)이지만 스텁 전용 검사 2개(`test_stub_package_exports_agent_and_mock_router`, `test_stub_handle_returns_fixed_message`)의 `AREAS`에서 balance를 뺐다. 실제 export(라우트가 있는 `mock_router`)와 실제 `handle()`(모델 호출)로 바꾸면 이 두 검사는 반드시 실패하기 때문이다. loan·interest 스텁 검사와 계약 3 dataclass·Protocol 검사 3개는 그대로다. 발판 수정의 예외는 이 파일과 `app/agents/balance/__init__.py` 둘뿐이다(BAL-005). main 병합(feat-router는 PR #4로 main에 들어갔다) 때 이 파일이 충돌하면 main 쪽 최신 파일에서 balance만 뺀다.
+- `tests/gateway/test_api.py` 예외(main 병합 때 추가, 2026-09-29 결정): `test_response_has_exactly_the_contract_fields`는 balance 스텁의 "준비 중인 기능입니다."를 기대한다. 병합할 때 fixture의 `classify`가 `["loan"]`을 돌려주게 하고 기대 `agent`를 `"loan"`으로 바꾼다. 계약 필드 검사와 "스텁까지 도달" 의도는 그대로다. 이 파일이 세 번째 예외다.
+  - 후속(아직 안 함): loan·interest도 스텁을 실제 구현으로 바꿀 때 `test_base.py`·`test_api.py`에서 같은 문제가 생기므로 팀원C에게 알린다.
 
 ## 학습 데이터
-- 원천: `split.json`의 train 중 `consulting_topic == "거래내역/잔액조회"`인 라벨링 데이터 `qa_data[]` (필드명은 데이터 확인 전 가정 — 공통 ARCHITECTURE 학습 파이프라인)
-- 한 항목 = 대화 1개: user(`input.question`) → assistant(`input.answer`) → user(`input.follow_up_question`) → **assistant 목표(`output`)**
-- 전처리 순서: `masking.mask()`로 치환 → `output`에 `input`에 없는 수치·상품명이 있으면 제외 → 베이스 모델 채팅 템플릿 적용
+- 원천: 로컬 은행 라벨링 ZIP의 JSON에서 `consulting.consulting_topic == "거래내역/잔액조회"`인 `qa_data[]`를 추출하고 `source.source_id`로 공통 `split.json`을 적용한다. 실제 확인된 건수는 Training 4,017건, Validation 503건이다. 원천 Training·Validation에 함께 있는 상담 2건은 공통 분할이 train으로 보낸다(main `docs/router/ADR.md` RT-005).
+- RT-005의 영역 규칙을 따른다: 같은 QA의 `qa_topic`이 `consulting_topic`과 다르면 뺀다. 원본에서 가려진 금액 `●●●원`은 `[금액_n]`으로 바꾼 뒤 `mask()`를 적용한다.
+- 한 QA에서 대화를 최대 2개 만든다(BAL-010). 목표 답은 모두 LLM이 다시 쓴 답이다.
+  - 첫 턴: user(`question`) → **assistant 목표(다시 쓴 `answer`)**
+  - 이어진 턴: user(`question`) → assistant(다시 쓴 `answer`) → user(`follow_up_question`) → **assistant 목표(다시 쓴 `output`)**
+- 전처리 순서: 네 필드에 `normalize_amounts` → 게이트웨이와 같은 `app.masking.mask()`(`mask_fields`) → 재작성 캐시에서 이 QA(`qa_key`)의 결과를 찾는다. 결과가 없으면 QA를 빼고 원문으로 대신하지 않는다 → 다시 쓴 두 답에도 `mask()` → 목표 답마다 안전망 필터(아래)를 적용하고, 걸린 샘플만 뺀다 → `prompt.build_messages(history, 질문, "general")`로 입력을 만든다. history는 필터 대상이 아니다(학습은 `--mask-prompt`라 loss에 들지 않는다). 채팅 템플릿은 MLX LM이 베이스 토크나이저로 입힌다. `app.masking` import 실패 시 전처리를 중단한다. 임시 정규식·fallback 마스킹은 허용하지 않는다(계약 4).
+- 원천의 한계(2026-09-29 로컬 집계, Training 4,017건): `output`은 대부분 절차 안내형 장문이고 `{{슬롯}}`을 쓰는 답은 0건, 아라비아 숫자가 든 답이 1,311건(33%)이다. 이것만 학습하면 잔액·거래내역 턴의 모델 출력은 필수 슬롯 검사(BAL-002)에 걸려 거의 항상 기본 문장으로 바뀐다. 원천은 콜센터 상담원 답이라 조회 결과 단정·행동 약속·개인정보 요구·지어낸 메뉴가 섞여 있다(BAL-009·BAL-010).
+- LLM 재작성(BAL-010): `training/balance/rewrite.py`가 QA마다 `answer`와 `output`을 한 번의 호출로 다시 쓴다.
+  - Claude Code 헤드리스 모드(`claude -p`, 사용자 구독 로그인)로 돌린다. 기본 모델은 `claude-haiku-4-5`다. 호출 한 번에 QA `CHUNK`(20)건을 묶는다. 규칙은 `--system-prompt`로 넘기고, 구조화 출력은 `--json-schema`로 받는다. 형식은 `{"items": [{"key", "answer", "output"}]}`다. stdin으로 보내는 입력은 `{"items": [{"key": qa_key(qa), **mask_fields(qa)}]}` JSON이다(마스킹을 거친 텍스트만 보낸다). 도구는 끄고(`--tools ""`), 빈 임시 폴더에서 실행해 프로젝트 CLAUDE.md가 읽히지 않게 한다.
+  - `REWRITE_SYSTEM`에 담을 규칙(문구는 구현이 정하되 아래를 빠짐없이 담는다):
+    1. 역할: 입력은 콜센터 상담 기록 한 건(question·answer·follow_up·output)이다. 이것을 은행 잔액조회 챗봇의 답으로 다시 쓴다. `answer`는 question에 대한 답이고, `output`은 다시 쓴 `answer` 다음 follow_up에 대한 답이다.
+    2. 챗봇이 할 수 있는 일은 등록된 계좌의 잔액과 최근 거래내역을 보여 주는 것뿐이다. 이 답을 쓰는 턴에서는 계좌를 조회하지 않는다.
+    3. 정중한 존댓말로 쓴다. 답마다 200자 이내(공백 포함), 2~3문장이다.
+    4. 조회·확인 결과를 말하지 않는다(예: "확인 결과 정상 입금되었습니다").
+    5. 할 수 없는 행동을 약속하지 않는다(문자·서면 발송, 발급, 정정, 처리, 접수, "조회해 드리겠습니다"). 은행·상담원이 나중에 해 줄 일도 약속하지 않는다(예: "정확한 원인을 파악하여 안내해 드리겠습니다", "해결되면 문자로 안내하므로 기다려 주세요"). 상담원·담당 부서 연결 안내와 고객센터 문의 안내는 괜찮다.
+    6. 성함·생년월일·계좌번호·비밀번호·주민번호·카드번호를 요구하지 않는다.
+    7. 금리·수수료·한도·상품명·메뉴 이름·화면 위치·준비물을 지어내지 않는다. 원래 답에 있던 것도 옮기지 않는다. 수수료·한도가 있는지 없는지, 처리·해제·반영에 걸리는 기간, 휴일·영업일 처리 방식, 자동 처리·자동 해제 여부, 규정 변경도 말하지 않는다(예: "수수료는 발생하지 않습니다", "출금일이 휴일이면 전 영업일에 처리됩니다", "보류 금액은 자동으로 해제됩니다", "금융보안 관련 규정이 변경되었습니다", "개인 정보 관리 메뉴에서 변경하실 수 있습니다"). 원래 답이 한 고객의 조회 결과로 원인을 설명했다면 그 원인을 일반 설명으로 바꾸지 않는다(예: "지급정지 상태는 해외 결제 등으로 자금이 일시적으로 보류된 상태를 의미합니다"). 모르는 내용은 상담원에게 확인하라고 안내한다.
+    8. 아라비아 숫자·`%`·날짜·금액을 쓰지 않는다. `[금액_1]` 같은 대괄호 토큰, `★`·`●`·`○`·`OO` 가림 표시, 은행 이름을 답에 옮기지 않는다. 은행은 "저희 은행"이나 "해당 은행"이라고 쓴다.
+    9. "서류"·"증명서"·"등본"·"재직"·"소득"이라는 단어를 쓰지 않는다(`validate.DOCUMENT_KEYWORDS`).
+    10. 원래 답에 있던 일반 안내는 살린다. 일반 안내는 고객이 어느 은행에서나 스스로 할 수 있는 일이다(앱을 최신 버전으로 업데이트한 뒤 다시 시도, 모바일 앱이나 인터넷 뱅킹에서 거래내역 확인, 송금한 은행이나 카드사에 문의, 비밀번호 정기 변경). 7에 해당하는 내용은 일반 안내가 아니다.
+    11. items는 서로 다른 상담이다. 다른 item의 내용을 가져오지 않는다.
+  - 규칙 5·7의 예문, 10의 괄호 안 예시, 11의 두 문장은 `REWRITE_SYSTEM`에 그대로 넣는다. 시범 판독에서 나온 위반이라 테스트로 고정한다(BAL-010 보강).
+  - 캐시: `REWRITE_PATH`(`data/processed/balance/rewrites.jsonl`, gitignore). 한 줄 형식은 `{"key", "source": mask_fields(qa), "answer", "output"}`다. 키는 `qa_key(qa)`이고, 이미 캐시에 있는 키는 다시 보내지 않는다. 묶음이 끝날 때마다 덧붙이므로 중간에 끊겨도 다시 실행하면 이어서 돈다. 응답에서 빠진 키는 다음 실행 때 다시 보낸다.
+  - 실행 순서(사람, MAC_TRAINING): 30건을 시범으로 돌린다(`rewrite --limit 30`). 사람이 읽고 통과하면 나머지를 돌린다(`rewrite --jobs N`). 규칙 위반이 많으면 멈추고 `REWRITE_SYSTEM`이나 모델을 바꾸는 step을 추가한다. 캐시 키에는 규칙과 모델이 들어가지 않는다. 그래서 규칙이나 모델을 바꾸면 기존 캐시를 다른 이름으로 옮기고 시범부터 다시 한다.
+- 안전망 필터(목표 답 기준, 하나라도 걸리면 그 샘플을 뺀다). 다시 쓴 답과 합성 응답 모두에 적용한다.
+  1. `validate.is_valid(답, (), ())`가 `False`(숫자·`%`·마스킹 토큰·슬롯·서류 키워드, BAL-008)
+  2. 상품명 휴리스틱(ADR-005): 아래 인터페이스의 제외 규칙 2. 입력은 첫 턴이면 question, 이어진 턴이면 question·다시 쓴 answer·follow_up이다
+  3. 콜센터식 정답(BAL-009)
+     - 개인정보 요구: 성함·생년월일·계좌번호(`계좌 번호`)·비밀번호·주민(등록)번호·카드번호(`카드 번호`) 뒤 같은 문장 25자 안에 `알려`·`말씀해`·`입력해`·`눌러`·`제공해`가 오면 뺀다. 빠질 예문: "성함과 생년월일 앞 여섯 자리를 알려주시기 바랍니다", "계좌 비밀번호 네 자리를 입력해 주십시오", "계좌 번호를 알려 주시면 확인해 드리겠습니다", "먼저 성함과 생년월일을 제공해 주셔야 본인 확인 절차를 진행할 수 있습니다"
+     - 행동 약속: 동사 `보내`·`전송해`·`발급해`·`조치해`·`정정해`·`처리해`·`발송해`·`전달해`·`제공해`·`진행해`·`정리해`·`접수해`·`신청해`·`조회해` 뒤에 `드리겠`·`드리니`·`드립니다`·`드릴 수`가 오면(띄어쓰기 유무 모두) 뺀다. 단 `드릴 수 없`(할 수 없다는 안내)은 남긴다. `즉시`·`바로` 뒤 `진행하겠`·`처리하겠`도 뺀다. 빠질 예문: "문자로 상세 정보를 보내드리겠습니다", "필요하시면 영수증도 전송해 드리니 잠시만 기다려 주시기 바랍니다", "PDF 파일이나 우편으로 발급해 드리겠습니다", "신속히 확인하여 조치해 드리겠습니다", "문자 발송을 바로 진행해 드리겠습니다", "요청해 주시면 해당 내용을 전달해 드리겠습니다", "입금 상세 내역을 추가로 제공해 드리겠습니다", "변경을 원하시는 내용을 알려 주시면 즉시 처리해 드립니다", "원하시는 신청 방법을 알려 주시면 즉시 진행하겠습니다", "변경 내역을 서면으로 발송해 드릴 수 있으니 요청해 주세요", "문자 메시지로도 정리해 드릴 수 있으니 문의해 주시기 바랍니다", "최근 자동이체 여부를 조회해 드리겠습니다"
+     - 남길 예문: "카드사 상담원과 연결해 드리겠습니다", "담당 부서로 연결해 드리겠습니다", "고객센터로 문의해 주시기 바랍니다", "조회 방법을 안내해 드리겠습니다", "해당 내역은 조회해 드릴 수 없으니 상담원에게 확인해 주세요"
+  4. 조회 결과 단정(BAL-010): `조회`·`확인` 뒤에 (`한`·`해 본`·`해 보니`·`해 드린`) `결과`가 오면 뺀다. `결과` 바로 뒤가 `는`·`를`이면 남긴다. `확인한 바에 따르면`·`확인되었습니다`도 뺀다. 빠질 예문: "시스템 확인 결과 해당 일자에는 거래가 없습니다", "거래내역을 확인한 결과, 자동이체로 출금된 금액은 대출 상환입니다", "확인한 바에 따르면 변경 사항이 정상적으로 적용되어 있습니다", "입금이 정상적으로 확인되었습니다". 남길 예문: "조회 결과는 화면에 표시되며 캡처하실 수 있습니다", "조회 결과를 앱에서 확인하실 수 있습니다", "입금 여부는 앱에서 확인하실 수 있습니다"
+  5. 비식별 표시(BAL-010): `★`·`●`·`○`·`OO`가 있으면 뺀다. 빠질 예문: "★★은행 모바일 앱에서 확인해 주세요", "●월 ●일 기준으로 반영됩니다", "OOO 고객님 확인 부탁드립니다"
+  6. 길이(BAL-010): `MAX_CHARS`(200자, 공백 포함)를 넘으면 뺀다. 원문이 아니라 다시 쓴 답과 합성 응답에 적용한다
+  - 2026-09-29 로컬 집계(원문 `output`, 재작성 전): AI Hub 통과분 2,327건(train 2,029·val 139·test 159) → 2,048건(train 1,807·val 109·test 132, BAL-009 1차 규칙) → 1,831건(train 1,626·val 89·test 116, BAL-009 보강 규칙) → 약 1,438건(train 1,282·val 68·test 88, 조회 단정·비식별 표시 추가).
+  - 재작성 뒤 집계(2026-09-30, train-export step): 대상 QA는 train 3,644·val 245·test 248이고 모두 재작성됐다(재작성 없음 0). 안전망 필터를 통과한 샘플은 첫 턴 train 3,543·val 235·test 241, 이어진 턴 train 3,555·val 239·test 244다. 합성을 더한 기록 수는 train 7,359·val 525·test 536이다.
+- 합성 샘플(BAL-008, BAL-010): `prepare.py`가 템플릿으로 만들어 AI Hub 샘플과 섞는다. 세 종류가 있다.
+  - 슬롯 샘플: 잔액·거래내역 질문 변형 → `{{슬롯}}` 응답 변형. 첫 턴 모양과 라벨 클릭 턴 모양 두 가지다.
+  - 가상 계좌번호 질문(BAL-010): mock 데이터의 가상 계좌번호를 질문 템플릿에 넣고 `mask()`로 바꾼다. 그러면 런타임과 같은 `[계좌번호_1]` 토큰이 든 입력이 된다. 원래 번호는 샘플에 남지 않는다. 응답은 슬롯 샘플과 같은 템플릿이다.
+  - general "상담원 안내"(BAL-010): 조회 방법·조회 오류·수수료·금리·한도·발급·모르는 입금처럼 모델이 사실을 모르는 질문에 대해, 지어내지 않고 채팅 조회 방법이나 상담원 확인을 안내하는 응답이다. 자체 점검 Q6~Q8의 기대 행동이다.
+  - 입력은 추론과 같은 `prompt.build_messages`로 만든다(`SYSTEM_PROMPT`, 슬롯 의도면 "사용할 수 있는 슬롯:" 줄 포함). 학습 입력과 추론 입력의 모양을 맞추기 위해서다(계약 4와 같은 이유).
+  - 응답 템플릿은 그 의도로 `validate.is_valid`를 통과해야 한다(필수 슬롯 포함, 숫자·`%`·마스킹 토큰·서류 키워드 없음). 안전망 필터도 통과해야 한다. 테스트로 고정한다.
+  - 사실(금리·상품명·수수료·서류·메뉴 이름)은 넣지 않는다. 슬롯과 안내 문구만 쓴다.
+  - 질문 목록과 합성 비중은 첫 소규모 학습 결과를 보고 조정한다.
 - 검증: val 분할에서 샘플을 뽑아 사람이 읽어 확인한다. test 분할은 최종 점검에만 쓴다.
+- 실행 환경: Hugging Face에서 받은 양자화 Qwen Instruct 베이스를 Mac의 MLX LM으로 학습하고 Ollama로 추론·평가한다. 데이터 형식·명령·GGUF 변환 게이트는 `backend/training/balance/MAC_TRAINING.md`를 따른다. `app.masking.mask()`·공통 split 코드는 가져왔다. 재작성 실행과 가공 데이터 생성은 train-export step(`phases/agent-balance/`, 사람)에서 한다. 학습은 로컬에서만 하고, 외부 API는 재작성에만 쓴다(BAL-010). main에서 마스킹·분할이 바뀌면 가공 데이터를 재생성한다.
+
+### `prepare.py` 인터페이스
+`backend/training/balance/prepare.py`. 원본 zip 경로와 분할 파일 경로는 `training.common.split`의 `TL_ZIP`·`VL_ZIP`·`OUT_PATH`를 import해서 쓴다(경로를 다시 적지 않는다). 재작성 캐시 읽기(`qa_key`·`load_rewrites`)도 여기에 둔다. `rewrite.py`가 `prepare`를 import하고, 그 반대 방향 import는 하지 않는다.
+```python
+TOPIC = "거래내역/잔액조회"
+OUT_DIR: Path                     # backend/data/processed/balance (gitignore)
+SPLIT_FILES = {"train": "train.jsonl", "val": "valid.jsonl", "test": "test.jsonl"}   # MLX LM은 valid.jsonl 이름을 쓴다
+REWRITE_PATH: Path                # OUT_DIR / "rewrites.jsonl" (gitignore, BAL-010)
+MAX_CHARS = 200                   # 다시 쓴 답·합성 응답 길이 상한(공백 포함)
+
+def load_qas(zip_path: Path) -> Iterator[dict]: ...
+    # {"source_id", "question", "answer", "follow_up", "output"}. 원본 필드 접근은 이 함수에만 둔다
+    # consulting.consulting_topic == TOPIC 이고 qa_data[].qa_topic == TOPIC 인 QA만 (RT-005 라벨 규칙)
+def normalize_amounts(text: str) -> str: ...        # 비식별 금액 "●…원" → "[금액_n]" (n은 1부터, RT-005). mask() 금액 규칙의 숫자 자리를 ●로 바꾼 모양(쉼표·억만천백십 허용)
+def mask_fields(qa: dict) -> dict: ...              # {"question", "answer", "follow_up", "output"} 각각 normalize_amounts → mask().masked_text
+def qa_key(qa: dict) -> str: ...                    # source_id와 원문 네 필드를 이은 문자열의 sha256 hex 앞 32자. 재작성 캐시 키이자 입력 items의 key
+def load_rewrites(path: Path) -> dict[str, dict]: ...   # {key: {"answer", "output"}}. 파일이 없으면 {}. 같은 키가 여러 줄이면 마지막 줄
+def build_samples(qa: dict, rewrite: dict | None) -> list[dict]: ...   # 첫 턴·이어진 턴 중 안전망 필터를 통과한 것(0~2개). rewrite가 None이면 []
+def synth_samples() -> dict[str, list[dict]]: ...   # {"train": [...], "val": [...], "test": [...]}
+def build_dataset(split_path: Path, out_dir: Path, zip_paths: list[Path], rewrites_path: Path = REWRITE_PATH) -> dict[str, int]: ...  # 분할별 기록 수
+def main(argv: list[str] | None = None) -> None: ...  # --split·--out-dir·--zip(여러 개)·--rewrites. 인자가 없으면 OUT_PATH·OUT_DIR·[TL_ZIP, VL_ZIP]·REWRITE_PATH. 분할별 기록 수와 재작성 없음으로 빠진 QA 수를 출력
+# CLI: cd backend && python -m training.balance.prepare
+```
+- `build_samples` 순서: `mask_fields(qa)` → 다시 쓴 `answer`·`output`에 `mask()` → 첫 턴 `{"messages": build_messages([], question, "general") + [assistant: answer]}`, 이어진 턴 `{"messages": build_messages([user: question, assistant: answer], follow_up, "general") + [assistant: output]}` → 각 샘플의 목표 답에 안전망 필터. 순서는 첫 턴, 이어진 턴이다.
+- 제외 규칙(안전망 필터, 위 "학습 데이터" 1~6). 상품명 휴리스틱의 기준:
+  1. `validate.is_valid(답, (), ())`가 `False`. 공통 ADR-005의 "input에 없는 수치"는 숫자 전부 제외로 대신한다
+  2. 상품명 휴리스틱(ADR-005): 정규식 `[가-힣A-Za-z]+(통장|적금|예금|카드|대출)`에 걸린 단어가 입력 필드에 없고 일반 명칭 허용 목록 `GENERIC_PRODUCT_NAMES`(`입출금통장`·`정기예금`·`정기적금`·`신용카드`·`체크카드`·`신용대출`·`주택담보대출`·`전세자금대출`)에도 없다
+- 분할: `split.json`의 `source_id` 값으로 정한다. `split.json`에 없는 `source_id`는 버린다.
+- `synth_samples` 규칙:
+  - 슬롯 샘플: 질문 목록 `BALANCE_QUESTIONS`·`TRANSACTION_QUESTIONS`(각 20개 이상)의 모든 질문은 `intent.classify_intent`가 자기 의도로 판단해야 한다. 추론 때와 같은 분기로 들어가게 하기 위해서다. 응답 템플릿 `BALANCE_ANSWERS`·`TRANSACTION_ANSWERS`(각 5개 이상)는 `validate.is_valid(답, SLOT_NAMES[의도], SLOT_NAMES[의도])`를 통과해야 한다. 샘플 = 질문 × 응답 전체 조합(무작위 없음). 질문 인덱스 `i`가 짝수면 첫 턴 모양 `build_messages([], 질문, 의도)`, 홀수면 라벨 클릭 턴 모양 `build_messages([user: 질문, assistant: resolve.ASK_TEXT], 라벨, 의도)`다. 라벨은 mock 데이터 계좌의 `account_label`을 차례로 쓴다.
+  - 가상 계좌번호 질문: `MASKED_BALANCE_QUESTIONS`·`MASKED_TRANSACTION_QUESTIONS`(각 5개 이상)는 `{account_no}` 자리표시자가 든 템플릿이다. 인덱스 `i`마다 mock 데이터 계좌(C001~C003 순서)의 `account_no`를 차례로 넣고 `mask()`로 바꾼다. 바뀐 질문은 `[계좌번호_1]`을 담고 `classify_intent`가 자기 의도로 판단해야 한다. 샘플 = 바뀐 질문 × 그 의도 응답 템플릿 전체, 모양은 첫 턴 `build_messages([], 바뀐 질문, 의도)`다.
+  - general "상담원 안내": `GENERAL_SYNTH`는 범주별 `(질문들, 응답들)` 튜플의 튜플이다(범주마다 질문 4개 이상·응답 3개 이상). 모든 질문은 `classify_intent`가 `general`이고, 모든 응답은 `is_valid(답, (), ())`·안전망 필터·`MAX_CHARS`를 통과한다. 샘플 = 범주 안 질문 × 그 범주 응답 전체, 모양은 `build_messages([], 질문, "general")`이다.
+  - 분할: 각 목록(범주) 안 질문 인덱스 `i`로 정한다. `i % 10 == 0`이면 test, `i % 10 == 1`이면 val, 나머지는 train.
+- 출력: `OUT_DIR/{train,valid,test}.jsonl`, 한 줄에 `{"messages": [...]}` 하나. AI Hub 샘플과 합성 샘플을 한 파일에 쓴다. `train.py check`(`check_dataset`)를 통과하는 형식이다.
+
+### `rewrite.py` 인터페이스 (BAL-010)
+`backend/training/balance/rewrite.py`. 사람이 train-export step에서 실행한다. Claude Code CLI(`claude`)를 `subprocess`로 부른다. 인증은 사용자의 Claude Code 로그인이므로 API 키와 SDK가 필요 없다. 테스트는 `run` 인자에 가짜 함수를 넣어 CLI를 부르지 않는다.
+```python
+MODEL = "claude-haiku-4-5"
+CHUNK = 20                        # 호출 한 번에 보낼 QA 수
+REWRITE_SYSTEM: str               # 위 "LLM 재작성" 규칙 1~11 + "입력 items마다 key를 그대로 돌려준다"
+OUTPUT_SCHEMA = {"type": "object", "properties": {"items": {"type": "array", "items": {
+                     "type": "object", "properties": {"key": {"type": "string"}, "answer": {"type": "string"}, "output": {"type": "string"}},
+                     "required": ["key", "answer", "output"], "additionalProperties": False}}},
+                 "required": ["items"], "additionalProperties": False}
+
+def build_prompt(qas: list[dict]) -> str: ...       # json.dumps({"items": [{"key": prepare.qa_key(q), **prepare.mask_fields(q)} for q in qas]}, ensure_ascii=False)
+def build_command(model: str) -> list[str]: ...
+    # ["claude", "-p", "--model", model, "--system-prompt", REWRITE_SYSTEM, "--tools", "",
+    #  "--json-schema", json.dumps(OUTPUT_SCHEMA), "--output-format", "json",
+    #  "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands"]
+def parse_envelope(stdout: str, keys: set[str]) -> tuple[dict[str, dict], float]: ...
+    # stdout은 `--output-format json` 결과 한 개다: {"type": "result", "is_error": bool, "structured_output": {...}, "total_cost_usd": float, ...}
+    # JSON이 아니거나 is_error가 참이거나 structured_output이 없으면 ({}, 0.0)
+    # structured_output["items"] 중 key가 keys에 있고 answer·output이 비어 있지 않은 문자열인 것만 {key: {"answer", "output"}}. 두 번째 값은 total_cost_usd(없으면 0.0)
+def run_claude(command: list[str], prompt: str) -> str: ...
+    # subprocess.run(command, input=prompt, capture_output=True, text=True, timeout=600, cwd=빈 tempfile.TemporaryDirectory())의 stdout
+    # 실패·시간 초과면 ""(parse_envelope가 빈 결과로 처리)
+def split_qas(split_path: Path, zip_paths: list[Path]) -> list[dict]: ...   # split.json에 있는 QA, load_qas 순서 그대로(결정적)
+def run_all(qas: list[dict], cache_path: Path, model: str = MODEL, chunk: int = CHUNK, jobs: int = 1,
+            run: Callable[[list[str], str], str] = run_claude) -> dict[str, float]: ...
+    # 캐시(prepare.load_rewrites)에 없는 QA만 chunk개씩 나눈다. 묶음을 jobs개까지 동시에 run으로 돌린다(ThreadPoolExecutor)
+    # 묶음이 끝날 때마다 메인 스레드에서 캐시에 {"key", "source": prepare.mask_fields(qa), "answer", "output"}를 한 줄씩 덧붙인다
+    # 반환 {"saved": n, "missing": n, "cost_usd": 합}. missing은 보냈지만 결과가 없었던 QA 수
+def main(argv: list[str] | None = None) -> None: ...
+    # --limit N(캐시에 없는 split QA 중 앞에서 N개, 기본 전부)·--chunk·--jobs·--model. 집계를 출력한다
+# CLI: cd backend && python -m training.balance.rewrite --limit 30
+```
+- 테스트와 AC에서 `claude` CLI를 실제로 부르지 않는다. 결과 순서와 누락은 `key`로 맞춘다.
+
+### Modelfile
+`backend/models/balance/Modelfile`. `.gguf`는 같은 폴더에 두고 커밋하지 않는다(`*.gguf` gitignore).
+- `FROM ./cs-balance.gguf`
+- `TEMPLATE`: Qwen3-4B-Instruct-2507의 ChatML(생각 블록 없음). 학습 때 MLX LM이 입힌 채팅 템플릿과 같은 모양이어야 한다.
+- `SYSTEM`: `prompt.SYSTEM_PROMPT`와 글자 단위로 같다. 에이전트는 매 요청에 system 메시지를 보내므로 이 값은 `ollama run` 직접 확인용이다.
+- `PARAMETER`: `stop "<|im_end|>"`, `stop "<|endoftext|>"`, `temperature 0.2`(지어내기 억제), `num_ctx 2048`, `num_predict 256`.
+- 등록: `ollama create cs-balance -f backend/models/balance/Modelfile` (계약 5 이름).

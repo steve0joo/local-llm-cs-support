@@ -24,7 +24,16 @@
 
 **테스트를 먼저** 작성한다(TDD 가드).
 
-1. `backend/tests/loan/test_agent_loan.py` — `llm.generate`는 목으로 대체한다. 이 파일에서 모델·Ollama를 실제로 호출하면 안 된다.
+0. **`{{extendable_status}}` 슬롯 도입(2026-09-29 결정, `docs/agent-loan/ARCHITECTURE.md` handle() 4~6단계 참고)** — step 1 산출물(`prompt.py`·`validate.py`)을 이 step에서 먼저 갱신한다.
+   - `prompt.py`
+     - `SYSTEM_PROMPT`에 "연장 가능 여부는 직접 '가능합니다'/'불가합니다'라고 쓰지 말고 `{{extendable_status}}` 슬롯으로 표현하라"는 지시를 추가한다.
+     - `build_messages()`의 "사용할 수 있는 슬롯" 줄에 `{{extendable_status}}`를 추가한다.
+     - `build_slots()`에 `extendable_status` 키를 추가한다. 값은 `loan["extendable"]`이 `true`면 `"연장 가능 대상으로 조회됩니다."`, `false`면 `"현재 연장 가능으로 조회되지 않습니다."` — 모델 출력과 무관하게 코드가 정한다.
+     - `fallback_text()`가 하드코딩한 연장 문구 대신 `{{extendable_status}}` 슬롯을 쓰도록 고친다(정상 경로와 기본 문장이 같은 값을 쓰게 되어 일관된다).
+   - `validate.py`의 `ALLOWED_SLOTS`에 `"extendable_status"`를 추가한다. **LN-004 d(부정 표현 검사)는 그대로 둔다** — 모델이 슬롯을 안 쓰고 직접 "가능합니다"를 써서 실제 값과 모순될 때를 잡는 이중 검증이다. 슬롯이 "사실이 화면에 항상 맞게 나온다"를 구조적으로 보장하고, d는 "모델이 딴 말로 모순을 만들지 않는지"를 텍스트로 한 번 더 본다.
+   - 이 변경으로 `backend/tests/loan/test_prompt.py`·`test_validate.py`의 기존 슬롯 목록·`fallback_text` 기대값도 같이 갱신해야 한다(TDD: 테스트를 먼저 고치고 실패를 확인한 뒤 구현을 고친다).
+
+1. `backend/tests/loan/test_agent.py` — `llm.generate`는 목으로 대체한다. 이 파일에서 모델·Ollama를 실제로 호출하면 안 된다.
 2. `backend/app/agents/loan/agent.py`
    ```python
    class LoanAgent:
@@ -36,7 +45,7 @@
    - 모델 호출은 `from app import llm` 후 `llm.generate("cs-loan", messages)`로 **모듈 속성 경유**로 부른다. 이유: 테스트가 `monkeypatch.setattr("app.llm.generate", ...)`로 바꿀 수 있어야 한다.
    - 검증 실패 시 `prompt.fallback_text(loan)`을 쓴다. 대출 없음이면 `prompt.NO_LOAN_TEXT`이며 모델을 호출하지 않는다.
    - `req.mask_map`을 프롬프트에 넣지 마라(계약 3).
-3. `backend/app/agents/loan/__init__.py` — `agent`와 `mock_router`를 export한다(`from .agent import agent`, `from .mock_api import mock_router`). 팀원C가 만든 스텁이 이미 있으면 **교체**한다(통합 순서 2단계).
+3. `backend/app/agents/loan/__init__.py` — `agent`와 `mock_router`를 export한다(`from .agent import agent`, `from .mock_api import mock_router`). 팀원C가 만든 스텁(`agent` + 빈 `mock_router`)이 main에 있어 병합 때 이 파일이 충돌하면, 먼저 스텁 쪽을 받은 뒤 실제 구현으로 **교체**한다(통합 순서 2단계). 대출 없음 응답은 `AgentReply(text=NO_LOAN_TEXT, slots={}, options=[])` 형태로 돌려준다.
 
 ## 테스트로 고정할 핵심 규칙
 
@@ -44,14 +53,16 @@
 - `C002`: `generate`에 넘어간 messages 전체에 `12000000`·`12,000,000`이 없다. `reply.slots["principal_remaining"] == "12,000,000원"`, `reply.slots["loan_label"] == "신용대출"`
 - 목이 "금리는 연 3.5%입니다" / "재직증명서가 필요합니다" / "{{balance}}입니다" / "1,200만원입니다"를 돌려주면 `reply.text`가 기본 문장이다
 - 목이 정상 문장("만기일은 2027-03-31입니다. 남은 원금은 {{principal_remaining}}입니다.")을 돌려주면 그대로 통과한다
-- `C003`에서 목이 "연장이 가능합니다"를 돌려주면 기본 문장(연장 가능으로 조회되지 않음)으로 바뀐다
+- `C003`에서 목이 "연장이 가능합니다"를 돌려주면 기본 문장(연장 가능으로 조회되지 않음)으로 바뀐다(슬롯을 안 쓰고 모순을 만든 경우 — LN-004 d 이중 검증)
+- `reply.slots["extendable_status"]`는 목이 뭐라고 반환하든(슬롯을 쓰든 안 쓰든, 검증에 걸려 기본 문장으로 바뀌든) 항상 `loan["extendable"]`에서 나온 값이다: `C002`(true)는 `"연장 가능 대상으로 조회됩니다."`, `C003`(false)는 `"현재 연장 가능으로 조회되지 않습니다."`
+- `{{extendable_status}}`도 `ALLOWED_SLOTS`에 있어 LN-004 b를 통과한다(목이 그 슬롯만 쓴 정상 문장을 돌려주면 그대로 통과)
 - `reply.options == []`, 호출한 모델 이름은 `"cs-loan"`
 - `history`가 프롬프트에 순서대로 포함된다
 
 ## Acceptance Criteria
 
 ```bash
-cd backend && python -m pytest tests/loan -q
+cd backend && python -m pytest tests/loan --import-mode=importlib -q
 ```
 
 ## 검증 절차
