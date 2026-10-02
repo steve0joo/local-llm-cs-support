@@ -18,7 +18,7 @@ backend/
 │   │   └── classify.py         # classify(masked_text) -> RouteResult(topics)
 │   └── agents/
 │       ├── base.py             # AgentRequest, AgentReply, Agent (계약 3)
-│       └── {balance,loan,interest}/__init__.py   # 스텁 → 각 담당이 교체
+│       └── {balance,loan,interest}/__init__.py   # 각 담당의 구현. agent·mock_router를 export(계약 3)
 ├── tests/{gateway,masking,llm,router}/
 ├── training/
 │   ├── common/                 # 은행 필터 + source_id 분할 → data/processed/split.json
@@ -61,7 +61,7 @@ POST /api/chat
 - `choice`가 지원 에이전트가 아니면 422가 아니라 unsupported 응답이다. pending이 없는 `choice`(계좌 선택 등)는 현재 메시지를 그대로 에이전트에 넘긴다.
 - history에는 answer 턴만 쌓는다. clarify·unsupported 문장은 게이트웨이가 만든 것이라 모델 문맥이 아니다. 에이전트에는 이번 턴 이전까지의 history 복사본을 넘긴다.
 - `dispatch()`는 dict를 돌려주고 스키마 클래스는 `api.py`에만 둔다. `classify`는 `router.classify()`로 불러 테스트가 `app.router.classify` 한 곳만 바꾼다.
-- 모델이 없어도 서버는 뜬다: `classify()`가 Ollama 호출 실패를 키워드 폴백으로 처리하고, 에이전트는 스텁이 답한다.
+- 모델이 없어도 서버는 뜬다: `classify()`가 Ollama 호출 실패를 키워드 폴백으로 처리하고, 에이전트의 모델 호출 실패는 게이트웨이가 `MODEL_UNAVAILABLE_TEXT`로 답한다.
 - `choice` 없는 새 메시지가 오면 `session.pending`을 비운다. 되묻기 뒤 버튼 대신 타이핑한 경우 이전 되묻기는 무효이며, 그 뒤 계좌 선택 `choice`에 옛 질문이 딸려가지 않는다.
 - 에이전트의 모델 호출 실패(`httpx.HTTPError`: Ollama 없음·모델 미등록·타임아웃)는 게이트웨이가 잡아 answer 타입으로 "지금은 답변을 드릴 수 없습니다. 상담원 연결을 도와드릴까요?"를 돌려준다(500 아님). 이 문장은 history에 넣지 않는다. 그 밖의 예외(코드 버그)는 그대로 올려 500이 되게 한다.
 
